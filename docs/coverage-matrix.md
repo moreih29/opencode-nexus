@@ -10,22 +10,22 @@ This document tracks implementation coverage against `nexus-reference-for-openco
 | 1 | Task pipeline guardrails | Complete | edit/write + close + stop guardrails enforced |
 | 1 | 4-layer knowledge | Complete | core/rules/context/briefing tools implemented |
 | 2 | How/Do/Check categories | Complete | 9-agent catalog + policy + team enforcement |
-| 2 | MATRIX briefing | Complete | role matrix + rules + latest decisions |
+| 2 | MATRIX briefing | Partial | role matrix + rules + latest decisions only; source asset parity still pending |
 | 2 | Structured delegation | Complete | `nx_delegate_template` implemented |
-| 3 | Tag system + detection | Complete | tags, false positives, stateful notices, system injection |
-| 3 | meet -> run pipeline | Complete | run phase tracking + strict transitions + guardrails |
-| 3 | history + memoryHint | Complete | archive + memory cycle notes |
-| 4 | LSP integration | Complete (lightweight) | symbol/refs/diagnostics/rename tools |
-| 4 | AST search/replace | Complete (lightweight) | regex-backed AST-style search/replace |
+| 3 | Tag system + detection | Partial | explicit tags + natural meet hints + stateful notices; full parity still pending |
+| 3 | meet -> run pipeline | Partial | run phase tracking exists; procedural meet/run parity still pending |
+| 3 | history + memoryHint | Partial | archive + memory cycle notes exist; sync-quality lifecycle still pending |
+| 4 | LSP integration | Partial | lightweight symbol/refs/diagnostics/rename only |
+| 4 | AST search/replace | Partial | regex-backed AST-style search/replace only |
 
 ## Final DoD
 
 - Full 9-agent behavior prompts are active through system injection.
-- 5 skill procedures are active through system injection.
+- 5 skill procedures are only partially represented through system injection.
 - Run pipeline enforces intake/design/execute/verify/complete with rollback.
 - Stop/nonstop equivalent behavior blocks exit with active tasks.
 - Team/speaker validation behaves structurally (not advisory only).
 - Structured delegation template is generated and used in agent tasking.
-- MATRIX briefing + memoryHint flow are complete.
-- LSP/AST tools are registered and operational.
+- MATRIX briefing + memoryHint flow are partial and still evolving toward parity.
+- LSP/AST tools are registered but remain lightweight placeholders in several areas.
 - `bun run check` and `bun run test:e2e` pass.

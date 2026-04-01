@@ -25,6 +25,14 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     .join("\n\n");
 
   const phaseLine = runPhase ? `- Current run phase: ${runPhase}` : "- Current run phase: unknown";
+  const taskPipeline = [
+    "TASK PIPELINE (mandatory for file modifications):",
+    "1. Check active meet decisions first and preserve issue linkage when tasks come from a meet.",
+    "2. Register each execution unit with nx_task_add before editing files.",
+    "3. Keep edits scoped to active tasks only.",
+    "4. As each task completes, call nx_task_update.",
+    "5. When all tasks complete, verify, sync knowledge if needed, then close with nx_task_close."
+  ].join("\n");
 
   return [
     "<nexus>",
@@ -45,6 +53,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- [d]: record decision in active meet session.",
     "- [rule]: write stable team conventions.",
     "- Use nx_delegate_template for subagent delegation payloads.",
+    taskPipeline,
     "Skills:",
     skillRows,
     "Skill Prompts:",

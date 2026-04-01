@@ -8,6 +8,7 @@ This document describes how to run the Nexus workflow in OpenCode with this plug
 - `[d]`: decision marker inside active meet session
 - `[run]`: execution mode, task cycle required
 - `[rule]`: rule-writing intent for team conventions
+- natural-language meet prompts are also detected for user guidance when the request clearly implies a meeting
 
 ## Workflow
 
@@ -26,6 +27,8 @@ This document describes how to run the Nexus workflow in OpenCode with this plug
   - create new tasks (`nx_task_add`).
 - `nx_meet_start` with non-lead attendees requires team existence tracked in `agent-tracker`.
 - Speaker validation in `nx_meet_discuss` allows only `lead`, `user`, or registered attendees.
+- Active `meet.json` or `tasks.json` state produces resume notices even without an explicit tag.
+- `[run]` system injection includes a mandatory TASK PIPELINE reminder for file modifications.
 
 ## State Files
 

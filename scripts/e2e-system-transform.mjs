@@ -26,5 +26,6 @@ assert.equal(systemOut.system.length > 0, true);
 const merged = systemOut.system.join("\n");
 assert.match(merged, /Active mode: run/);
 assert.match(merged, /openai\/gpt-5\.3-codex/);
+assert.match(merged, /TASK PIPELINE/);
 
 console.log("e2e system transform passed");

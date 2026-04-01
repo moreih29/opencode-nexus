@@ -8,7 +8,7 @@ import { readRunState, setRunPhase } from "../shared/run-state";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state";
-import { buildTagNotice, detectNexusTag } from "../shared/tag-parser";
+import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser";
 import { buildNexusSystemPrompt } from "./system-prompt";
 import type { NexusPluginState } from "../plugin-state";
 
@@ -105,7 +105,7 @@ export function createHooks(ctx: PluginContext) {
       }
 
       const mode = detectNexusTag(prompt);
-      const notice = await buildStatefulNotice(mode, paths, projectRoot);
+      const notice = await buildStatefulNotice(prompt, mode, paths, projectRoot);
       if (!notice) {
         return;
       }
@@ -289,36 +289,79 @@ async function safeUnlink(filePath: string): Promise<void> {
 }
 
 async function buildStatefulNotice(
+  prompt: string,
   mode: ReturnType<typeof detectNexusTag>,
   paths: ReturnType<typeof createNexusPaths>,
   projectRoot: string
 ): Promise<string | null> {
+  const hasMeet = await fileExists(paths.MEET_FILE);
+  const taskSummary = await readTasksSummary(paths.TASKS_FILE);
+  const meetReminder = hasMeet ? await buildMeetReminder(paths.MEET_FILE) : null;
+  const ruleTags = detectRuleTags(prompt);
+  const attendeeMentions = detectAttendeeMentions(prompt);
+
+  if (attendeeMentions.length > 0) {
+    if (hasMeet) {
+      return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Add them with nx_meet_join before continuing discussion.`;
+    }
+    return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Start or resume a meet first, then use nx_meet_join.`;
+  }
+
   if (!mode) {
+    if (meetReminder) {
+      return meetReminder;
+    }
+    if (taskSummary) {
+      if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
+        return [
+          "[nexus] Active task cycle detected.",
+          `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}`,
+          "Resume work, update task states with nx_task_update, and close with nx_task_close when done."
+        ].join(" ");
+      }
+      return "[nexus] A completed task cycle is still open. Run nx_task_close before starting a new edit cycle.";
+    }
     return null;
   }
 
   const fallback = buildTagNotice(mode);
-  const hasMeet = await fileExists(paths.MEET_FILE);
-  const taskSummary = await readTasksSummary(paths.TASKS_FILE);
 
   if (mode === "meet") {
     return hasMeet
-      ? "[nexus] Meet session is active. Continue with nx_meet_discuss / nx_meet_decide."
-      : "[nexus] Meet mode detected. Start with nx_meet_start (topic, research_summary, issues).";
+      ? [
+          "[nexus] Meet session is active.",
+          meetReminder ?? "",
+          "Continue one issue at a time. Record major deliberation with nx_meet_discuss and decisions with [d] -> nx_meet_decide."
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : [
+          "[nexus] Meet mode detected.",
+          "Research first, then start with nx_meet_start(topic, research_summary, issues).",
+          "If non-lead attendees are needed, create the team before starting the meet."
+        ].join(" ");
   }
 
   if (mode === "decide") {
     return hasMeet
-      ? "[nexus] Decision tag detected. Record issue decisions with nx_meet_decide."
+      ? "[nexus] Decision tag detected. Record the active issue with nx_meet_decide and keep discussion history in nx_meet_discuss."
       : "[nexus] [d] detected but no active meet session. Run nx_meet_start first.";
   }
 
   if (mode === "run") {
     if (!taskSummary) {
-      return "[nexus] Run mode detected. No task cycle yet. Create tasks with nx_task_add.";
+      return [
+        "[nexus] Run mode detected. No task cycle yet.",
+        "TASK PIPELINE: check meet decisions, decompose work, register each task with nx_task_add, then edit.",
+        "After implementation, update task states and close with nx_task_close."
+      ].join(" ");
     }
     if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
-      return `[nexus] Run mode detected. Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`;
+      return [
+        "[nexus] Run mode detected.",
+        `Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`,
+        "Keep edits scoped to active tasks and update status as each unit completes."
+      ].join(" ");
     }
     const qa = await evaluateQaAutoTrigger(projectRoot, []);
     if (qa.shouldSpawn) {
@@ -327,5 +370,29 @@ async function buildStatefulNotice(
     return "[nexus] Run mode detected. All tasks completed. Use nx_task_close to archive cycle.";
   }
 
+  if (mode === "rule") {
+    const suffix = ruleTags && ruleTags.length > 0 ? ` Tags requested: ${ruleTags.join(", ")}.` : " Infer stable rule tags from the instruction.";
+    return `[nexus] Rule mode detected. Save durable conventions to .nexus/rules with nx_rules_write.${suffix}`;
+  }
+
   return fallback;
+}
+
+async function buildMeetReminder(meetFile: string): Promise<string | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(meetFile, "utf8")) as {
+      topic?: unknown;
+      issues?: Array<{ id?: unknown; title?: unknown; status?: unknown }>;
+    };
+    const issues = Array.isArray(raw.issues) ? raw.issues : [];
+    const discussing = issues.find((issue) => issue.status === "discussing");
+    const pending = issues.filter((issue) => issue.status === "pending");
+    const current = discussing ?? pending[0];
+    const currentText = current
+      ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\".`
+      : "All issues are decided.";
+    return `[nexus] Meet session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Use one-issue-at-a-time discussion and record important reasoning in nx_meet_discuss.`;
+  } catch {
+    return null;
+  }
 }

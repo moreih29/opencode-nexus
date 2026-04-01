@@ -23,6 +23,7 @@ Extended preset with agent and permission examples: `opencode.example.json`
 
 - 9-agent catalog (HOW/DO/CHECK) with tool policies
 - skill-aware system prompt injection for `[meet]`, `[run]`, `[d]`, `[rule]`
+- stateful meet/task reminders and stronger TASK PIPELINE guidance
 - task pipeline guardrails for edit tools
 
 ## Development
@@ -53,6 +54,14 @@ See `opencode.example.json` for a baseline setup with plugin registration, agent
 - `src/plugin/hooks.ts`: hook guardrails
 - `src/tools/*`: Nexus custom tools (`nx_meet_*`, `nx_task_*`, `nx_core_*`, etc.)
 - `src/shared/*`: paths, state, schemas, utilities
+
+## Status
+
+This plugin is a parity-focused migration of `claude-nexus`, but it is not yet full parity.
+
+- Strong today: hook guardrails, task/meet state tools, 9-agent catalog, system prompt injection
+- Partial today: procedural skill behavior, setup/onboarding workflows, code intelligence depth
+- Planned parity work remains for `nx-init`, `nx-sync`, `nx-setup`, richer meet/run workflows, and safer code-intel operations
 
 ## Notes
 
