@@ -139,16 +139,20 @@ export const nxTaskClose = tool({
       ? ((meet as { issues: Array<{ decision?: unknown }> }).issues.filter((issue) => issue.decision).length)
       : 0;
 
+    const memoryHint = {
+      taskCount,
+      decisionCount,
+      hadLoopDetection: false,
+      cycleTopics: [typeof (meet as { topic?: unknown } | null)?.topic === "string" ? (meet as { topic: string }).topic : ""]
+        .filter(Boolean)
+    };
+
+    await writeMemoryCycleNote(paths.CORE_ROOT, memoryHint);
+
     return JSON.stringify(
       {
         closed: true,
-        memoryHint: {
-          taskCount,
-          decisionCount,
-          hadLoopDetection: false,
-          cycleTopics: [typeof (meet as { topic?: unknown } | null)?.topic === "string" ? (meet as { topic: string }).topic : ""]
-            .filter(Boolean)
-        }
+        memoryHint
       },
       null,
       2
@@ -177,4 +181,25 @@ async function readCurrentBranch(projectRoot: string): Promise<string> {
   } catch {
     return "unknown";
   }
+}
+
+async function writeMemoryCycleNote(
+  coreRoot: string,
+  memoryHint: { taskCount: number; decisionCount: number; hadLoopDetection: boolean; cycleTopics: string[] }
+): Promise<void> {
+  const memoryDir = path.join(coreRoot, "memory");
+  await fs.mkdir(memoryDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filePath = path.join(memoryDir, `cycle-${stamp}.md`);
+  const content = [
+    "<!-- tags: memory, cycle -->",
+    `# Cycle Memory ${stamp}`,
+    "",
+    `- taskCount: ${memoryHint.taskCount}`,
+    `- decisionCount: ${memoryHint.decisionCount}`,
+    `- hadLoopDetection: ${memoryHint.hadLoopDetection}`,
+    `- cycleTopics: ${memoryHint.cycleTopics.join(", ") || "none"}`,
+    ""
+  ].join("\n");
+  await fs.writeFile(filePath, content, "utf8");
 }

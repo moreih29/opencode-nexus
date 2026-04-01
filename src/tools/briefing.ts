@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
 import { createNexusPaths } from "../shared/paths";
+import { readJsonFile } from "../shared/json-store";
 import { matchesHint } from "../shared/markdown";
 
 const z = tool.schema;
@@ -30,6 +31,11 @@ export const nxBriefing = tool({
     const layers = MATRIX[role] ?? ["identity", "codebase", "reference", "memory"];
 
     const sections: string[] = [];
+
+    const decisions = await readLatestDecisions(paths.HISTORY_FILE);
+    if (decisions.length > 0) {
+      sections.push("## Decisions\n" + decisions.map((d) => `- ${d}`).join("\n"));
+    }
 
     const rules = await readMarkdownDir(paths.RULES_ROOT, args.hint);
     if (rules.length > 0) {
@@ -69,6 +75,16 @@ async function readMarkdownDir(dir: string, hint?: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+async function readLatestDecisions(historyFile: string): Promise<string[]> {
+  const history = await readJsonFile<{ cycles?: Array<{ meet?: { issues?: Array<{ decision?: string }> } }> }>(historyFile, {
+    cycles: []
+  });
+  const cycles = history.cycles ?? [];
+  const latest = cycles[cycles.length - 1];
+  const issues = latest?.meet?.issues ?? [];
+  return issues.map((i) => i.decision).filter((v): v is string => typeof v === "string" && v.length > 0);
 }
 
 function capitalize(s: string): string {

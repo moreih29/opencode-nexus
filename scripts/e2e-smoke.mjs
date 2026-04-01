@@ -51,4 +51,7 @@ const history = JSON.parse(await fs.readFile(paths.HISTORY_FILE, "utf8"));
 assert.equal(Array.isArray(history.cycles), true);
 assert.equal(history.cycles.length, 1);
 
+const memoryEntries = await fs.readdir(path.join(paths.CORE_ROOT, "memory"));
+assert.equal(memoryEntries.some((name) => name.startsWith("cycle-") && name.endsWith(".md")), true);
+
 console.log("e2e smoke passed");
