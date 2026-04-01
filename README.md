@@ -53,6 +53,7 @@ See `opencode.example.json` for a baseline setup with plugin registration, agent
 - `src/skills/catalog.ts`: built-in skill metadata
 - `src/plugin/hooks.ts`: hook guardrails
 - `src/tools/*`: Nexus custom tools (`nx_meet_*`, `nx_task_*`, `nx_core_*`, etc.)
+- `src/tools/workflow.ts`: `nx_init` and `nx_sync` workflow tools
 - `src/shared/*`: paths, state, schemas, utilities
 
 ## Status

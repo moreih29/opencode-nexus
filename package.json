@@ -18,7 +18,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "generate:template": "bun run build && bun scripts/generate-template.mjs",
-    "test:e2e": "bun run build && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-phase-guard.mjs"
+    "test:e2e": "bun run build && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-phase-guard.mjs"
   },
   "dependencies": {
     "zod": "^3.23.8"

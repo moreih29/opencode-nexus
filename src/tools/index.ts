@@ -8,6 +8,7 @@ import { nxLspDiagnostics, nxLspFindReferences, nxLspRename, nxLspSymbols } from
 import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet";
 import { nxRulesRead, nxRulesWrite } from "./rules-store";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task";
+import { nxInit, nxSync } from "./workflow";
 
 export const nexusTools = {
   nx_meet_start: nxMeetStart,
@@ -21,6 +22,8 @@ export const nexusTools = {
   nx_task_list: nxTaskList,
   nx_task_update: nxTaskUpdate,
   nx_task_close: nxTaskClose,
+  nx_init: nxInit,
+  nx_sync: nxSync,
 
   nx_core_read: nxCoreRead,
   nx_core_write: nxCoreWrite,

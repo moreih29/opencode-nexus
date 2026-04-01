@@ -155,7 +155,8 @@ export const nxTaskClose = tool({
     return JSON.stringify(
       {
         closed: true,
-        memoryHint
+        memoryHint,
+        nextStep: "Run nx_sync to promote this archived cycle into core knowledge."
       },
       null,
       2
