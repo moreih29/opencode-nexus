@@ -1,6 +1,7 @@
 import path from "node:path";
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog";
+import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger";
 import { readRunState, setRunPhase } from "../shared/run-state";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths";
@@ -101,7 +102,7 @@ export function createHooks(ctx: PluginContext) {
       }
 
       const mode = detectNexusTag(prompt);
-      const notice = await buildStatefulNotice(mode, paths);
+      const notice = await buildStatefulNotice(mode, paths, projectRoot);
       if (!notice) {
         return;
       }
@@ -238,7 +239,8 @@ function pickSessionID(input: unknown): string | null {
 
 async function buildStatefulNotice(
   mode: ReturnType<typeof detectNexusTag>,
-  paths: ReturnType<typeof createNexusPaths>
+  paths: ReturnType<typeof createNexusPaths>,
+  projectRoot: string
 ): Promise<string | null> {
   if (!mode) {
     return null;
@@ -266,6 +268,10 @@ async function buildStatefulNotice(
     }
     if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
       return `[nexus] Run mode detected. Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`;
+    }
+    const qa = await evaluateQaAutoTrigger(projectRoot, []);
+    if (qa.shouldSpawn) {
+      return `[nexus] Run mode detected. All tasks completed. Spawn QA before close (reasons: ${qa.reasons.join(",")}).`;
     }
     return "[nexus] Run mode detected. All tasks completed. Use nx_task_close to archive cycle.";
   }
