@@ -45,6 +45,7 @@ For instruction delivery through OpenCode config, add `AGENTS.md` to `instructio
 ## Operations Docs
 
 - `docs/operations.md`: runtime workflow, tags, and guardrails
+- `docs/reference-boundaries.md`: what remains as legacy or historical reference
 - `docs/release-checklist.md`: release preparation checklist
 
 ## Structure
@@ -60,11 +61,17 @@ For instruction delivery through OpenCode config, add `AGENTS.md` to `instructio
 
 ## Status
 
-This plugin is a parity-focused migration of `claude-nexus`, but it is not yet full parity.
+This plugin is an OpenCode-native migration of the original `claude-nexus` project, but it is not yet full parity.
 
 - Strong today: hook guardrails, task/meet state tools, 9-agent catalog, system prompt injection
 - Partial today: procedural skill behavior, setup/onboarding workflows, code intelligence depth
 - Planned parity work remains for `nx-init`, `nx-sync`, `nx-setup`, richer meet/run workflows, and safer code-intel operations
+
+## Reference Layers
+
+- Current implementation truth: `docs/operations.md` and `docs/coverage-matrix.md`
+- Historical/source analysis: `nexus-reference-for-opencode.md`
+- Legacy migration notes and leftover source concepts: `docs/reference-boundaries.md`
 
 ## Notes
 

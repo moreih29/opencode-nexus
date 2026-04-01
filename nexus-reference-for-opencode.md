@@ -1,8 +1,10 @@
 # Nexus Reference — 철학, 아키텍처, 코드 구조 완전 가이드
 
-> 이 문서는 claude-nexus 플러그인의 설계 철학과 코드 구조를 상세히 기술한다. 다른 AI 코딩 도구(opencode 등)에서 동일한 철학의 오케스트레이션 시스템을 구축할 때 참고 자료로 사용한다.
+> 이 문서는 원본 `claude-nexus`의 설계 철학과 코드 구조를 분석한 historical reference다. 다른 AI 코딩 도구(opencode 등)에서 동일한 철학의 오케스트레이션 시스템을 구축할 때 참고 자료로 사용한다.
 
-> 현재 `opencode-nexus` 저장소의 실제 구현 범위는 `docs/coverage-matrix.md`를 기준으로 판단해야 한다. 이 문서는 목표 아키텍처와 원본 참조를 함께 담고 있어, 일부 항목은 현재 구현보다 앞서 있을 수 있다.
+> 현재 `opencode-nexus` 저장소의 실제 구현 범위는 `docs/coverage-matrix.md`와 `docs/operations.md`를 기준으로 판단해야 한다. 이 문서는 목표 아키텍처와 원본 참조를 함께 담고 있어, 일부 항목은 현재 구현보다 앞서 있을 수 있다.
+
+> Claude Code 전용 개념(`.claude-plugin`, `CLAUDE.md` auto sync, TeamCreate/SendMessage 등)은 이 문서에서 source analysis 용도로 유지된다. 현재 OpenCode runtime 지원 여부는 별도로 확인해야 한다.
 
 ---
 

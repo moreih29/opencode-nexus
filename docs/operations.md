@@ -2,6 +2,8 @@
 
 This document describes how to run the Nexus workflow in OpenCode with this plugin.
 
+This is a current-state runtime guide. For source-project analysis and historical Claude Code concepts, see `nexus-reference-for-opencode.md` and `docs/reference-boundaries.md`.
+
 ## Modes and Tags
 
 - `[meet]`: discussion mode, define issues and decisions first

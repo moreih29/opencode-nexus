@@ -2,6 +2,8 @@
 
 This document tracks implementation coverage against `nexus-reference-for-opencode.md`.
 
+Use this document and `docs/operations.md` as the source of truth for what `opencode-nexus` actually supports today.
+
 ## Phase Coverage
 
 | Phase | Item | Status | Notes |
@@ -13,9 +15,11 @@ This document tracks implementation coverage against `nexus-reference-for-openco
 | 2 | MATRIX briefing | Partial | role matrix + rules + latest decisions only; source asset parity still pending |
 | 2 | Structured delegation | Complete | `nx_delegate_template` implemented |
 | 2 | Init/setup/sync workflows | Partial | `nx_init`, `nx_setup`, and `nx_sync` tools exist, but OpenCode-native scope differs from Claude slash-skills |
+| 2 | Claude-native slash skill runtime | Missing | Replaced with OpenCode tools and config/instruction flows |
 | 3 | Tag system + detection | Partial | explicit tags + natural meet hints + stateful notices; full parity still pending |
 | 3 | meet -> run pipeline | Partial | run phase tracking exists; procedural meet/run parity still pending |
 | 3 | history + memoryHint | Partial | archive now includes lifecycle signals, but deeper loop telemetry is still pending |
+| 3 | Claude-native team messaging | Missing | No TeamCreate/SendMessage parity; lead coordinates subagents through OpenCode tasking |
 | 4 | LSP integration | Partial | heuristic hover/definition/references/symbols/actions with preview-first rename |
 | 4 | AST search/replace | Partial | regex-backed AST search plus preview-first replace |
 
