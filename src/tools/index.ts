@@ -1,8 +1,10 @@
 import { nxArtifactWrite } from "./artifact";
+import { nxAstReplace, nxAstSearch } from "./ast";
 import { nxBriefing } from "./briefing";
 import { nxContext } from "./context";
 import { nxCoreRead, nxCoreWrite } from "./core-store";
 import { nxDelegateTemplate } from "./delegation";
+import { nxLspDiagnostics, nxLspFindReferences, nxLspRename, nxLspSymbols } from "./lsp";
 import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet";
 import { nxRulesRead, nxRulesWrite } from "./rules-store";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task";
@@ -27,5 +29,12 @@ export const nexusTools = {
   nx_context: nxContext,
   nx_briefing: nxBriefing,
   nx_artifact_write: nxArtifactWrite,
-  nx_delegate_template: nxDelegateTemplate
+  nx_delegate_template: nxDelegateTemplate,
+
+  nx_lsp_symbols: nxLspSymbols,
+  nx_lsp_diagnostics: nxLspDiagnostics,
+  nx_lsp_references: nxLspFindReferences,
+  nx_lsp_rename: nxLspRename,
+  nx_ast_search: nxAstSearch,
+  nx_ast_replace: nxAstReplace
 };
