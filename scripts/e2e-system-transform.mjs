@@ -29,5 +29,8 @@ assert.match(merged, /openai\/gpt-5\.3-codex/);
 assert.match(merged, /TASK PIPELINE/);
 assert.match(merged, /Branch Guard/);
 assert.match(merged, /one issue at a time/);
+assert.match(merged, /DELEGATION PLAYBOOK/);
+assert.match(merged, /OUTPUT CONTRACTS/);
+assert.match(merged, /PLATFORM MAPPING/);
 
 console.log("e2e system transform passed");
