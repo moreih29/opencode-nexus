@@ -1,0 +1,6 @@
+*
+!core/
+!rules/
+!config.json
+!history.json
+!.gitignore

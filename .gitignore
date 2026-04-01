@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+
+.DS_Store
+
+.nexus/*
+!.nexus/core/
+!.nexus/rules/
+!.nexus/config.json
+!.nexus/history.json
+!.nexus/.gitignore
