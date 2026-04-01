@@ -1,7 +1,7 @@
 import path from "node:path";
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog";
-import { readRunState, writeRunState } from "../shared/run-state";
+import { readRunState, setRunPhase } from "../shared/run-state";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state";
@@ -137,10 +137,10 @@ export function createHooks(ctx: PluginContext) {
       const prompt = sessionID ? ctx.state.lastPromptBySession.get(sessionID) ?? "" : "";
       const mode = detectNexusTag(prompt) ?? "idle";
       if (mode === "run") {
-        await writeRunState(paths.RUN_FILE, "execute", "run tag detected");
+        await setRunPhase(paths.RUN_FILE, "execute", "run tag detected", true);
       }
       if (mode === "meet") {
-        await writeRunState(paths.RUN_FILE, "design", "meet tag detected");
+        await setRunPhase(paths.RUN_FILE, "design", "meet tag detected", true);
       }
       const run = await readRunState(paths.RUN_FILE);
       output.system.push(

@@ -4,7 +4,7 @@ import { tool } from "@opencode-ai/plugin";
 import { appendHistory } from "../shared/history";
 import { createNexusPaths } from "../shared/paths";
 import { readJsonFile, writeJsonFile } from "../shared/json-store";
-import { writeRunState } from "../shared/run-state";
+import { setRunPhase, writeRunState } from "../shared/run-state";
 import { fileExists } from "../shared/state";
 import { TasksFileSchema, type TaskItem, type TasksFile } from "../shared/schema";
 
@@ -38,7 +38,7 @@ export const nxTaskAdd = tool({
     tasksFile.tasks.push(task);
     TasksFileSchema.parse(tasksFile);
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
-    await writeRunState(paths.RUN_FILE, "execute", "task added");
+    await setRunPhase(paths.RUN_FILE, "execute", "task added", true);
 
     return `Added task ${id}: ${args.title}`;
   }
@@ -93,7 +93,12 @@ export const nxTaskUpdate = tool({
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
 
     const hasActive = tasksFile.tasks.some((item) => item.status === "pending" || item.status === "in_progress" || item.status === "blocked");
-    await writeRunState(paths.RUN_FILE, hasActive ? "execute" : "verify", hasActive ? "tasks still active" : "all tasks completed");
+    await setRunPhase(
+      paths.RUN_FILE,
+      hasActive ? "execute" : "verify",
+      hasActive ? "tasks still active" : "all tasks completed",
+      false
+    );
 
     return args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`;
   }
@@ -121,6 +126,8 @@ export const nxTaskClose = tool({
         tasks: tasks ?? undefined
       });
     }
+
+    await setRunPhase(paths.RUN_FILE, "complete", "cycle closed", false);
 
     await safeUnlink(paths.MEET_FILE);
     await safeUnlink(paths.TASKS_FILE);
