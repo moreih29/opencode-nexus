@@ -44,6 +44,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- [run]: execute with tasks, then verify, then close cycle.",
     "- [d]: record decision in active meet session.",
     "- [rule]: write stable team conventions.",
+    "- Use nx_delegate_template for subagent delegation payloads.",
     "Skills:",
     skillRows,
     "Skill Prompts:",

@@ -2,6 +2,7 @@ import { nxArtifactWrite } from "./artifact";
 import { nxBriefing } from "./briefing";
 import { nxContext } from "./context";
 import { nxCoreRead, nxCoreWrite } from "./core-store";
+import { nxDelegateTemplate } from "./delegation";
 import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet";
 import { nxRulesRead, nxRulesWrite } from "./rules-store";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task";
@@ -25,5 +26,6 @@ export const nexusTools = {
   nx_rules_write: nxRulesWrite,
   nx_context: nxContext,
   nx_briefing: nxBriefing,
-  nx_artifact_write: nxArtifactWrite
+  nx_artifact_write: nxArtifactWrite,
+  nx_delegate_template: nxDelegateTemplate
 };
