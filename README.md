@@ -29,6 +29,7 @@ This repository is Bun-first.
 bun install
 bun run check
 bun run test:e2e
+bun run generate:template
 ```
 
 ## Example Config
