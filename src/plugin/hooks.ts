@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
+import { canJoinMeetWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger";
 import { readRunState, setRunPhase } from "../shared/run-state";
@@ -47,6 +48,7 @@ export function createHooks(ctx: PluginContext) {
       }
 
       if (input.tool === "task") {
+        await enforceTaskTeamPolicy(output.args, paths);
         await trackSubagentStart(output.args, paths.AGENT_TRACKER_FILE);
       }
 
@@ -190,7 +192,7 @@ async function validateMeetStart(args: Record<string, unknown>, trackerFile: str
       return false;
     }
     const role = (a as { role?: unknown }).role;
-    return typeof role === "string" && role.toLowerCase() !== "lead";
+    return typeof role === "string" && !canJoinMeetWithoutTeam(role);
   });
 
   if (!hasNonLead) {
@@ -200,6 +202,31 @@ async function validateMeetStart(args: Record<string, unknown>, trackerFile: str
   const teamExists = await hasRunningTeam(trackerFile);
   if (!teamExists) {
     throw new Error("Attendees include non-lead agents. Create a team first with task tool and team_name.");
+  }
+}
+
+async function enforceTaskTeamPolicy(
+  args: Record<string, unknown>,
+  paths: ReturnType<typeof createNexusPaths>
+): Promise<void> {
+  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
+  if (!agentType) {
+    return;
+  }
+  if (!isKnownNexusAgent(agentType) || agentType.toLowerCase() === "explore") {
+    return;
+  }
+
+  const hasMeet = await fileExists(paths.MEET_FILE);
+  const hasTasks = await fileExists(paths.TASKS_FILE);
+  const inRunMode = hasTasks && !hasMeet;
+  if (!inRunMode || !requiresTeamInRunMode(agentType)) {
+    return;
+  }
+
+  const teamName = pickString(args, ["team_name", "team"]);
+  if (!teamName) {
+    throw new Error(`Run mode requires team_name for ${agentType} subagent tasks.`);
   }
 }
 
