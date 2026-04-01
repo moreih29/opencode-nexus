@@ -27,5 +27,7 @@ const merged = systemOut.system.join("\n");
 assert.match(merged, /Active mode: run/);
 assert.match(merged, /openai\/gpt-5\.3-codex/);
 assert.match(merged, /TASK PIPELINE/);
+assert.match(merged, /Branch Guard/);
+assert.match(merged, /one issue at a time/);
 
 console.log("e2e system transform passed");

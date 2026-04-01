@@ -40,7 +40,10 @@ export const nxTaskAdd = tool({
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
     await setRunPhase(paths.RUN_FILE, "execute", "task added", true);
 
-    return `Added task ${id}: ${args.title}`;
+    const meetActive = await fileExists(paths.MEET_FILE);
+    const linkageNote = meetActive && !args.meet_issue ? " Link this task to its meet issue with meet_issue when possible." : "";
+
+    return `Added task ${id}: ${args.title}${linkageNote}`;
   }
 });
 

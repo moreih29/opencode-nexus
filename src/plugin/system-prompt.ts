@@ -50,6 +50,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "Guidelines:",
     "- [meet]: discuss and decide before implementation.",
     "- [run]: execute with tasks, then verify, then close cycle.",
+    "- Branch Guard: avoid substantial execution directly on main/master.",
     "- [d]: record decision in active meet session.",
     "- [rule]: write stable team conventions.",
     "- Use nx_delegate_template for subagent delegation payloads.",

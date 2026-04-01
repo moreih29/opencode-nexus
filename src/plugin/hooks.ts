@@ -288,12 +288,26 @@ async function safeUnlink(filePath: string): Promise<void> {
   }
 }
 
+async function readCurrentBranch(projectRoot: string): Promise<string> {
+  try {
+    const head = (await fs.readFile(path.join(projectRoot, ".git", "HEAD"), "utf8")).trim();
+    if (!head.startsWith("ref: ")) {
+      return "detached";
+    }
+    return head.slice(5).split("/").at(-1) ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 async function buildStatefulNotice(
   prompt: string,
   mode: ReturnType<typeof detectNexusTag>,
   paths: ReturnType<typeof createNexusPaths>,
   projectRoot: string
 ): Promise<string | null> {
+  const branch = await readCurrentBranch(projectRoot);
+  const branchGuard = branch === "main" || branch === "master";
   const hasMeet = await fileExists(paths.MEET_FILE);
   const taskSummary = await readTasksSummary(paths.TASKS_FILE);
   const meetReminder = hasMeet ? await buildMeetReminder(paths.MEET_FILE) : null;
@@ -352,6 +366,7 @@ async function buildStatefulNotice(
     if (!taskSummary) {
       return [
         "[nexus] Run mode detected. No task cycle yet.",
+        branchGuard ? `Branch Guard: current branch is ${branch}. Create a task branch before substantial execution.` : "",
         "TASK PIPELINE: check meet decisions, decompose work, register each task with nx_task_add, then edit.",
         "After implementation, update task states and close with nx_task_close."
       ].join(" ");
@@ -359,6 +374,7 @@ async function buildStatefulNotice(
     if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
       return [
         "[nexus] Run mode detected.",
+        branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
         `Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`,
         "Keep edits scoped to active tasks and update status as each unit completes."
       ].join(" ");

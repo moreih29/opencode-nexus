@@ -13,11 +13,18 @@ This document describes how to run the Nexus workflow in OpenCode with this plug
 ## Workflow
 
 1. Start meeting with `nx_meet_start`.
-2. Discuss issues with `nx_meet_discuss`.
+2. Discuss one issue at a time with `nx_meet_discuss`, including trade-offs and a recommendation.
 3. Record decisions with `nx_meet_decide`.
-4. Switch to run mode and create tasks with `nx_task_add`.
+4. Switch to run mode and create tasks with `nx_task_add`, linking `meet_issue` when the task comes from a decided issue.
 5. Execute work and update task status via `nx_task_update`.
-6. Close and archive cycle using `nx_task_close`.
+6. Verify, then close and archive the cycle using `nx_task_close`.
+
+## Procedural Expectations
+
+- `[meet]` is discussion-only. Research first, then start or resume a meeting.
+- Present one issue at a time and capture significant reasoning in `nx_meet_discuss`.
+- `[run]` follows intake -> design -> execute -> verify -> complete.
+- Branch Guard applies in run mode: avoid substantial execution directly on `main` or `master`.
 
 ## Guardrails
 
