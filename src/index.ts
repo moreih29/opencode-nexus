@@ -1,11 +1,15 @@
 import type { Plugin } from "@opencode-ai/plugin";
-import { createHooks } from "./plugin/hooks";
-import { nexusTools } from "./tools";
+import { createConfigHook } from "./create-config";
+import { createHooks } from "./create-hooks";
+import { createPluginState } from "./plugin-state";
+import { createTools } from "./create-tools";
 
 const OpenCodeNexusPlugin: Plugin = async (ctx) => {
+  const state = createPluginState();
   const hooks = createHooks({
     directory: ctx.directory,
-    worktree: ctx.worktree
+    worktree: ctx.worktree,
+    state
   });
 
   await ctx.client.app.log({
@@ -17,7 +21,8 @@ const OpenCodeNexusPlugin: Plugin = async (ctx) => {
   });
 
   return {
-    tool: nexusTools,
+    tool: createTools(),
+    config: createConfigHook(),
     ...hooks
   };
 };

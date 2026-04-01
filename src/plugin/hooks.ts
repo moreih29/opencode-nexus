@@ -1,12 +1,18 @@
 import path from "node:path";
+import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
+import { NEXUS_SKILL_CATALOG } from "../skills/catalog";
+import { readRunState, writeRunState } from "../shared/run-state";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state";
 import { buildTagNotice, detectNexusTag } from "../shared/tag-parser";
+import { buildNexusSystemPrompt } from "./system-prompt";
+import type { NexusPluginState } from "../plugin-state";
 
 interface PluginContext {
   directory: string;
   worktree?: string;
+  state: NexusPluginState;
 }
 
 interface ToolInput {
@@ -40,6 +46,13 @@ export function createHooks(ctx: PluginContext) {
 
       if (input.tool === "task") {
         await trackSubagentStart(output.args, paths.AGENT_TRACKER_FILE);
+      }
+
+      if (input.tool === "nx_task_close") {
+        const summary = await readTasksSummary(paths.TASKS_FILE);
+        if (summary && (summary.pending > 0 || summary.in_progress > 0 || summary.blocked > 0)) {
+          throw new Error("Cannot close cycle with active tasks. Complete or unblock remaining tasks first.");
+        }
       }
 
       if (!isEditLikeTool(input.tool)) {
@@ -82,6 +95,11 @@ export function createHooks(ctx: PluginContext) {
         return;
       }
 
+      const sessionID = pickSessionID(_input);
+      if (sessionID) {
+        ctx.state.lastPromptBySession.set(sessionID, prompt);
+      }
+
       const mode = detectNexusTag(prompt);
       const notice = await buildStatefulNotice(mode, paths);
       if (!notice) {
@@ -92,6 +110,47 @@ export function createHooks(ctx: PluginContext) {
         type: "text",
         text: `\n\n${notice}`
       });
+    },
+
+    "command.execute.before": async (
+      input: { command: string; sessionID: string },
+      output: { parts: Array<Record<string, unknown>> }
+    ) => {
+      if (!isExitCommand(input.command)) {
+        return;
+      }
+      const summary = await readTasksSummary(paths.TASKS_FILE);
+      if (!summary || (summary.pending === 0 && summary.in_progress === 0 && summary.blocked === 0)) {
+        return;
+      }
+      output.parts.push({
+        type: "text",
+        text: "[nexus] Active tasks remain. Close or update tasks before exiting this cycle."
+      } as Record<string, unknown>);
+    },
+
+    "experimental.chat.system.transform": async (
+      input: { sessionID?: string },
+      output: { system: string[] }
+    ) => {
+      const sessionID = input.sessionID;
+      const prompt = sessionID ? ctx.state.lastPromptBySession.get(sessionID) ?? "" : "";
+      const mode = detectNexusTag(prompt) ?? "idle";
+      if (mode === "run") {
+        await writeRunState(paths.RUN_FILE, "execute", "run tag detected");
+      }
+      if (mode === "meet") {
+        await writeRunState(paths.RUN_FILE, "design", "meet tag detected");
+      }
+      const run = await readRunState(paths.RUN_FILE);
+      output.system.push(
+        buildNexusSystemPrompt({
+          mode,
+          agents: NEXUS_AGENT_CATALOG,
+          skills: NEXUS_SKILL_CATALOG,
+          runPhase: run?.phase
+        })
+      );
     }
   };
 }
@@ -163,6 +222,18 @@ function extractText(parts: Array<{ type?: string; text?: string }>): string {
     .filter((part) => (part.type ?? "text") === "text" && typeof part.text === "string")
     .map((part) => part.text ?? "")
     .join("\n");
+}
+
+function isExitCommand(command: string): boolean {
+  return /^(exit|quit|:q|\/exit|\/quit)\b/i.test(command.trim());
+}
+
+function pickSessionID(input: unknown): string | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const value = (input as { sessionID?: unknown }).sessionID;
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 async function buildStatefulNotice(
