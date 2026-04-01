@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger";
@@ -122,11 +123,20 @@ export function createHooks(ctx: PluginContext) {
       }
       const summary = await readTasksSummary(paths.TASKS_FILE);
       if (!summary || (summary.pending === 0 && summary.in_progress === 0 && summary.blocked === 0)) {
+        await safeUnlink(paths.STOP_WARNED_FILE);
         return;
       }
+
+      const warned = await fileExists(paths.STOP_WARNED_FILE);
+      if (!warned) {
+        await fs.writeFile(paths.STOP_WARNED_FILE, "1\n", "utf8");
+      } else {
+        await safeUnlink(paths.STOP_WARNED_FILE);
+      }
+
       output.parts.push({
         type: "text",
-        text: "[nexus] Active tasks remain. Close or update tasks before exiting this cycle."
+        text: "[nexus] Active tasks remain. Close or update tasks before exiting this cycle (nx_task_close when complete)."
       } as Record<string, unknown>);
     },
 
@@ -235,6 +245,14 @@ function pickSessionID(input: unknown): string | null {
   }
   const value = (input as { sessionID?: unknown }).sessionID;
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+async function safeUnlink(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    // noop
+  }
 }
 
 async function buildStatefulNotice(
