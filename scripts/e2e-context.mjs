@@ -3,6 +3,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { createHooks } from "../dist/plugin/hooks.js";
+import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
 import { nxContext } from "../dist/tools/context.js";
@@ -14,6 +16,7 @@ await fs.writeFile(path.join(root, ".git", "HEAD"), "ref: refs/heads/main\n", "u
 
 const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
+const hooks = createHooks({ directory: root, worktree: root, state: createPluginState() });
 await fs.writeFile(
   paths.MEET_FILE,
   JSON.stringify(
@@ -34,9 +37,20 @@ const ctx = { directory: root, worktree: root };
 const addResult = await nxTaskAdd.execute({ title: "Implement workflow" }, ctx);
 assert.match(addResult, /Link this task to its meet issue/);
 
+await hooks["tool.execute.before"](
+  { tool: "task" },
+  { args: { subagent_type: "engineer", team_name: "impl-group", description: "implement workflow" } }
+);
+await hooks["tool.execute.after"](
+  { tool: "task", args: { subagent_type: "engineer", team_name: "impl-group" } },
+  { title: "ok", output: "done", metadata: null }
+);
+
 const contextResult = JSON.parse(await nxContext.execute({}, ctx));
 assert.equal(contextResult.branchGuard, true);
 assert.equal(contextResult.meetTopic, "Procedural parity");
 assert.equal(contextResult.currentIssue.id, "issue-1");
+assert.equal(contextResult.coordinationGroups.length > 0, true);
+assert.equal(contextResult.coordinationGroups[0].label, "impl-group");
 
 console.log("e2e context passed");

@@ -73,6 +73,7 @@ This plugin is an OpenCode-native migration of the original `claude-nexus` proje
 - Historical/source analysis: `nexus-reference-for-opencode.md`
 - Legacy migration notes and leftover source concepts: `docs/reference-boundaries.md`
 - Team compatibility details: `docs/team-compatibility.md`
+- OpenCode group coordination model: `docs/group-orchestration.md`
 
 ## Notes
 

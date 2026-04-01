@@ -247,6 +247,9 @@ async function trackSubagentStart(args: Record<string, unknown>, trackerFile: st
     agent_type: agentType,
     state: teamName ? "team-spawning" : "running",
     team_name: teamName ?? undefined,
+    coordination_label: teamName ?? undefined,
+    lead_agent: "lead",
+    purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined,
     started_at: new Date().toISOString()
   });
 }

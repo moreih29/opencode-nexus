@@ -54,6 +54,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- [d]: record decision in active meet session.",
     "- [rule]: write stable team conventions.",
     "- team_name is only a lead-managed coordination label, not a platform-native team object.",
+    "- All grouped execution is lead-mediated; subagents do not directly coordinate each other.",
     "- Use nx_delegate_template for subagent delegation payloads.",
     taskPipeline,
     "Skills:",

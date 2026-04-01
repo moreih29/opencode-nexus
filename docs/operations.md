@@ -62,6 +62,7 @@ This is a current-state runtime guide. For source-project analysis and historica
 - `nx_artifact_write`: save runtime artifacts
 
 See `docs/team-compatibility.md` for supported, partial, and unsupported team-related behaviors.
+See `docs/group-orchestration.md` for the OpenCode-native lead-coordinated group model.
 
 ## Instruction Files
 
