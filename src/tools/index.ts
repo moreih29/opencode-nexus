@@ -4,7 +4,17 @@ import { nxBriefing } from "./briefing";
 import { nxContext } from "./context";
 import { nxCoreRead, nxCoreWrite } from "./core-store";
 import { nxDelegateTemplate } from "./delegation";
-import { nxLspDiagnostics, nxLspFindReferences, nxLspRename, nxLspSymbols } from "./lsp";
+import {
+  nxLspCodeActions,
+  nxLspDiagnostics,
+  nxLspDocumentSymbols,
+  nxLspFindReferences,
+  nxLspGotoDefinition,
+  nxLspHover,
+  nxLspRename,
+  nxLspSymbols,
+  nxLspWorkspaceSymbols
+} from "./lsp";
 import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet";
 import { nxRulesRead, nxRulesWrite } from "./rules-store";
 import { nxSetup } from "./setup";
@@ -37,9 +47,15 @@ export const nexusTools = {
   nx_delegate_template: nxDelegateTemplate,
 
   nx_lsp_symbols: nxLspSymbols,
+  nx_lsp_document_symbols: nxLspDocumentSymbols,
+  nx_lsp_workspace_symbols: nxLspWorkspaceSymbols,
+  nx_lsp_hover: nxLspHover,
+  nx_lsp_goto_definition: nxLspGotoDefinition,
   nx_lsp_diagnostics: nxLspDiagnostics,
   nx_lsp_references: nxLspFindReferences,
+  nx_lsp_find_references: nxLspFindReferences,
   nx_lsp_rename: nxLspRename,
+  nx_lsp_code_actions: nxLspCodeActions,
   nx_ast_search: nxAstSearch,
   nx_ast_replace: nxAstReplace
 };

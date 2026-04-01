@@ -26,18 +26,34 @@ export const nxAstSearch = tool({
 });
 
 export const nxAstReplace = tool({
-  description: "Replace source code with regex",
+  description: "Preview or apply regex-backed source replacement",
   args: {
     file: z.string(),
     pattern: z.string(),
-    replace: z.string()
+    replace: z.string(),
+    dry_run: z.boolean().default(true)
   },
   async execute(args, context) {
     const abs = path.isAbsolute(args.file) ? args.file : path.join(context.worktree ?? context.directory, args.file);
     const regex = new RegExp(args.pattern, "g");
     const original = await fs.readFile(abs, "utf8");
+    const matches = Array.from(original.matchAll(regex)).map((match) => match[0]);
     const next = original.replace(regex, args.replace);
-    await fs.writeFile(abs, next, "utf8");
-    return `AST-style regex replace applied in ${args.file}`;
+
+    if (!args.dry_run) {
+      await fs.writeFile(abs, next, "utf8");
+    }
+
+    return JSON.stringify(
+      {
+        file: args.file,
+        dryRun: args.dry_run,
+        replacementCount: matches.length,
+        changed: original !== next,
+        preview: original !== next ? next.slice(0, 400) : null
+      },
+      null,
+      2
+    );
   }
 });
