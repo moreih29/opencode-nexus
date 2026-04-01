@@ -147,6 +147,12 @@ export function createHooks(ctx: PluginContext) {
       output: { system: string[] }
     ) => {
       const sessionID = input.sessionID;
+      if (sessionID && !ctx.state.onboardedSessions.has(sessionID)) {
+        output.system.push(
+          "[nexus] Quick start: use [meet] to decide, [run] to execute tasks, nx_task_close to archive when complete."
+        );
+        ctx.state.onboardedSessions.add(sessionID);
+      }
       const prompt = sessionID ? ctx.state.lastPromptBySession.get(sessionID) ?? "" : "";
       const mode = detectNexusTag(prompt) ?? "idle";
       if (mode === "run") {

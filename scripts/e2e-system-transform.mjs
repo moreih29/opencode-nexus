@@ -23,7 +23,8 @@ const systemOut = { system: [] };
 await hooks["experimental.chat.system.transform"]({ sessionID: "s1" }, systemOut);
 
 assert.equal(systemOut.system.length > 0, true);
-assert.match(systemOut.system[0], /Active mode: run/);
-assert.match(systemOut.system[0], /openai\/gpt-5\.3-codex/);
+const merged = systemOut.system.join("\n");
+assert.match(merged, /Active mode: run/);
+assert.match(merged, /openai\/gpt-5\.3-codex/);
 
 console.log("e2e system transform passed");

@@ -15,6 +15,10 @@ Add the package to your OpenCode config plugin list.
 }
 ```
 
+Minimal preset: `opencode.minimal.json`
+
+Extended preset with agent and permission examples: `opencode.example.json`
+
 `opencode-nexus` applies built-in Nexus presets through plugin hooks:
 
 - 9-agent catalog (HOW/DO/CHECK) with tool policies
