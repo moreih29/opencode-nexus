@@ -15,6 +15,12 @@ Add the package to your OpenCode config plugin list.
 }
 ```
 
+`opencode-nexus` applies built-in Nexus presets through plugin hooks:
+
+- 9-agent catalog (HOW/DO/CHECK) with tool policies
+- skill-aware system prompt injection for `[meet]`, `[run]`, `[d]`, `[rule]`
+- task pipeline guardrails for edit tools
+
 ## Development
 
 This repository is Bun-first.
@@ -37,6 +43,8 @@ See `opencode.example.json` for a baseline setup with plugin registration, agent
 ## Structure
 
 - `src/index.ts`: plugin entry (default export only)
+- `src/agents/catalog.ts`: built-in 9-agent definitions
+- `src/skills/catalog.ts`: built-in skill metadata
 - `src/plugin/hooks.ts`: hook guardrails
 - `src/tools/*`: Nexus custom tools (`nx_meet_*`, `nx_task_*`, `nx_core_*`, etc.)
 - `src/shared/*`: paths, state, schemas, utilities

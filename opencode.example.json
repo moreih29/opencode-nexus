@@ -6,7 +6,7 @@
     "architect": {
       "description": "Technical design and architecture review",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "openai/gpt-5.3-codex",
       "tools": {
         "edit": false,
         "write": false,
@@ -19,7 +19,7 @@
     "engineer": {
       "description": "Code implementation and debugging",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "openai/gpt-5.3-codex-spark",
       "tools": {
         "nx_task_add": false
       }
@@ -27,7 +27,7 @@
     "qa": {
       "description": "Verification and test-focused review",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-5",
+      "model": "openai/gpt-5.3-codex-spark",
       "tools": {
         "nx_task_add": false
       }
