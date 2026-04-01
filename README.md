@@ -74,6 +74,7 @@ This plugin is an OpenCode-native migration of the original `claude-nexus` proje
 - Legacy migration notes and leftover source concepts: `docs/reference-boundaries.md`
 - Team compatibility details: `docs/team-compatibility.md`
 - OpenCode group coordination model: `docs/group-orchestration.md`
+- Prompt parity inventory and migration checklist: `docs/prompt-parity-plan.md`
 
 ## Notes
 
