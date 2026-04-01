@@ -14,6 +14,8 @@ await execFileAsync("bun", ["scripts/generate-template.mjs"], { cwd: repoRoot })
 const template = await fs.readFile(path.join(repoRoot, "templates", "nexus-section.md"), "utf8");
 assert.match(template, /## Nexus Agent Orchestration/);
 assert.match(template, /### Tags/);
+assert.match(template, /### Operational Rules/);
+assert.match(template, /### Platform Mapping/);
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-setup-"));
 const ctx = { directory: root, worktree: root, abort: new AbortController().signal, metadata() {}, async ask() {} };
@@ -28,5 +30,6 @@ assert.equal(config.instructions.includes("AGENTS.md"), true);
 const agents = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
 assert.match(agents, /<!-- NEXUS:START -->/);
 assert.match(agents, /## Nexus Agent Orchestration/);
+assert.match(agents, /coordination label/);
 
 console.log("e2e setup template passed");
