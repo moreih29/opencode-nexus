@@ -333,10 +333,11 @@ async function buildStatefulNotice(
         return [
           "[nexus] Active task cycle detected.",
           `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}`,
-          "Resume work, update task states with nx_task_update, and close with nx_task_close when done."
+          taskSummary.blocked > 0 ? "Resolve blocked tasks or explicitly re-plan before continuing implementation." : "",
+          "Resume work, update task states with nx_task_update, verify when complete, and close with nx_task_close after optional nx_sync."
         ].join(" ");
       }
-      return "[nexus] A completed task cycle is still open. Run nx_task_close before starting a new edit cycle.";
+      return "[nexus] A completed task cycle is still open. Verify if needed, run nx_sync when useful, then nx_task_close before starting a new edit cycle.";
     }
     return null;
   }
@@ -348,20 +349,21 @@ async function buildStatefulNotice(
       ? [
           "[nexus] Meet session is active.",
           meetReminder ?? "",
-          "Continue one issue at a time. Record major deliberation with nx_meet_discuss and decisions with [d] -> nx_meet_decide."
+          "Continue one issue at a time. Record major deliberation with nx_meet_discuss, compare options with trade-offs, and use [d] -> nx_meet_decide only after discussion is logged."
         ]
           .filter(Boolean)
           .join(" ")
       : [
           "[nexus] Meet mode detected.",
           "Research first, then start with nx_meet_start(topic, research_summary, issues).",
-          "If non-lead attendees are needed, create the team before starting the meet."
+          "If non-lead attendees are needed, start grouped coordination before starting the meet.",
+          "Keep the agenda one issue at a time and decide only after discussing trade-offs."
         ].join(" ");
   }
 
   if (mode === "decide") {
     return hasMeet
-      ? "[nexus] Decision tag detected. Record the active issue with nx_meet_decide and keep discussion history in nx_meet_discuss."
+      ? "[nexus] Decision tag detected. Record supporting reasoning with nx_meet_discuss first if it is missing, then record the active issue with nx_meet_decide."
       : "[nexus] [d] detected but no active meet session. Run nx_meet_start first.";
   }
 
@@ -371,7 +373,8 @@ async function buildStatefulNotice(
         "[nexus] Run mode detected. No task cycle yet.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Create a task branch before substantial execution.` : "",
         "TASK PIPELINE: check meet decisions, decompose work, register each task with nx_task_add, then edit.",
-        "After implementation, update task states and close with nx_task_close."
+        "Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
+        "After implementation, update task states, verify, optionally nx_sync, and close with nx_task_close."
       ].join(" ");
     }
     if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
@@ -379,14 +382,15 @@ async function buildStatefulNotice(
         "[nexus] Run mode detected.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
         `Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`,
-        "Keep edits scoped to active tasks and update status as each unit completes."
+        taskSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
+        "Keep edits scoped to active tasks, use nx_briefing before specialist delegation, and update status as each unit completes."
       ].join(" ");
     }
     const qa = await evaluateQaAutoTrigger(projectRoot, []);
     if (qa.shouldSpawn) {
-      return `[nexus] Run mode detected. All tasks completed. Spawn QA before close (reasons: ${qa.reasons.join(",")}).`;
+      return `[nexus] Run mode detected. All tasks completed. Spawn QA before close (reasons: ${qa.reasons.join(",")}), then consider nx_sync before nx_task_close.`;
     }
-    return "[nexus] Run mode detected. All tasks completed. Use nx_task_close to archive cycle.";
+    return "[nexus] Run mode detected. All tasks completed. Verify if needed, consider nx_sync, then use nx_task_close to archive the cycle.";
   }
 
   if (mode === "rule") {
