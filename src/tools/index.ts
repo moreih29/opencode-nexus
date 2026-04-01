@@ -7,6 +7,7 @@ import { nxDelegateTemplate } from "./delegation";
 import { nxLspDiagnostics, nxLspFindReferences, nxLspRename, nxLspSymbols } from "./lsp";
 import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet";
 import { nxRulesRead, nxRulesWrite } from "./rules-store";
+import { nxSetup } from "./setup";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task";
 import { nxInit, nxSync } from "./workflow";
 
@@ -24,6 +25,7 @@ export const nexusTools = {
   nx_task_close: nxTaskClose,
   nx_init: nxInit,
   nx_sync: nxSync,
+  nx_setup: nxSetup,
 
   nx_core_read: nxCoreRead,
   nx_core_write: nxCoreWrite,

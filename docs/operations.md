@@ -51,6 +51,7 @@ This document describes how to run the Nexus workflow in OpenCode with this plug
 - `nx_briefing(role, hint?)`: role-scoped context assembly
 - `nx_init`: repository scan + core knowledge bootstrap
 - `nx_sync`: promote archived cycle history into core knowledge
+- `nx_setup`: inject Nexus instructions into `AGENTS.md` and update `opencode.json`
 - `nx_core_read/write`: project knowledge store
 - `nx_rules_read/write`: team rules
 - `nx_artifact_write`: save runtime artifacts
