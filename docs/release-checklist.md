@@ -13,6 +13,9 @@ Use this checklist before publishing a new `opencode-nexus` version.
 - Run `bun run check`.
 - Run `bun run test:e2e`.
 - Run `bun run build`.
+- Verify phase guard e2e passes (`e2e phase guard passed`).
+- Verify system injection e2e passes (`e2e system transform passed`).
+- Verify team/stop guardrails e2e pass.
 
 ## Packaging
 
@@ -32,3 +35,9 @@ Use this checklist before publishing a new `opencode-nexus` version.
   "plugin": ["opencode-nexus"]
 }
 ```
+
+## Mandatory Gates
+
+- No failing e2e scenario in guardrails, phase transitions, or system injection.
+- Task pipeline must block edit tools without active tasks.
+- Run phase transitions must reject invalid jumps.
