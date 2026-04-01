@@ -1,4 +1,5 @@
 import type { NexusAgentProfile } from "../agents/catalog";
+import { AGENT_PROMPTS } from "../agents/prompts";
 import type { NexusSkillProfile } from "../skills/catalog";
 
 interface BuildSystemInput {
@@ -17,6 +18,9 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
 
   const skillRows = skills.map((s) => `- ${s.id} (${s.trigger}): ${s.purpose}`).join("\n");
   const modelRows = agents.map((a) => `- ${a.id}: ${a.model}`).join("\n");
+  const promptRows = agents
+    .map((a) => `### ${a.id}\n${AGENT_PROMPTS[a.id] ?? "No prompt"}`)
+    .join("\n\n");
 
   const phaseLine = runPhase ? `- Current run phase: ${runPhase}` : "- Current run phase: unknown";
 
@@ -42,6 +46,8 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     skillRows,
     "Agent Models:",
     modelRows,
+    "Agent Prompts:",
+    promptRows,
     "</nexus>"
   ].join("\n");
 }
