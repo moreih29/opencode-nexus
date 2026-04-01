@@ -57,8 +57,18 @@ export const AgentTrackerItemSchema = z.object({
 
 export const AgentTrackerSchema = z.array(AgentTrackerItemSchema);
 
+export const RunPhaseSchema = z.enum(["intake", "design", "execute", "verify", "complete"]);
+
+export const RunStateSchema = z.object({
+  phase: RunPhaseSchema,
+  updated_at: z.string(),
+  reason: z.string().optional()
+});
+
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskItem = z.infer<typeof TaskItemSchema>;
 export type TasksFile = z.infer<typeof TasksFileSchema>;
 export type MeetFile = z.infer<typeof MeetFileSchema>;
 export type AgentTrackerItem = z.infer<typeof AgentTrackerItemSchema>;
+export type RunPhase = z.infer<typeof RunPhaseSchema>;
+export type RunState = z.infer<typeof RunStateSchema>;

@@ -4,6 +4,7 @@ import { tool } from "@opencode-ai/plugin";
 import { appendHistory } from "../shared/history";
 import { createNexusPaths } from "../shared/paths";
 import { readJsonFile, writeJsonFile } from "../shared/json-store";
+import { writeRunState } from "../shared/run-state";
 import { fileExists } from "../shared/state";
 import { TasksFileSchema, type TaskItem, type TasksFile } from "../shared/schema";
 
@@ -37,6 +38,7 @@ export const nxTaskAdd = tool({
     tasksFile.tasks.push(task);
     TasksFileSchema.parse(tasksFile);
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
+    await writeRunState(paths.RUN_FILE, "execute", "task added");
 
     return `Added task ${id}: ${args.title}`;
   }
@@ -90,6 +92,9 @@ export const nxTaskUpdate = tool({
     task.updated_at = new Date().toISOString();
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
 
+    const hasActive = tasksFile.tasks.some((item) => item.status === "pending" || item.status === "in_progress" || item.status === "blocked");
+    await writeRunState(paths.RUN_FILE, hasActive ? "execute" : "verify", hasActive ? "tasks still active" : "all tasks completed");
+
     return args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`;
   }
 });
@@ -104,6 +109,10 @@ export const nxTaskClose = tool({
     const meet = await readJsonFile<Record<string, unknown> | null>(paths.MEET_FILE, null);
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
 
+    if (tasks && tasks.tasks.some((task) => task.status !== "completed")) {
+      throw new Error("Cannot close cycle before all tasks are completed.");
+    }
+
     if (args.archive && (meet || tasks)) {
       await appendHistory(paths.HISTORY_FILE, {
         completed_at: new Date().toISOString(),
@@ -116,6 +125,7 @@ export const nxTaskClose = tool({
     await safeUnlink(paths.MEET_FILE);
     await safeUnlink(paths.TASKS_FILE);
     await safeUnlink(paths.STOP_WARNED_FILE);
+    await safeUnlink(paths.RUN_FILE);
 
     const taskCount = tasks?.tasks.length ?? 0;
     const decisionCount = Array.isArray((meet as { issues?: unknown[] } | null)?.issues)
