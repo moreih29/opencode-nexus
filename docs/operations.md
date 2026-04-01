@@ -58,3 +58,8 @@ This is a current-state runtime guide. For source-project analysis and historica
 - `nx_core_read/write`: project knowledge store
 - `nx_rules_read/write`: team rules
 - `nx_artifact_write`: save runtime artifacts
+
+## Instruction Files
+
+- OpenCode primary instruction path: `AGENTS.md` plus `opencode.json.instructions`
+- Legacy migration input: `CLAUDE.md` may be scanned by `nx_init`, but it is not treated as the primary runtime instruction source

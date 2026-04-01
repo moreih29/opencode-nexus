@@ -18,6 +18,8 @@ await fs.writeFile(
   "utf8"
 );
 await fs.writeFile(path.join(root, "README.md"), "# Sample\n", "utf8");
+await fs.writeFile(path.join(root, "AGENTS.md"), "# Project Instructions\n", "utf8");
+await fs.writeFile(path.join(root, "CLAUDE.md"), "# Legacy Claude Instructions\n", "utf8");
 await fs.writeFile(path.join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: {} }, null, 2), "utf8");
 
 const paths = createNexusPaths(root);
@@ -47,6 +49,9 @@ const initResult = JSON.parse(
 );
 assert.equal(initResult.generatedFiles.includes(path.join("core", "codebase", "architecture.md")), true);
 assert.equal(initResult.generatedFiles.includes(path.join("rules", "dev-rules.md")), true);
+assert.equal(initResult.primaryDocs.includes("AGENTS.md"), true);
+assert.equal(initResult.legacyDocs.includes("CLAUDE.md"), true);
+assert.equal(initResult.legacyInputsUsed.includes("CLAUDE.md"), true);
 
 await nxMeetStart.execute(
   {

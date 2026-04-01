@@ -77,3 +77,4 @@ This plugin is an OpenCode-native migration of the original `claude-nexus` proje
 
 - `.opencode/agents` and `.opencode/skills` are consumer-project resources.
 - This plugin package focuses on runtime hooks and custom tools.
+- `AGENTS.md` is the primary OpenCode instruction file. `CLAUDE.md` is treated only as a legacy migration input when scanning existing repositories.

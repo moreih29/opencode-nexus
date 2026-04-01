@@ -15,6 +15,7 @@ Use this document and `docs/operations.md` as the source of truth for what `open
 | 2 | MATRIX briefing | Partial | role matrix + rules + latest decisions only; source asset parity still pending |
 | 2 | Structured delegation | Complete | `nx_delegate_template` implemented |
 | 2 | Init/setup/sync workflows | Partial | `nx_init`, `nx_setup`, and `nx_sync` tools exist, but OpenCode-native scope differs from Claude slash-skills |
+| 2 | CLAUDE.md migration handling | Partial | `nx_init` can ingest `CLAUDE.md` as legacy input, but OpenCode defaults to `AGENTS.md` |
 | 2 | Claude-native slash skill runtime | Missing | Replaced with OpenCode tools and config/instruction flows |
 | 3 | Tag system + detection | Partial | explicit tags + natural meet hints + stateful notices; full parity still pending |
 | 3 | meet -> run pipeline | Partial | run phase tracking exists; procedural meet/run parity still pending |

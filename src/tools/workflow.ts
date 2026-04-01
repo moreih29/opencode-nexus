@@ -97,10 +97,14 @@ export const nxInit = tool({
         mode,
         backupPath,
         scan,
+        primaryDocs: scan.primaryDocs,
+        legacyDocs: scan.legacyDocs,
+        legacyInputsUsed: scan.legacyInputsUsed,
         generatedFiles,
         proposedIdentity,
         nextSteps: [
           "Review proposed identity fields if any were not explicitly provided.",
+          "Prefer AGENTS.md and opencode.json.instructions as the primary instruction path in OpenCode.",
           "Use [meet] for major decisions before implementation.",
           "Use nx_sync after completed cycles to promote decisions into core knowledge."
         ]
@@ -190,15 +194,20 @@ async function scanProject(root: string) {
     ...Object.keys(packageJson?.dependencies ?? {}),
     ...Object.keys(packageJson?.devDependencies ?? {})
   ];
-  const docs = (await Promise.all(["README.md", "README.en.md", "CLAUDE.md", "docs"].map(async (entry) => ((await fileExists(path.join(root, entry))) ? entry : null)))).filter(
+  const docs = (await Promise.all(["AGENTS.md", "README.md", "README.en.md", "CLAUDE.md", "docs"].map(async (entry) => ((await fileExists(path.join(root, entry))) ? entry : null)))).filter(
     (entry): entry is string => Boolean(entry)
   );
+  const primaryDocs = docs.filter((entry) => entry !== "CLAUDE.md");
+  const legacyDocs = docs.filter((entry) => entry === "CLAUDE.md");
   const languageHints = await detectLanguages(root);
   const gitCommits = await readRecentCommits(root);
 
   return {
     topLevel,
     docs,
+    primaryDocs,
+    legacyDocs,
+    legacyInputsUsed: legacyDocs,
     packageManager: (await fileExists(path.join(root, "bun.lock"))) ? "bun" : packageJson ? "npm-compatible" : "unknown",
     scripts,
     frameworks: detectFrameworks(deps, languageHints),
@@ -232,7 +241,8 @@ function buildDevelopmentDoc(scan: Awaited<ReturnType<typeof scanProject>>): str
     "",
     `- Package manager: ${scan.packageManager}`,
     `- Scripts: ${scan.scripts.join(", ") || "none detected"}`,
-    `- Docs present: ${scan.docs.join(", ") || "none detected"}`,
+    `- Primary docs: ${scan.primaryDocs.join(", ") || "none detected"}`,
+    `- Legacy docs: ${scan.legacyDocs.join(", ") || "none detected"}`,
     "",
     "## Recent Activity",
     ...scan.recentCommits.map((commit) => `- ${commit}`)
