@@ -5,6 +5,7 @@ export interface HistoryCycle {
   branch: string;
   meet?: unknown;
   tasks?: unknown;
+  memoryHint?: unknown;
 }
 
 interface HistoryFile {

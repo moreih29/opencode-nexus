@@ -43,6 +43,7 @@ This document describes how to run the Nexus workflow in OpenCode with this plug
 - `.nexus/state/tasks.json`: active task cycle
 - `.nexus/state/run.json`: run pipeline phase state
 - `.nexus/state/agent-tracker.json`: subagent lifecycle
+- `.nexus/state/reopen-tracker.json`: reopen and blocked-transition signals for lifecycle summaries
 - `.nexus/history.json`: archived meet/task cycles
 
 ## Useful Tools

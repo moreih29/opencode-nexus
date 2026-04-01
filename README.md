@@ -40,6 +40,7 @@ bun run generate:template
 ## Example Config
 
 See `opencode.example.json` for a baseline setup with plugin registration, agent examples, and permissions.
+For instruction delivery through OpenCode config, add `AGENTS.md` to `instructions` or run `nx_setup`.
 
 ## Operations Docs
 

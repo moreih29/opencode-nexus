@@ -12,11 +12,12 @@ This document tracks implementation coverage against `nexus-reference-for-openco
 | 2 | How/Do/Check categories | Complete | 9-agent catalog + policy + team enforcement |
 | 2 | MATRIX briefing | Partial | role matrix + rules + latest decisions only; source asset parity still pending |
 | 2 | Structured delegation | Complete | `nx_delegate_template` implemented |
+| 2 | Init/setup/sync workflows | Partial | `nx_init`, `nx_setup`, and `nx_sync` tools exist, but OpenCode-native scope differs from Claude slash-skills |
 | 3 | Tag system + detection | Partial | explicit tags + natural meet hints + stateful notices; full parity still pending |
 | 3 | meet -> run pipeline | Partial | run phase tracking exists; procedural meet/run parity still pending |
-| 3 | history + memoryHint | Partial | archive + memory cycle notes exist; sync-quality lifecycle still pending |
-| 4 | LSP integration | Partial | lightweight symbol/refs/diagnostics/rename only |
-| 4 | AST search/replace | Partial | regex-backed AST-style search/replace only |
+| 3 | history + memoryHint | Partial | archive now includes lifecycle signals, but deeper loop telemetry is still pending |
+| 4 | LSP integration | Partial | heuristic hover/definition/references/symbols/actions with preview-first rename |
+| 4 | AST search/replace | Partial | regex-backed AST search plus preview-first replace |
 
 ## Final DoD
 

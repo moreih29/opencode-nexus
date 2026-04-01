@@ -292,7 +292,15 @@ function summarizeCycle(cycle: any) {
     taskTitles: tasks.map((task: any) => String(task.title ?? task.id ?? "unknown task")),
     decisions,
     taskCount: tasks.length,
-    decisionCount: decisions.length
+    decisionCount: decisions.length,
+    memoryHint:
+      cycle?.memoryHint && typeof cycle.memoryHint === "object"
+        ? {
+            hadLoopDetection: Boolean((cycle.memoryHint as { hadLoopDetection?: unknown }).hadLoopDetection),
+            reopenCount: Number((cycle.memoryHint as { reopenCount?: unknown }).reopenCount ?? 0),
+            blockedTransitions: Number((cycle.memoryHint as { blockedTransitions?: unknown }).blockedTransitions ?? 0)
+          }
+        : null
   };
 }
 
@@ -306,6 +314,9 @@ function buildRecentCycleMemoryDoc(summary: ReturnType<typeof summarizeCycle>): 
     `- Topic: ${summary.topic ?? "none"}`,
     `- Task count: ${summary.taskCount}`,
     `- Decision count: ${summary.decisionCount}`,
+    `- Loop detection: ${summary.memoryHint?.hadLoopDetection ? "yes" : "no"}`,
+    `- Reopen count: ${summary.memoryHint?.reopenCount ?? 0}`,
+    `- Blocked transitions: ${summary.memoryHint?.blockedTransitions ?? 0}`,
     "",
     "## Tasks",
     ...summary.taskTitles.map((task: string) => `- ${task}`),
@@ -324,6 +335,7 @@ function buildRecentChangesDoc(summary: ReturnType<typeof summarizeCycle>): stri
     "",
     `- Latest archived branch: ${summary.branch}`,
     `- Latest meet topic: ${summary.topic ?? "none"}`,
+    `- Lifecycle signals: reopen=${summary.memoryHint?.reopenCount ?? 0}, blocked=${summary.memoryHint?.blockedTransitions ?? 0}`,
     "",
     "## Completed Work",
     ...summary.taskTitles.map((task: string) => `- ${task}`),

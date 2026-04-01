@@ -20,6 +20,7 @@ export function createNexusPaths(projectRoot: string) {
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),
     RUN_FILE: path.join(STATE_ROOT, "run.json"),
     AGENT_TRACKER_FILE: path.join(STATE_ROOT, "agent-tracker.json"),
+    REOPEN_TRACKER_FILE: path.join(STATE_ROOT, "reopen-tracker.json"),
     STOP_WARNED_FILE: path.join(STATE_ROOT, "stop-warned"),
     ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts")
   };

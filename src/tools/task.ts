@@ -85,15 +85,25 @@ export const nxTaskUpdate = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const tasksFile = TasksFileSchema.parse(await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] }));
+    const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
     const task = tasksFile.tasks.find((item) => item.id === args.id);
 
     if (!task) {
       throw new Error(`Task not found: ${args.id}`);
     }
 
+    const previousStatus = task.status;
     task.status = args.status;
     task.updated_at = new Date().toISOString();
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
+
+    if (previousStatus === "completed" && args.status !== "completed") {
+      tracker.reopenCount += 1;
+    }
+    if (previousStatus !== "blocked" && args.status === "blocked") {
+      tracker.blockedTransitions += 1;
+    }
+    await writeJsonFile(paths.REOPEN_TRACKER_FILE, tracker);
 
     const hasActive = tasksFile.tasks.some((item) => item.status === "pending" || item.status === "in_progress" || item.status === "blocked");
     await setRunPhase(
@@ -116,26 +126,11 @@ export const nxTaskClose = tool({
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const meet = await readJsonFile<Record<string, unknown> | null>(paths.MEET_FILE, null);
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
+    const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
 
     if (tasks && tasks.tasks.some((task) => task.status !== "completed")) {
       throw new Error("Cannot close cycle before all tasks are completed.");
     }
-
-    if (args.archive && (meet || tasks)) {
-      await appendHistory(paths.HISTORY_FILE, {
-        completed_at: new Date().toISOString(),
-        branch: await readCurrentBranch(context.worktree ?? context.directory),
-        meet: meet ?? undefined,
-        tasks: tasks ?? undefined
-      });
-    }
-
-    await setRunPhase(paths.RUN_FILE, "complete", "cycle closed", false);
-
-    await safeUnlink(paths.MEET_FILE);
-    await safeUnlink(paths.TASKS_FILE);
-    await safeUnlink(paths.STOP_WARNED_FILE);
-    await safeUnlink(paths.RUN_FILE);
 
     const taskCount = tasks?.tasks.length ?? 0;
     const decisionCount = Array.isArray((meet as { issues?: unknown[] } | null)?.issues)
@@ -145,10 +140,30 @@ export const nxTaskClose = tool({
     const memoryHint = {
       taskCount,
       decisionCount,
-      hadLoopDetection: false,
+      hadLoopDetection: tracker.reopenCount > 0 || tracker.blockedTransitions > 0,
+      reopenCount: tracker.reopenCount,
+      blockedTransitions: tracker.blockedTransitions,
       cycleTopics: [typeof (meet as { topic?: unknown } | null)?.topic === "string" ? (meet as { topic: string }).topic : ""]
         .filter(Boolean)
     };
+
+    if (args.archive && (meet || tasks)) {
+      await appendHistory(paths.HISTORY_FILE, {
+        completed_at: new Date().toISOString(),
+        branch: await readCurrentBranch(context.worktree ?? context.directory),
+        meet: meet ?? undefined,
+        tasks: tasks ?? undefined,
+        memoryHint
+      });
+    }
+
+    await setRunPhase(paths.RUN_FILE, "complete", "cycle closed", false);
+
+    await safeUnlink(paths.MEET_FILE);
+    await safeUnlink(paths.TASKS_FILE);
+    await safeUnlink(paths.STOP_WARNED_FILE);
+    await safeUnlink(paths.RUN_FILE);
+    await writeJsonFile(paths.REOPEN_TRACKER_FILE, { reopenCount: 0, blockedTransitions: 0 });
 
     await writeMemoryCycleNote(paths.CORE_ROOT, memoryHint);
 
@@ -189,7 +204,14 @@ async function readCurrentBranch(projectRoot: string): Promise<string> {
 
 async function writeMemoryCycleNote(
   coreRoot: string,
-  memoryHint: { taskCount: number; decisionCount: number; hadLoopDetection: boolean; cycleTopics: string[] }
+  memoryHint: {
+    taskCount: number;
+    decisionCount: number;
+    hadLoopDetection: boolean;
+    reopenCount: number;
+    blockedTransitions: number;
+    cycleTopics: string[];
+  }
 ): Promise<void> {
   const memoryDir = path.join(coreRoot, "memory");
   await fs.mkdir(memoryDir, { recursive: true });
@@ -202,8 +224,21 @@ async function writeMemoryCycleNote(
     `- taskCount: ${memoryHint.taskCount}`,
     `- decisionCount: ${memoryHint.decisionCount}`,
     `- hadLoopDetection: ${memoryHint.hadLoopDetection}`,
+    `- reopenCount: ${memoryHint.reopenCount}`,
+    `- blockedTransitions: ${memoryHint.blockedTransitions}`,
     `- cycleTopics: ${memoryHint.cycleTopics.join(", ") || "none"}`,
     ""
   ].join("\n");
   await fs.writeFile(filePath, content, "utf8");
+}
+
+async function readTracker(filePath: string): Promise<{ reopenCount: number; blockedTransitions: number }> {
+  const tracker = await readJsonFile<{ reopenCount?: number; blockedTransitions?: number }>(filePath, {
+    reopenCount: 0,
+    blockedTransitions: 0
+  });
+  return {
+    reopenCount: Number(tracker.reopenCount ?? 0),
+    blockedTransitions: Number(tracker.blockedTransitions ?? 0)
+  };
 }
