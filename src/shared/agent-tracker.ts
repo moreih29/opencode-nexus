@@ -42,3 +42,5 @@ export async function hasRunningTeam(filePath: string): Promise<boolean> {
   const items = await readAgentTracker(filePath);
   return items.some((item) => (item.state === "team-spawning" || item.state === "running") && !!item.team_name);
 }
+
+// team_name is a coordination label in OpenCode, not a platform-native team object.

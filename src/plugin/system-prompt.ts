@@ -53,6 +53,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Branch Guard: avoid substantial execution directly on main/master.",
     "- [d]: record decision in active meet session.",
     "- [rule]: write stable team conventions.",
+    "- team_name is only a lead-managed coordination label, not a platform-native team object.",
     "- Use nx_delegate_template for subagent delegation payloads.",
     taskPipeline,
     "Skills:",

@@ -207,7 +207,7 @@ async function validateMeetStart(args: Record<string, unknown>, trackerFile: str
 
   const teamExists = await hasRunningTeam(trackerFile);
   if (!teamExists) {
-    throw new Error("Attendees include non-lead agents. Create a team first with task tool and team_name.");
+    throw new Error("Attendees include non-lead agents. Start subagent coordination first with a shared team_name label.");
   }
 }
 
@@ -232,7 +232,7 @@ async function enforceTaskTeamPolicy(
 
   const teamName = pickString(args, ["team_name", "team"]);
   if (!teamName) {
-    throw new Error(`Run mode requires team_name for ${agentType} subagent tasks.`);
+    throw new Error(`Run mode requires a shared team_name coordination label for ${agentType} subagent tasks.`);
   }
 }
 

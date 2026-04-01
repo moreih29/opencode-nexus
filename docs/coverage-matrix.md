@@ -21,6 +21,7 @@ Use this document and `docs/operations.md` as the source of truth for what `open
 | 3 | meet -> run pipeline | Partial | run phase tracking exists; procedural meet/run parity still pending |
 | 3 | history + memoryHint | Partial | archive now includes lifecycle signals, but deeper loop telemetry is still pending |
 | 3 | Claude-native team messaging | Missing | No TeamCreate/SendMessage parity; lead coordinates subagents through OpenCode tasking |
+| 3 | team_name semantics | Partial | supported only as a coordination label, not as a native team object |
 | 4 | LSP integration | Partial | heuristic hover/definition/references/symbols/actions with preview-first rename |
 | 4 | AST search/replace | Partial | regex-backed AST search plus preview-first replace |
 

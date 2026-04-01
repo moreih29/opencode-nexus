@@ -35,6 +35,7 @@ This is a current-state runtime guide. For source-project analysis and historica
   - close the cycle (`nx_task_close`), or
   - create new tasks (`nx_task_add`).
 - `nx_meet_start` with non-lead attendees requires team existence tracked in `agent-tracker`.
+- `team_name` is a shared coordination label for lead-managed subagent work, not a platform-native team object.
 - Speaker validation in `nx_meet_discuss` allows only `lead`, `user`, or registered attendees.
 - Active `meet.json` or `tasks.json` state produces resume notices even without an explicit tag.
 - `[run]` system injection includes a mandatory TASK PIPELINE reminder for file modifications.
@@ -45,6 +46,7 @@ This is a current-state runtime guide. For source-project analysis and historica
 - `.nexus/state/tasks.json`: active task cycle
 - `.nexus/state/run.json`: run pipeline phase state
 - `.nexus/state/agent-tracker.json`: subagent lifecycle
+- `.nexus/state/agent-tracker.json` records coordination labels and subagent lifecycle state; it is not a full team registry
 - `.nexus/state/reopen-tracker.json`: reopen and blocked-transition signals for lifecycle summaries
 - `.nexus/history.json`: archived meet/task cycles
 
@@ -58,6 +60,8 @@ This is a current-state runtime guide. For source-project analysis and historica
 - `nx_core_read/write`: project knowledge store
 - `nx_rules_read/write`: team rules
 - `nx_artifact_write`: save runtime artifacts
+
+See `docs/team-compatibility.md` for supported, partial, and unsupported team-related behaviors.
 
 ## Instruction Files
 

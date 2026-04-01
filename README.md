@@ -72,6 +72,7 @@ This plugin is an OpenCode-native migration of the original `claude-nexus` proje
 - Current implementation truth: `docs/operations.md` and `docs/coverage-matrix.md`
 - Historical/source analysis: `nexus-reference-for-opencode.md`
 - Legacy migration notes and leftover source concepts: `docs/reference-boundaries.md`
+- Team compatibility details: `docs/team-compatibility.md`
 
 ## Notes
 

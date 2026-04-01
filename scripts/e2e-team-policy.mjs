@@ -18,15 +18,18 @@ await ensureNexusStructure(paths);
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 
 let blocked = false;
+let blockedMessage = "";
 try {
   await hooks["tool.execute.before"](
     { tool: "task" },
     { args: { subagent_type: "engineer", description: "do work" } }
   );
-} catch {
+} catch (error) {
   blocked = true;
+  blockedMessage = String(error);
 }
 assert.equal(blocked, true);
+assert.match(blockedMessage, /coordination label/i);
 
 await hooks["tool.execute.before"](
   { tool: "task" },

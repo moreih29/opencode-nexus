@@ -3,7 +3,7 @@ import type { NexusSkillProfile } from "./catalog";
 export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
   "nx-meet": [
     "<role>",
-    "Facilitate structured team meetings. Lead is both facilitator and participant.",
+    "Facilitate structured coordination meetings. Lead is both facilitator and participant.",
     "</role>",
     "<constraints>",
     "- NEVER execute implementation during meet phase.",
@@ -16,6 +16,7 @@ export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
     "1) Discover intent depth and attendees.",
     "2) Research code, prior decisions, and relevant references before starting the meet.",
     "3) Start or resume a meet session with clear issues and attendees.",
+    "3a) Treat team_name only as a shared coordination label for lead-managed subagent work.",
     "4) Discuss one issue at a time, compare options with pros/cons/trade-offs, and recommend a path.",
     "5) Wait for the user's decision, then record it with [d] -> nx_meet_decide.",
     "6) When all issues are decided, offer the transition to [run].",
@@ -37,6 +38,7 @@ export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
     "1) Intake: confirm direction, inspect meet decisions, and watch for branch guard needs.",
     "2) Design: bring in HOW agents only when scope, architecture, or trade-offs require it.",
     "3) Execute: decompose work into tasks, delegate with structured payloads, and keep edits scoped.",
+    "3a) Use shared team_name labels only to group related subagent work under the lead agent.",
     "4) Verify: use Lead + CHECK agents when risk triggers fire; failed verification reopens execute or design.",
     "5) Complete: sync learned context, archive with nx_task_close, and report final status.",
     "Rollback rule: verify failure returns to execute for code defects and to design for approach defects.",
