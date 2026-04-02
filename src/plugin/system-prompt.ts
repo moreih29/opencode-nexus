@@ -1,7 +1,5 @@
 import type { NexusAgentProfile } from "../agents/catalog";
-import { AGENT_PROMPTS } from "../agents/prompts";
 import type { NexusSkillProfile } from "../skills/catalog";
-import { SKILL_PROMPTS } from "../skills/prompts";
 
 interface BuildSystemInput {
   mode: "meet" | "run" | "decide" | "rule" | "idle";
@@ -18,11 +16,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const check = agents.filter((a) => a.category === "check").map((a) => a.id).join(", ");
 
   const skillRows = skills.map((s) => `- ${s.id} (${s.trigger}): ${s.purpose}`).join("\n");
-  const skillPromptRows = skills.map((s) => `### ${s.id}\n${SKILL_PROMPTS[s.id]}`).join("\n\n");
   const modelRows = agents.map((a) => `- ${a.id}: ${a.model}`).join("\n");
-  const promptRows = agents
-    .map((a) => `### ${a.id}\n${AGENT_PROMPTS[a.id] ?? "No prompt"}`)
-    .join("\n\n");
 
   const phaseLine = runPhase ? `- Current run phase: ${runPhase}` : "- Current run phase: unknown";
   const modePlaybook = buildModePlaybook(mode);
@@ -87,14 +81,12 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     delegationPlaybook,
     outputContracts,
     legacyMapping,
+    "Runtime Note:",
+    "- Detailed role and skill procedures live in AGENTS.md, instructions, and the nx_* skill/tool surfaces; keep system injection focused on current state and mandatory execution guardrails.",
     "Skills:",
     skillRows,
-    "Skill Prompts:",
-    skillPromptRows,
     "Agent Models:",
     modelRows,
-    "Agent Prompts:",
-    promptRows,
     "</nexus>"
   ].join("\n");
 }

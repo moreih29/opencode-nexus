@@ -25,12 +25,12 @@ await hooks["experimental.chat.system.transform"]({ sessionID: "s1" }, systemOut
 assert.equal(systemOut.system.length > 0, true);
 const merged = systemOut.system.join("\n");
 assert.match(merged, /Active mode: run/);
-assert.match(merged, /openai\/gpt-5\.3-codex/);
 assert.match(merged, /TASK PIPELINE/);
 assert.match(merged, /Branch Guard/);
-assert.match(merged, /one issue at a time/);
+assert.match(merged, /Current run phase: execute/);
 assert.match(merged, /DELEGATION PLAYBOOK/);
 assert.match(merged, /OUTPUT CONTRACTS/);
 assert.match(merged, /PLATFORM MAPPING/);
+assert.match(merged, /Detailed role and skill procedures live in AGENTS\.md/);
 
 console.log("e2e system transform passed");
