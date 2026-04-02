@@ -419,7 +419,7 @@ async function buildStatefulNotice(
         branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
         `Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`,
         taskSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
-        "Keep edits scoped to active tasks, involve Engineer for code execution units once work is decomposed, use nx_briefing before specialist delegation, and update status as each unit completes."
+        "Keep edits scoped to active tasks, do not continue as Lead solo once work is decomposed, involve Engineer for code execution units, use nx_briefing before specialist delegation, and update status as each unit completes."
       ].join(" ");
     }
     const qa = await evaluateQaAutoTrigger(projectRoot, []);
@@ -450,7 +450,7 @@ async function buildMeetReminder(meetFile: string): Promise<string | null> {
     const currentText = current
       ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\".`
       : "All issues are decided.";
-    return `[nexus] Meet session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Use one-issue-at-a-time discussion and record important reasoning in nx_meet_discuss.`;
+    return `[nexus] Meet session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Use one-issue-at-a-time discussion, record important reasoning in nx_meet_discuss, and do not open the next issue until the current issue is decided or explicitly deferred.`;
   } catch {
     return null;
   }

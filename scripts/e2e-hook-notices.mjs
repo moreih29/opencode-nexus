@@ -40,6 +40,7 @@ const meetReminder = { parts: [{ type: "text", text: "계속 진행하자" }] };
 await hooks["chat.message"]({ sessionID: "s2" }, meetReminder);
 assert.match(meetReminder.parts.at(-1).text, /Meet session/i);
 assert.match(meetReminder.parts.at(-1).text, /one-issue-at-a-time/i);
+assert.match(meetReminder.parts.at(-1).text, /Do not open the next issue/i);
 
 const attendeePrompt = { parts: [{ type: "text", text: "아키텍트 참석시켜" }] };
 await hooks["chat.message"]({ sessionID: "s3" }, attendeePrompt);
@@ -78,5 +79,6 @@ assert.match(taskReminder.parts.at(-1).text, /Resolve blocked tasks/i);
 const runPrompt = { parts: [{ type: "text", text: "[run] 구현 계속해" }] };
 await hooks["chat.message"]({ sessionID: "s5" }, runPrompt);
 assert.match(runPrompt.parts.at(-1).text, /nx_briefing/);
+assert.match(runPrompt.parts.at(-1).text, /Lead solo/i);
 
 console.log("e2e hook notices passed");
