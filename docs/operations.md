@@ -27,7 +27,7 @@ When available, the preferred primary agent is `nexus`. It acts as the orchestra
 
 - `[meet]` is discussion-only. Research first, then start or resume a meeting.
 - Present one issue at a time and capture significant reasoning in `nx_meet_discuss`.
-- `[run]` follows intake -> design -> execute -> verify -> complete.
+- `[run]` is task-driven. Treat `tasks.json` as the execution source of truth rather than relying on a separate phase file.
 - Branch Guard applies in run mode: avoid substantial execution directly on `main` or `master`.
 
 ## Guardrails
@@ -48,8 +48,7 @@ When available, the preferred primary agent is `nexus`. It acts as the orchestra
 - `.nexus/state/meet.json`: active meet session
 - `.nexus/state/meet.opencode.json`: OpenCode-only meet sidecar for canonical-first handoff and HOW panel continuity
 - meet issues track richer statuses such as `researching`, `deferred`, and `tasked`
-- `.nexus/state/tasks.json`: active task cycle
-- `.nexus/state/run.json`: run pipeline phase state
+- `.nexus/state/tasks.json`: active task cycle and execution source of truth
 - `.nexus/state/agent-tracker.json`: subagent lifecycle
 - `.nexus/state/agent-tracker.json` records coordination labels and subagent lifecycle state; it is not a full team registry
 - `.nexus/state/reopen-tracker.json`: reopen and blocked-transition signals for lifecycle summaries

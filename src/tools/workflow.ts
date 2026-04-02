@@ -56,6 +56,11 @@ export const nxInit = tool({
 
     const scan = await scanProject(root);
     const generatedFiles: string[] = [];
+    const identityInputs = {
+      mission: args.mission?.trim(),
+      design: args.design?.trim(),
+      roadmap: args.roadmap?.trim()
+    };
 
     generatedFiles.push(
       ...(await writeIfChanged(
@@ -76,10 +81,11 @@ export const nxInit = tool({
     );
 
     const proposedIdentity = buildIdentityDrafts(scan);
+    const confirmationQuestions = buildIdentityConfirmationQuestions(proposedIdentity, identityInputs);
     generatedFiles.push(
-      ...(await writeIdentityDoc(identityDir, "mission", args.mission, proposedIdentity.mission)),
-      ...(await writeIdentityDoc(identityDir, "design", args.design, proposedIdentity.design)),
-      ...(await writeIdentityDoc(identityDir, "roadmap", args.roadmap, proposedIdentity.roadmap))
+      ...(await writeIdentityDoc(identityDir, "mission", identityInputs.mission, proposedIdentity.mission)),
+      ...(await writeIdentityDoc(identityDir, "design", identityInputs.design, proposedIdentity.design)),
+      ...(await writeIdentityDoc(identityDir, "roadmap", identityInputs.roadmap, proposedIdentity.roadmap))
     );
 
     if (args.setup_rules) {
@@ -102,13 +108,16 @@ export const nxInit = tool({
         legacyInputsUsed: scan.legacyInputsUsed,
         generatedFiles,
         proposedIdentity,
-        identityNeedsConfirmation: !(args.mission && args.design && args.roadmap),
+        identityNeedsConfirmation: confirmationQuestions.length > 0,
+        confirmationQuestions,
         instructionFiles: {
           primary: scan.primaryDocs.includes("AGENTS.md") ? "AGENTS.md" : null,
           legacy: scan.legacyDocs.includes("CLAUDE.md") ? "CLAUDE.md" : null
         },
         nextSteps: [
-          "Review proposed identity fields if any were not explicitly provided.",
+          ...(confirmationQuestions.length > 0
+            ? ["Answer the confirmation questions and rerun nx_init with the confirmed mission, design, and roadmap values."]
+            : ["Identity values were explicitly provided for this run."]),
           "Prefer AGENTS.md and opencode.json.instructions as the primary instruction path in OpenCode.",
           "Use [meet] for major decisions before implementation.",
           "Use nx_sync after completed cycles to promote decisions into core knowledge."
@@ -123,7 +132,7 @@ export const nxInit = tool({
 export const nxSync = tool({
   description: "Promote archived cycle history into Nexus core knowledge",
   args: {
-    scope: z.enum(["all", "memory", "codebase", "reference"]).default("all"),
+    scope: z.enum(["all", "identity", "memory", "codebase", "reference"]).default("all"),
     cycle_index: z.number().optional()
   },
   async execute(args, context) {
@@ -146,7 +155,7 @@ export const nxSync = tool({
     const gitSignals = await readGitSignals(root);
     const summary = summarizeCycle(cycle, gitSignals);
     const generatedFiles: string[] = [];
-    const scannedLayers = args.scope === "all" ? ["memory", "codebase", "reference"] : [args.scope];
+    const scannedLayers = args.scope === "all" ? ["identity", "memory", "codebase", "reference"] : [args.scope];
     const sources = [
       "archived cycle history",
       gitSignals.changedFiles.length > 0 ? "git working tree changes" : "git working tree changes (none detected)",
@@ -158,6 +167,11 @@ export const nxSync = tool({
       ...(summary.decisionCount === 0 ? ["No recorded meet decisions were available in the archived cycle."] : [])
     ];
 
+    if (args.scope === "all" || args.scope === "identity") {
+      const identitySync = await syncIdentityDocs(paths.CORE_ROOT, summary);
+      generatedFiles.push(...identitySync.generatedFiles);
+      needsVerification.push(...identitySync.needsVerification);
+    }
     if (args.scope === "all" || args.scope === "memory") {
       generatedFiles.push(
         ...(await writeIfChanged(
@@ -293,6 +307,35 @@ function buildIdentityDrafts(scan: Awaited<ReturnType<typeof scanProject>>) {
   };
 }
 
+function buildIdentityConfirmationQuestions(
+  proposedIdentity: ReturnType<typeof buildIdentityDrafts>,
+  identityInputs: { mission?: string; design?: string; roadmap?: string }
+) {
+  const questions: Array<{ field: "mission" | "design" | "roadmap"; prompt: string; draft: string }> = [];
+  if (!identityInputs.mission) {
+    questions.push({
+      field: "mission",
+      prompt: "Confirm the project mission: what problem does this project solve and for whom?",
+      draft: proposedIdentity.mission
+    });
+  }
+  if (!identityInputs.design) {
+    questions.push({
+      field: "design",
+      prompt: "Confirm the design rationale: what key architectural decisions and trade-offs define this project?",
+      draft: proposedIdentity.design
+    });
+  }
+  if (!identityInputs.roadmap) {
+    questions.push({
+      field: "roadmap",
+      prompt: "Confirm the near-term roadmap: what are the next 1-3 priorities for this project?",
+      draft: proposedIdentity.roadmap
+    });
+  }
+  return questions;
+}
+
 function buildRulesDoc(scan: Awaited<ReturnType<typeof scanProject>>): string {
   return [
     "<!-- tags: dev, workflow -->",
@@ -404,6 +447,76 @@ function buildDecisionLogDoc(summary: ReturnType<typeof summarizeCycle>): string
         )
       : ["No decisions were recorded in this cycle."])
   ].join("\n\n");
+}
+
+async function syncIdentityDocs(
+  coreRoot: string,
+  summary: ReturnType<typeof summarizeCycle>
+): Promise<{ generatedFiles: string[]; needsVerification: string[] }> {
+  const identityDir = path.join(coreRoot, "identity");
+  const roadmapPath = path.join(identityDir, "roadmap.md");
+  const generatedFiles: string[] = [];
+  const needsVerification: string[] = [];
+
+  const syncBlock = buildRoadmapSyncBlock(summary);
+  const roadmapExists = await fileExists(roadmapPath);
+
+  if (roadmapExists) {
+    const previous = await fs.readFile(roadmapPath, "utf8");
+    if (!previous.includes(syncBlock)) {
+      generatedFiles.push(
+        ...(await writeIfChanged(
+          roadmapPath,
+          appendSection(previous, syncBlock),
+          path.join("core", "identity", "roadmap.md")
+        ))
+      );
+    }
+  } else {
+    generatedFiles.push(
+      ...(await writeIfChanged(
+        roadmapPath,
+        [
+          "<!-- tags: identity, roadmap -->",
+          "# Roadmap",
+          "",
+          "This roadmap update was synchronized from archived cycle history and should be confirmed by the user.",
+          "",
+          syncBlock
+        ].join("\n"),
+        path.join("core", "identity", "roadmap.md")
+      ))
+    );
+    needsVerification.push("Identity roadmap was created from archived cycle evidence and still needs user confirmation.");
+  }
+
+  for (const file of ["mission", "design"] as const) {
+    if (!(await fileExists(path.join(identityDir, `${file}.md`)))) {
+      needsVerification.push(`Identity ${file} was not updated because archived cycle evidence was insufficient to confirm it.`);
+    }
+  }
+
+  return { generatedFiles, needsVerification };
+}
+
+function buildRoadmapSyncBlock(summary: ReturnType<typeof summarizeCycle>): string {
+  const heading = `## Synced Update (${summary.completedAt})`;
+  return [
+    heading,
+    "",
+    `- Source branch: ${summary.branch}`,
+    `- Source topic: ${summary.topic ?? "none"}`,
+    `- Completed tasks: ${summary.taskCount}`,
+    ...(summary.taskTitles.length > 0 ? summary.taskTitles.map((task: string) => `- Task: ${task}`) : ["- Task: none recorded"]),
+    ...(summary.recentCommits.length > 0
+      ? summary.recentCommits.slice(0, 3).map((commit) => `- Commit signal: ${commit}`)
+      : ["- Commit signal: none detected"])
+  ].join("\n");
+}
+
+function appendSection(existing: string, block: string): string {
+  const trimmed = existing.trimEnd();
+  return trimmed.length > 0 ? `${trimmed}\n\n${block}\n` : `${block}\n`;
 }
 
 async function writeIdentityDoc(identityDir: string, name: string, explicitContent: string | undefined, fallback: string): Promise<string[]> {

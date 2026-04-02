@@ -41,6 +41,7 @@ export const nxSetup = tool({
 
     const instructionsContent = await buildInstructionsFile(targets.instructionsFile, template);
     await fs.writeFile(targets.instructionsFile, instructionsContent, "utf8");
+    const skillFiles = await installEntrypointSkills(targets.skillsRoot);
 
     const config = await readJsonFile<Record<string, unknown>>(targets.configFile, { $schema: "https://opencode.ai/config.json" });
     const nextConfig = mergeSetupConfig({
@@ -62,7 +63,7 @@ export const nxSetup = tool({
     nexusConfig.updated_at = new Date().toISOString();
     await writeJsonFile(projectPaths.CONFIG_FILE, nexusConfig);
 
-    const generatedFiles = [targets.instructionsFile, targets.configFile, projectPaths.CONFIG_FILE];
+    const generatedFiles = [targets.instructionsFile, targets.configFile, projectPaths.CONFIG_FILE, ...skillFiles];
     let initResult: string | null = null;
     if (initAfterSetup && scope === "project") {
       initResult = await nxInit.execute({ reset: false, setup_rules: false }, context);
@@ -75,7 +76,8 @@ export const nxSetup = tool({
         targetPaths: {
           instructionsFile: targets.instructionsFile,
           configFile: targets.configFile,
-          nexusConfigFile: projectPaths.CONFIG_FILE
+          nexusConfigFile: projectPaths.CONFIG_FILE,
+          skillsRoot: targets.skillsRoot
         },
         generatedFiles,
         profile: resolvedProfile,
@@ -103,19 +105,44 @@ async function readTemplate(): Promise<string> {
   return fs.readFile(templatePath, "utf8");
 }
 
+async function readEntrypointSkillTemplate(name: "nx-init" | "nx-sync" | "nx-setup"): Promise<string> {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const templatePath = path.resolve(currentDir, `../../templates/skills/${name}/SKILL.md`);
+  return fs.readFile(templatePath, "utf8");
+}
+
 function resolveTargets(scope: "project" | "user", projectRoot: string, instructionsFile?: string) {
   if (scope === "user") {
     const configRoot = path.join(os.homedir(), ".config", "opencode");
     return {
       configFile: path.join(configRoot, "opencode.json"),
-      instructionsFile: instructionsFile ? expandHome(instructionsFile) : path.join(configRoot, "AGENTS.md")
+      instructionsFile: instructionsFile ? expandHome(instructionsFile) : path.join(configRoot, "AGENTS.md"),
+      skillsRoot: path.join(configRoot, "skills")
     };
   }
 
   return {
     configFile: path.join(projectRoot, "opencode.json"),
-    instructionsFile: instructionsFile ? path.resolve(projectRoot, instructionsFile) : path.join(projectRoot, "AGENTS.md")
+    instructionsFile: instructionsFile ? path.resolve(projectRoot, instructionsFile) : path.join(projectRoot, "AGENTS.md"),
+    skillsRoot: path.join(projectRoot, ".opencode", "skills")
   };
+}
+
+async function installEntrypointSkills(skillsRoot: string): Promise<string[]> {
+  const skillNames = ["nx-init", "nx-sync", "nx-setup"] as const;
+  const generatedFiles: string[] = [];
+  await fs.mkdir(skillsRoot, { recursive: true });
+
+  for (const name of skillNames) {
+    const skillDir = path.join(skillsRoot, name);
+    const skillFile = path.join(skillDir, "SKILL.md");
+    const skillTemplate = await readEntrypointSkillTemplate(name);
+    await fs.mkdir(skillDir, { recursive: true });
+    await fs.writeFile(skillFile, skillTemplate, "utf8");
+    generatedFiles.push(skillFile);
+  }
+
+  return generatedFiles;
 }
 
 async function buildInstructionsFile(filePath: string, template: string): Promise<string> {

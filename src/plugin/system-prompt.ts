@@ -5,11 +5,10 @@ interface BuildSystemInput {
   mode: "meet" | "run" | "decide" | "rule" | "idle";
   agents: NexusAgentProfile[];
   skills: NexusSkillProfile[];
-  runPhase?: string;
 }
 
 export function buildNexusSystemPrompt(input: BuildSystemInput): string {
-  const { mode, agents, skills, runPhase } = input;
+  const { mode, agents, skills } = input;
 
   const how = agents.filter((a) => a.category === "how").map((a) => a.id).join(", ");
   const execute = agents.filter((a) => a.category === "do").map((a) => a.id).join(", ");
@@ -18,7 +17,6 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const skillRows = skills.map((s) => `- ${s.id} (${s.trigger}): ${s.purpose}`).join("\n");
   const modelRows = agents.map((a) => `- ${a.id}: ${a.model}`).join("\n");
 
-  const phaseLine = runPhase ? `- Current run phase: ${runPhase}` : "- Current run phase: unknown";
   const modePlaybook = buildModePlaybook(mode);
   const taskPipeline = [
     "TASK PIPELINE (mandatory for file modifications):",
@@ -64,7 +62,6 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- When the nexus primary is available, treat it as the preferred orchestration lead.",
     "Context:",
     `- Active mode: ${mode}`,
-    phaseLine,
     `- HOW agents: ${how}`,
     `- DO agents: ${execute}`,
     `- CHECK agents: ${check}`,

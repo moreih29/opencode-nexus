@@ -5,7 +5,6 @@ import { summarizeCoordinationGroups } from "../shared/agent-tracker.js";
 import { readMeetSidecar } from "../shared/meet-sidecar.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile } from "../shared/json-store.js";
-import { readRunState } from "../shared/run-state.js";
 import { fileExists, readTasksSummary } from "../shared/state.js";
 
 export const nxContext = tool({
@@ -15,12 +14,11 @@ export const nxContext = tool({
     const root = context.worktree ?? context.directory;
     const paths = createNexusPaths(root);
 
-    const [hasMeet, hasTasks, tasksSummary, branch, runState, meet, meetSidecar, coordinationGroups] = await Promise.all([
+    const [hasMeet, hasTasks, tasksSummary, branch, meet, meetSidecar, coordinationGroups] = await Promise.all([
       fileExists(paths.MEET_FILE),
       fileExists(paths.TASKS_FILE),
       readTasksSummary(paths.TASKS_FILE),
       readCurrentBranch(root),
-      readRunState(paths.RUN_FILE),
       readJsonFile<{ topic?: string; issues?: Array<{ id?: string; title?: string; status?: string }> } | null>(paths.MEET_FILE, null),
       readMeetSidecar(paths.MEET_SIDECAR_FILE),
       summarizeCoordinationGroups(paths.AGENT_TRACKER_FILE)
@@ -34,7 +32,6 @@ export const nxContext = tool({
         branch,
         branchGuard: branch === "main" || branch === "master",
         activeMode,
-        runPhase: runState?.phase ?? null,
         meetTopic: typeof meet?.topic === "string" ? meet.topic : null,
         currentIssue,
         handoff: meetSidecar

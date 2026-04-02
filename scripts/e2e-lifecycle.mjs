@@ -24,8 +24,6 @@ await nxTaskUpdate.execute({ id, status: "pending" }, ctx);
 await nxTaskUpdate.execute({ id, status: "blocked" }, ctx);
 await nxTaskUpdate.execute({ id, status: "completed" }, ctx);
 
-await fs.unlink(paths.RUN_FILE).catch(() => {});
-
 const close = JSON.parse(await nxTaskClose.execute({ archive: true }, ctx));
 assert.equal(close.memoryHint.hadLoopDetection, true);
 assert.equal(close.memoryHint.reopenCount, 1);

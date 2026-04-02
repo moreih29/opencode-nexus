@@ -27,7 +27,6 @@ const merged = systemOut.system.join("\n");
 assert.match(merged, /Active mode: run/);
 assert.match(merged, /TASK PIPELINE/);
 assert.match(merged, /Branch Guard/);
-assert.match(merged, /Current run phase: execute/);
 assert.match(merged, /DELEGATION PLAYBOOK/);
 assert.match(merged, /OUTPUT CONTRACTS/);
 assert.match(merged, /PLATFORM MAPPING/);

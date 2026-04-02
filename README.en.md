@@ -20,6 +20,8 @@ OpenCode gives you agents, tools, and plugins. `opencode-nexus` adds operating d
 
 ## Quick Start
 
+Use `Entrypoint Commands` to get started, `Canonical Tools` as the stable backend contract, and `Coordination Tags` to control workflow mode.
+
 Install the plugin in your project config:
 
 ```json
@@ -35,11 +37,13 @@ Or start from the included presets:
 - Minimal: `opencode.minimal.json`
 - Extended example: `opencode.example.json`
 
-Then run setup inside your project:
+Then run the setup entrypoint inside your project:
 
 ```text
-Use nx_setup to configure this repository for opencode-nexus.
+Use nx-setup to configure this repository for opencode-nexus.
 ```
+
+This entrypoint routes to the canonical `nx_setup` tool.
 
 `nx_setup` now supports setup profiles.
 
@@ -76,14 +80,24 @@ Important:
 Recommended first run:
 
 ```text
-Use nx_init to scan this project and create initial Nexus knowledge.
+Use nx-init to scan this project and create initial Nexus knowledge.
 ```
+
+This entrypoint routes to the canonical `nx_init` tool.
 
 ## First Use
 
 - Meeting: `[meet] How should we design the authentication flow?`
 - Record a decision: `Let's go with that option [d]`
 - Execution: `[run] Implement the agreed authentication flow`
+
+## Entrypoint Commands
+
+| Entrypoint | Canonical Tool | Purpose |
+| --- | --- | --- |
+| `nx-setup` | `nx_setup` | Configure `AGENTS.md`, `opencode.json`, and thin Nexus entrypoint skills |
+| `nx-init` | `nx_init` | Project onboarding and initial knowledge generation |
+| `nx-sync` | `nx_sync` | Sync archived execution knowledge back into `.nexus/core/` |
 
 ## Tags
 
@@ -108,15 +122,19 @@ Use nx_init to scan this project and create initial Nexus knowledge.
 | CHECK | QA | Tests, verification, and risk review |
 | CHECK | Reviewer | Content and factual review |
 
+## Canonical Tools and Tags
+
+`nx_*` tools are the real execution contract. `nx-setup`, `nx-init`, and `nx-sync` are thin entrypoints that route into those tools. `[meet]`, `[run]`, `[d]`, and `[rule]` are Coordination Tags that change workflow mode rather than execute a tool directly.
+
 ## Built-in Skills
 
 | Skill | Trigger | Purpose |
 | --- | --- | --- |
 | `nx-meet` | `[meet]` | Structured discussion and decision workflow |
 | `nx-run` | `[run]` | Task-driven execution workflow |
-| `nx-init` | tool | Project onboarding and initial knowledge generation |
-| `nx-sync` | tool | Sync archived execution knowledge back into `.nexus/core/` |
-| `nx-setup` | tool | Configure `AGENTS.md` and `opencode.json` for OpenCode |
+| `nx-init` | `nx-init` | Onboarding entrypoint that routes to `nx_init` |
+| `nx-sync` | `nx-sync` | Sync entrypoint that routes to `nx_sync` |
+| `nx-setup` | `nx-setup` | Setup entrypoint that routes to `nx_setup` |
 
 ## What It Adds To OpenCode
 

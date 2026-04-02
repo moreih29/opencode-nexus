@@ -4,7 +4,6 @@ import { tool } from "@opencode-ai/plugin";
 import { appendHistory } from "../shared/history.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
-import { setRunPhase, writeRunState } from "../shared/run-state.js";
 import { fileExists } from "../shared/state.js";
 import { MeetFileSchema, TasksFileSchema, type MeetFile, type TaskItem, type TasksFile } from "../shared/schema.js";
 
@@ -39,7 +38,6 @@ export const nxTaskAdd = tool({
     TasksFileSchema.parse(tasksFile);
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
     await syncMeetIssueTaskLink(paths.MEET_FILE, args.meet_issue, id);
-    await setRunPhase(paths.RUN_FILE, "execute", "task added", true);
 
     const meetActive = await fileExists(paths.MEET_FILE);
     const linkageNote = meetActive && !args.meet_issue ? " Link this task to its meet issue with meet_issue when possible." : "";
@@ -106,14 +104,6 @@ export const nxTaskUpdate = tool({
     }
     await writeJsonFile(paths.REOPEN_TRACKER_FILE, tracker);
 
-    const hasActive = tasksFile.tasks.some((item) => item.status === "pending" || item.status === "in_progress" || item.status === "blocked");
-    await setRunPhase(
-      paths.RUN_FILE,
-      hasActive ? "execute" : "verify",
-      hasActive ? "tasks still active" : "all tasks completed",
-      false
-    );
-
     return args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`;
   }
 });
@@ -158,12 +148,9 @@ export const nxTaskClose = tool({
       });
     }
 
-    await setRunPhase(paths.RUN_FILE, "complete", "cycle closed", true);
-
     await safeUnlink(paths.MEET_FILE);
     await safeUnlink(paths.TASKS_FILE);
     await safeUnlink(paths.STOP_WARNED_FILE);
-    await safeUnlink(paths.RUN_FILE);
     await writeJsonFile(paths.REOPEN_TRACKER_FILE, { reopenCount: 0, blockedTransitions: 0 });
 
     await writeMemoryCycleNote(paths.CORE_ROOT, memoryHint);

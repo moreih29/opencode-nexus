@@ -1273,6 +1273,353 @@
         "blockedTransitions": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "completed_at": "2026-04-02T06:17:54.613Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775110275357-2j2pzw",
+            "title": "Remove run.json and phase-based runtime tracking",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T06:11:15.353Z",
+            "updated_at": "2026-04-02T06:17:44.820Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T07:16:34.936Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 3,
+        "topic": "opencode-nexus의 사용자 노출 command 표면과 제품 포지셔닝 검토",
+        "attendees": [
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T06:27:33.228Z"
+          },
+          {
+            "role": "strategist",
+            "name": "Strategist",
+            "joined_at": "2026-04-02T06:27:33.241Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "사용자에게 보이는 command 표면 부재를 제품/아키텍처 문제로 볼 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "이 상태는 아키텍처 결함이라기보다 tool-first 설계 선택으로 보인다. 다만 npm/GitHub 관성상 사용자는 CLI를 기대할 수 있으므로, 설계보다 interaction contract를 명시하지 않은 점이 문제다. full CLI 추가는 orchestration semantics를 이중화할 위험이 있다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T06:27:45.632Z"
+              },
+              {
+                "speaker": "Architect",
+                "message": "사용자가 말한 command는 standalone CLI가 아니라 OpenCode 내부의 '/...'형 진입 표면이다. 이 저장소 기준으로는 Claude의 slash skill runtime이 그대로 존재하지 않고, slash-skill behavior가 nx_* tools, tags, hooks, system injection으로 치환되어 있다. 따라서 문제 정의는 'CLI 부재'가 아니라 'OpenCode에서 slash-like entrypoint가 사용자에게 충분히 보이는가'로 수정되어야 한다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T06:29:55.217Z"
+              },
+              {
+                "speaker": "Strategist",
+                "message": "제품 관점에서도 핵심은 사용자가 '/명령어'를 기대하는데 실제 진입 표면이 태그([meet], [run])와 도구(nx_setup, nx_init, nx_sync)로 분산되어 있다는 점이다. 즉 command naming보다 discoverability와 mental model mismatch가 더 큰 이슈다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T06:29:55.275Z"
+              },
+              {
+                "speaker": "Strategist",
+                "message": "사용자 제안은 조건부로 타당하다. 의도적·저빈도·고영향 작업(nx-init/nx-setup/nx-sync)은 명시 호출형이 온보딩/예측가능성에 유리하고, 협업 상태 신호(meet/run/d/rule)는 경량 표식으로도 충분하다. 다만 이원 표면은 초기 학습 부담과 멘탈모델 분열 위험이 있어 단일 시작경로 제시와 용어 정리가 필요하다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T06:34:14.818Z"
+              },
+              {
+                "speaker": "Architect",
+                "message": "반대 논거도 있다. slash entry를 추가하면 결국 또 하나의 command surface를 관리해야 하며, slash와 자연어/태그가 같은 백엔드 작업을 다른 의미로 보이게 만들면 UX가 분열될 수 있다. 따라서 도입하더라도 thin alias로 두고 backend path는 하나로 유지해야 한다.",
+                "kind": "risk",
+                "recorded_at": "2026-04-02T06:34:56.284Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "사용자에게 보이는 command surface 문제는 standalone CLI 부재가 아니라 OpenCode 내부의 slash-like discoverability 부족으로 본다. 방향은 조건부 찬성: nx-init, nx-sync, nx-setup은 명시 호출형 slash-like entry로 노출하는 것이 적절하고, meet/run/d/rule은 협업 상태 신호이므로 태그로 유지한다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T06:54:22.942Z"
+              }
+            ],
+            "decision": "사용자에게 보이는 command surface 문제는 standalone CLI 부재가 아니라 OpenCode 내부의 slash-like discoverability 부족으로 본다. 방향은 조건부 찬성: nx-init, nx-sync, nx-setup은 명시 호출형 slash-like entry로 노출하는 것이 적절하고, meet/run/d/rule은 협업 상태 신호이므로 태그로 유지한다.",
+            "summary": "Claude식 slash skill parity를 그대로 복제하기보다, 사용자 의도가 분명한 utility 흐름(init/setup/sync)만 명시 진입점으로 올리고, 협업 오케스트레이션 흐름(meet/run/d/rule)은 기존 태그 UX를 유지하는 방향으로 정리했다. 단, slash entry는 별도 실행 모델이 아니라 기존 nx_* 도구의 thin alias여야 하며, '언제 slash, 언제 태그' 규칙을 문서에서 명확히 고정해야 한다.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-2",
+            "title": "만약 문제라면 어떤 최소 진입 표면을 우선 노출해야 하는가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "선택지 A(real skill surface)는 발견성과 가드레일, 계약된 UX 측면에서 강하지만 표면 중복과 유지보수 비용이 크다. 선택지 B(command alias/thin layer)는 기존 nx_* 도구를 정식 API로 유지한 채 빠르게 사용자 진입점을 추가할 수 있고 drift 위험이 작다. 내 추천은 B 우선, 필요 시 일부만 A로 승격하는 방식이다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T06:56:43.192Z"
+              },
+              {
+                "speaker": "Architect",
+                "message": "절충안도 가능하다. 사용자에게는 slash-like entry를 제공하되 내부적으로는 alias가 canonical nx_* tool을 호출하고, 필요할 때만 richer prompt/guardrail을 추가해 skill-like UX로 키운다. 이렇게 하면 command surface와 실행 의미를 분리하지 않고도 점진적으로 발전시킬 수 있다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T06:56:43.286Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "nx-init, nx-sync, nx-setup의 명시 진입점은 사용자에게 slash-like entry로 노출하되, 초기 구현은 thin alias로 시작하고 canonical execution path는 기존 nx_* tool로 유지한다. 이후 실제 사용성과 가드레일 필요가 확인된 항목만 richer skill-like UX로 점진 승격한다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T06:59:48.958Z"
+              }
+            ],
+            "decision": "nx-init, nx-sync, nx-setup의 명시 진입점은 사용자에게 slash-like entry로 노출하되, 초기 구현은 thin alias로 시작하고 canonical execution path는 기존 nx_* tool로 유지한다. 이후 실제 사용성과 가드레일 필요가 확인된 항목만 richer skill-like UX로 점진 승격한다.",
+            "summary": "아키텍처 안정성과 제품 발견성을 함께 만족시키기 위해 alias-first 절충안을 채택했다. 사용자 표면은 slash-like entry로 보이게 하되 실행 의미를 별도로 분기하지 않고 기존 nx_* tool을 단일 backend로 유지한다. 이렇게 하면 즉시 discoverability를 개선하면서도 drift와 유지보수 비용을 줄일 수 있고, init/setup/sync 중 실제로 더 강한 가이드가 필요한 흐름만 선택적으로 공식 skill surface에 가까운 UX로 발전시킬 수 있다.",
+            "task_refs": [
+              "task-1775113865037-ag37nv"
+            ]
+          },
+          {
+            "id": "issue-3",
+            "title": "문서와 온보딩에서 command-first와 tool-first를 어떻게 조율해야 하는가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "문서 구조는 two-lane, one-source가 적합하다. 초반에는 command-first Quick Start를 두되, 각 slash-like entry가 어떤 canonical nx_* tool로 매핑되는지 즉시 병기해야 한다. 태그는 실행 도구가 아니라 orchestration intent marker로 별도 섹션에 분리해야 한다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T07:02:27.419Z"
+              },
+              {
+                "speaker": "Strategist",
+                "message": "온보딩 원칙은 '입구는 command-first, 개념은 intent-first, 심화는 tool-first'가 적절하다. README 첫 화면은 3분 안에 첫 성공을 주는 복붙 가능한 예시와 다음 1개 액션 제안에 집중하고, 태그와 고급 규칙은 초반 필수 학습 대상으로 과노출하지 않는 편이 좋다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T07:02:27.460Z"
+              },
+              {
+                "speaker": "Architect",
+                "message": "용어도 고정해야 한다. slash-like는 Entrypoint Commands, nx_*는 Canonical Tools, [meet]/[run]/[d]/[rule]은 Coordination Tags로 분리하는 것이 혼선을 줄인다. 이를 섞어 command/tool/skill을 번갈아 쓰면 문서 전체가 빠르게 흐려진다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T07:02:27.496Z"
+              },
+              {
+                "speaker": "Strategist",
+                "message": "제품 리스크는 첫 화면에서 slash-like, nx_*, 태그를 동급 세 가지 체계처럼 병렬 소개하는 것이다. 그렇게 되면 인지부하가 커지고 사용자는 무엇이 표준인지 판단하지 못한다. alias는 입구, canonical tool은 기준, tag는 흐름 제어라는 서열을 유지해야 한다.",
+                "kind": "risk",
+                "recorded_at": "2026-04-02T07:02:27.778Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "문서와 온보딩은 command-first entry와 tool-first canonical model을 함께 쓰되 역할을 분리한다. README/온보딩의 첫 표면은 slash-like Entrypoint Commands로 두고, 각 항목에 대응하는 canonical nx_* tool 매핑을 즉시 병기한다. [meet]/[run]/[d]/[rule]은 Coordination Tags로 별도 분리해 흐름 제어 신호로 설명한다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T07:07:34.949Z"
+              }
+            ],
+            "decision": "문서와 온보딩은 command-first entry와 tool-first canonical model을 함께 쓰되 역할을 분리한다. README/온보딩의 첫 표면은 slash-like Entrypoint Commands로 두고, 각 항목에 대응하는 canonical nx_* tool 매핑을 즉시 병기한다. [meet]/[run]/[d]/[rule]은 Coordination Tags로 별도 분리해 흐름 제어 신호로 설명한다.",
+            "summary": "문서 구조는 two-lane, one-source 원칙을 따른다. 사용자는 command-first로 빠르게 첫 성공을 얻고, 시스템의 정식 기준은 nx_* canonical tools로 유지한다. 태그는 실행 명령과 섞지 않고 orchestration intent marker로 따로 설명하며, 용어도 Entrypoint Commands / Canonical Tools / Coordination Tags로 고정한다. 이를 통해 발견성과 유지보수 기준을 동시에 확보하고, alias/tool/tag가 동급 체계처럼 보이는 혼선을 줄인다.",
+            "task_refs": [
+              "task-1775113872418-wp7lbk",
+              "task-1775113884916-ojz68d"
+            ]
+          }
+        ],
+        "research_summary": "코드와 문서를 확인한 결과 opencode-nexus는 standalone CLI가 아니라 OpenCode plugin/tool-first 제품으로 보인다. package.json에는 bin 엔트리가 없고 README는 plugin 등록 후 nx_setup, nx_init, nx_context, [meet], [run] 같은 도구/태그 사용을 안내한다. Architect와 Strategist 검토도 공통적으로 '사용자에게 보이는 command 부재'를 아키텍처 결함이라기보다 기대 관리와 온보딩 문제로 해석했다. 핵심 쟁점은 true CLI를 추가할지보다, 현재의 plugin-native 표면을 얼마나 명확하게 드러낼지다.",
+        "created_at": "2026-04-02T06:27:28.093Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775113865037-ag37nv",
+            "title": "Implement slash-like entrypoints for nx-init/nx-sync/nx-setup via setup-installed skills while keeping nx_* tools canonical",
+            "status": "completed",
+            "owner": "Engineer",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T07:11:05.035Z",
+            "updated_at": "2026-04-02T07:15:55.597Z"
+          },
+          {
+            "id": "task-1775113872418-wp7lbk",
+            "title": "Update README and injected template to document Entrypoint Commands, Canonical Tools, and Coordination Tags",
+            "status": "completed",
+            "owner": "Writer",
+            "meet_issue": "issue-3",
+            "deps": [
+              "task-1775113865037-ag37nv"
+            ],
+            "created_at": "2026-04-02T07:11:12.415Z",
+            "updated_at": "2026-04-02T07:15:55.611Z"
+          },
+          {
+            "id": "task-1775113884916-ojz68d",
+            "title": "Verify build and targeted behavior after command-surface changes",
+            "status": "completed",
+            "owner": "QA",
+            "meet_issue": "issue-3",
+            "deps": [
+              "task-1775113865037-ag37nv",
+              "task-1775113872418-wp7lbk"
+            ],
+            "created_at": "2026-04-02T07:11:24.914Z",
+            "updated_at": "2026-04-02T07:16:28.938Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 3,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "opencode-nexus의 사용자 노출 command 표면과 제품 포지셔닝 검토"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T07:20:40.543Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775114410774-oxhk7s",
+            "title": "Audit and fix SKILL.md frontmatter to match OpenCode requirements",
+            "status": "completed",
+            "owner": "Engineer",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T07:20:10.772Z",
+            "updated_at": "2026-04-02T07:20:27.754Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T07:44:36.486Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 4,
+        "topic": "nx-init/nx-sync 설계 결함 조사",
+        "attendees": [
+          {
+            "role": "strategist",
+            "name": "전략가",
+            "joined_at": "2026-04-02T07:25:04.576Z"
+          },
+          {
+            "role": "architect",
+            "name": "아키텍트",
+            "joined_at": "2026-04-02T07:25:04.605Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "nx-init/nx-sync가 기대 동작을 수행하지 못하는 원인 규명",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "strategist",
+                "message": "사용자가 '빈 껍데기'로 느끼는 이유는 문구만 얇아서가 아니라 기대 UX 자체가 사라졌기 때문이다. 원본 nx-init은 질문-확정 플로우가 있고 nx-sync는 레이어별 근거 기반 문서 갱신을 약속하지만, 현재 구현은 초안 생성 플래그 반환과 3개 요약 문서 재생성에 가깝다. 제품 계약이 thin skill, prompts.ts, workflow.ts, 원본 문서 사이에서 일관되지 않다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T07:31:26.758Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "추가 근거로 docs/prompt-parity-plan.md는 nx-init, nx-sync 모두 OpenCode 대상 상태를 Partial로 표기한다. 즉 원본 claude-nexus skill의 절차를 완전히 이식하지 못했다는 사실이 저장소 내부에 이미 문서화되어 있다. 이번 현상은 우연한 오작동이라기보다 부분 이식 상태를 thin entrypoint로 노출한 결과에 가깝다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T07:31:50.919Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "현재 문제는 원본 claude-nexus 스킬 프롬프트를 일부 참조했더라도, thin skill 재설계와 prompts.ts/workflow.ts 간 계약 불일치, 그리고 nx_init/nx_sync backend capability 부족이 결합되어 발생한 설계 결함으로 본다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T07:33:15.972Z"
+              }
+            ],
+            "decision": "현재 문제는 원본 claude-nexus 스킬 프롬프트를 일부 참조했더라도, thin skill 재설계와 prompts.ts/workflow.ts 간 계약 불일치, 그리고 nx_init/nx_sync backend capability 부족이 결합되어 발생한 설계 결함으로 본다.",
+            "summary": "nx-init/nx-sync의 빈 껍데기 체감은 단순 프롬프트 누락이 아니라 제품 계약 드리프트다. .opencode thin skill, src/skills/prompts.ts, src/tools/workflow.ts, 원본 claude-nexus skill이 서로 다른 동작을 정의하고 있으며, 특히 nx-init의 대화형 identity 확정과 nx-sync의 근거 기반 레이어별 갱신이 실제 구현에 충분히 반영되지 않았다.",
+            "task_refs": [
+              "task-1775115377718-afhraf",
+              "task-1775115455809-zh3xo0",
+              "task-1775115600403-82h5ja",
+              "task-1775115616188-kvzs4a"
+            ]
+          }
+        ],
+        "research_summary": "사용자 보고에 따르면 현재 저장소의 nx-init/nx-sync 스킬은 얇은 엔트리포인트만 수행하고, 원본 claude-nexus 스킬에 있는 심층 질문/코어 문서 갱신 의도를 반영하지 못하고 있습니다. 원인이 프롬프트 누락인지, 백엔드 툴 설계 문제인지, 또는 둘 다인지 비교 조사합니다.",
+        "created_at": "2026-04-02T07:24:52.130Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775115377720-ntfdb3",
+            "title": "변경 검증 및 결과 정리",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T07:36:17.714Z",
+            "updated_at": "2026-04-02T07:43:32.540Z"
+          },
+          {
+            "id": "task-1775115455809-zh3xo0",
+            "title": "nx_init/nx_sync 백엔드 계약 정렬",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T07:37:35.806Z",
+            "updated_at": "2026-04-02T07:40:00.403Z"
+          },
+          {
+            "id": "task-1775115616188-kvzs4a",
+            "title": "nx-init/nx-sync 스킬 문서와 템플릿 정렬",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775115455809-zh3xo0"
+            ],
+            "created_at": "2026-04-02T07:40:16.187Z",
+            "updated_at": "2026-04-02T07:44:30.958Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "nx-init/nx-sync 설계 결함 조사"
+        ]
+      }
     }
   ]
 }

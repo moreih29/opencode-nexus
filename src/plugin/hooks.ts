@@ -4,7 +4,6 @@ import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
 import { canJoinMeetWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
-import { readRunState, setRunPhase } from "../shared/run-state.js";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
 import { loadCanonicalMeet, syncMeetSidecar } from "../shared/meet-sidecar.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
@@ -144,19 +143,11 @@ export function createHooks(ctx: PluginContext) {
       }
       const prompt = sessionID ? ctx.state.lastPromptBySession.get(sessionID) ?? "" : "";
       const mode = detectNexusTag(prompt) ?? "idle";
-      if (mode === "run") {
-        await setRunPhase(paths.RUN_FILE, "execute", "run tag detected", true);
-      }
-      if (mode === "meet") {
-        await setRunPhase(paths.RUN_FILE, "design", "meet tag detected", true);
-      }
-      const run = await readRunState(paths.RUN_FILE);
       output.system.push(
         buildNexusSystemPrompt({
           mode,
           agents: NEXUS_AGENT_CATALOG,
-          skills: NEXUS_SKILL_CATALOG,
-          runPhase: run?.phase
+          skills: NEXUS_SKILL_CATALOG
         })
       );
     }
