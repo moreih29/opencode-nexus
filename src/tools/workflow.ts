@@ -102,6 +102,11 @@ export const nxInit = tool({
         legacyInputsUsed: scan.legacyInputsUsed,
         generatedFiles,
         proposedIdentity,
+        identityNeedsConfirmation: !(args.mission && args.design && args.roadmap),
+        instructionFiles: {
+          primary: scan.primaryDocs.includes("AGENTS.md") ? "AGENTS.md" : null,
+          legacy: scan.legacyDocs.includes("CLAUDE.md") ? "CLAUDE.md" : null
+        },
         nextSteps: [
           "Review proposed identity fields if any were not explicitly provided.",
           "Prefer AGENTS.md and opencode.json.instructions as the primary instruction path in OpenCode.",

@@ -52,6 +52,9 @@ assert.equal(initResult.generatedFiles.includes(path.join("rules", "dev-rules.md
 assert.equal(initResult.primaryDocs.includes("AGENTS.md"), true);
 assert.equal(initResult.legacyDocs.includes("CLAUDE.md"), true);
 assert.equal(initResult.legacyInputsUsed.includes("CLAUDE.md"), true);
+assert.equal(initResult.identityNeedsConfirmation, false);
+assert.equal(initResult.instructionFiles.primary, "AGENTS.md");
+assert.equal(initResult.instructionFiles.legacy, "CLAUDE.md");
 
 await nxMeetStart.execute(
   {

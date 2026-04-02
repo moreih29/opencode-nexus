@@ -22,6 +22,9 @@ const ctx = { directory: root, worktree: root, abort: new AbortController().sign
 
 const result = JSON.parse(await nxSetup.execute({ scope: "project", install_plugin: true, init_after_setup: false }, ctx));
 assert.equal(result.configured, true);
+assert.equal(result.targetPaths.instructionsFile, path.join(root, "AGENTS.md"));
+assert.equal(result.targetPaths.configFile, path.join(root, "opencode.json"));
+assert.equal(result.mergePolicy.mergePluginArray, true);
 
 const config = JSON.parse(await fs.readFile(path.join(root, "opencode.json"), "utf8"));
 assert.equal(config.plugin.includes("opencode-nexus"), true);

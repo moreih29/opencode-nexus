@@ -55,7 +55,17 @@ export const nxSetup = tool({
       {
         configured: true,
         scope: args.scope,
+        targetPaths: {
+          instructionsFile: targets.instructionsFile,
+          configFile: targets.configFile,
+          nexusConfigFile: projectPaths.CONFIG_FILE
+        },
         generatedFiles,
+        mergePolicy: {
+          preserveMarkerOutsideText: true,
+          mergePluginArray: true,
+          mergeInstructionsArray: true
+        },
         initTriggered: args.init_after_setup && args.scope === "project",
         initResult
       },
