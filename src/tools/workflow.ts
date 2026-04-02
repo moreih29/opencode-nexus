@@ -138,8 +138,20 @@ export const nxSync = tool({
       throw new Error(`Cycle index out of range: ${index}`);
     }
 
-    const summary = summarizeCycle(cycle);
+    const gitSignals = await readGitSignals(root);
+    const summary = summarizeCycle(cycle, gitSignals);
     const generatedFiles: string[] = [];
+    const scannedLayers = args.scope === "all" ? ["memory", "codebase", "reference"] : [args.scope];
+    const sources = [
+      "archived cycle history",
+      gitSignals.changedFiles.length > 0 ? "git working tree changes" : "git working tree changes (none detected)",
+      gitSignals.recentCommits.length > 0 ? "recent git commits" : "recent git commits (none detected)",
+      "current core files"
+    ];
+    const needsVerification = [
+      ...(gitSignals.changedFiles.length === 0 ? ["No git working tree changes detected during sync."] : []),
+      ...(summary.decisionCount === 0 ? ["No recorded meet decisions were available in the archived cycle."] : [])
+    ];
 
     if (args.scope === "all" || args.scope === "memory") {
       generatedFiles.push(
@@ -173,7 +185,10 @@ export const nxSync = tool({
       {
         synced: true,
         cycleIndex: index,
+        sources,
+        scannedLayers,
         generatedFiles,
+        needsVerification,
         summary
       },
       null,
@@ -289,7 +304,7 @@ function buildRulesDoc(scan: Awaited<ReturnType<typeof scanProject>>): string {
   ].join("\n");
 }
 
-function summarizeCycle(cycle: any) {
+function summarizeCycle(cycle: any, gitSignals: Awaited<ReturnType<typeof readGitSignals>>) {
   const tasks = Array.isArray(cycle?.tasks?.tasks) ? cycle.tasks.tasks : [];
   const issues = Array.isArray(cycle?.meet?.issues) ? cycle.meet.issues : [];
   const decisions = issues
@@ -303,6 +318,8 @@ function summarizeCycle(cycle: any) {
     decisions,
     taskCount: tasks.length,
     decisionCount: decisions.length,
+    changedFiles: gitSignals.changedFiles,
+    recentCommits: gitSignals.recentCommits,
     memoryHint:
       cycle?.memoryHint && typeof cycle.memoryHint === "object"
         ? {
@@ -327,6 +344,7 @@ function buildRecentCycleMemoryDoc(summary: ReturnType<typeof summarizeCycle>): 
     `- Loop detection: ${summary.memoryHint?.hadLoopDetection ? "yes" : "no"}`,
     `- Reopen count: ${summary.memoryHint?.reopenCount ?? 0}`,
     `- Blocked transitions: ${summary.memoryHint?.blockedTransitions ?? 0}`,
+    `- Git changed files seen during sync: ${summary.changedFiles.length}`,
     "",
     "## Tasks",
     ...summary.taskTitles.map((task: string) => `- ${task}`),
@@ -334,7 +352,10 @@ function buildRecentCycleMemoryDoc(summary: ReturnType<typeof summarizeCycle>): 
     "## Decisions",
     ...(summary.decisions.length > 0
       ? summary.decisions.map((decision: { id: string; title: string; decision: string }) => `- ${decision.id} ${decision.title}: ${decision.decision}`)
-      : ["- none recorded"])
+      : ["- none recorded"]),
+    "",
+    "## Git Signals",
+    ...(summary.changedFiles.length > 0 ? summary.changedFiles.map((file: string) => `- ${file}`) : ["- none detected"])
   ].join("\n");
 }
 
@@ -349,6 +370,12 @@ function buildRecentChangesDoc(summary: ReturnType<typeof summarizeCycle>): stri
     "",
     "## Completed Work",
     ...summary.taskTitles.map((task: string) => `- ${task}`),
+    "",
+    "## Git Diff Signals",
+    ...(summary.changedFiles.length > 0 ? summary.changedFiles.map((file: string) => `- ${file}`) : ["- none detected"]),
+    "",
+    "## Recent Commits",
+    ...(summary.recentCommits.length > 0 ? summary.recentCommits.map((commit: string) => `- ${commit}`) : ["- none detected"]),
     "",
     "## Design Decisions",
     ...(summary.decisions.length > 0
@@ -434,6 +461,25 @@ async function readRecentCommits(root: string): Promise<string[]> {
     return stdout.split("\n").map((line) => line.trim()).filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+async function readGitSignals(root: string): Promise<{ changedFiles: string[]; recentCommits: string[] }> {
+  const recentCommits = await readRecentCommits(root);
+  try {
+    const { stdout } = await execFileAsync("git", ["status", "--short", "--untracked-files=all"], { cwd: root });
+    const changedFiles = stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const normalized = line.replace(/^..\s+/, "");
+        const renamed = normalized.split(" -> ").at(-1);
+        return renamed ?? normalized;
+      });
+    return { changedFiles, recentCommits };
+  } catch {
+    return { changedFiles: [], recentCommits };
   }
 }
 

@@ -69,8 +69,12 @@ await nxTaskClose.execute({ archive: true }, ctx);
 
 const syncResult = JSON.parse(await nxSync.execute({ scope: "all" }, ctx));
 assert.equal(syncResult.synced, true);
+assert.equal(syncResult.sources.includes("archived cycle history"), true);
+assert.equal(syncResult.scannedLayers.includes("codebase"), true);
 assert.equal(syncResult.generatedFiles.includes(path.join("core", "memory", "recent-cycle-summary.md")), true);
 assert.equal(syncResult.generatedFiles.includes(path.join("core", "codebase", "recent-changes.md")), true);
 assert.equal(syncResult.generatedFiles.includes(path.join("core", "reference", "decision-log.md")), true);
+assert.equal(Array.isArray(syncResult.summary.changedFiles), true);
+assert.equal(Array.isArray(syncResult.summary.recentCommits), true);
 
 console.log("e2e init sync passed");
