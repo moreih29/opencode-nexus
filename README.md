@@ -1,83 +1,125 @@
 # opencode-nexus
 
-Nexus orchestration plugin for OpenCode.
+[![npm version](https://img.shields.io/npm/v/opencode-nexus)](https://www.npmjs.com/package/opencode-nexus)
 
-This repository is a plugin package source. It is not a per-project `.opencode` preset.
+> [English](README.en.md)
 
-## Install
+OpenCode를 위한 Nexus 오케스트레이션 플러그인.
 
-Add the package to your OpenCode config plugin list.
+`opencode-nexus`는 `claude-nexus`의 핵심 워크플로를 OpenCode에 맞게 옮긴 프로젝트입니다. 복잡한 작업을 즉흥 프롬프트로 굴리는 대신, 구조화된 미팅, 태스크 기반 실행, 지속되는 프로젝트 지식 흐름을 OpenCode에서 그대로 사용할 수 있게 합니다.
+
+## Why
+
+OpenCode가 에이전트와 도구를 제공한다면, `opencode-nexus`는 그 위에 운영 규율을 얹습니다.
+
+- 구현 전에 `[meet]`로 먼저 결정
+- `[run]`에서 명시적인 task state로 실행
+- `.nexus/`에 프로젝트 지식 축적
+- 느슨한 프롬프트 관습 대신 Nexus 도구 사용
+- 편집, 위임, 검증, 사이클 종료에 가드레일 추가
+
+## Quick Start
+
+프로젝트 `opencode.json`에 플러그인을 추가합니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus"]
+  "plugin": ["opencode-nexus"],
+  "instructions": ["AGENTS.md"]
 }
 ```
 
-Minimal preset: `opencode.minimal.json`
+또는 포함된 예제 설정을 시작점으로 사용해도 됩니다.
 
-Extended preset with agent and permission examples: `opencode.example.json`
+- 최소 설정: `opencode.minimal.json`
+- 확장 예제: `opencode.example.json`
 
-`opencode-nexus` applies built-in Nexus presets through plugin hooks:
+그다음 프로젝트 안에서 setup을 실행합니다.
 
-- 9-agent catalog (HOW/DO/CHECK) with tool policies
-- skill-aware system prompt injection for `[meet]`, `[run]`, `[d]`, `[rule]`
-- stateful meet/task reminders and stronger TASK PIPELINE guidance
-- task pipeline guardrails for edit tools
-
-## Development
-
-This repository is Bun-first.
-
-```bash
-bun install
-bun run check
-bun run test:e2e
-bun run generate:template
+```text
+Use nx_setup to configure this repository for opencode-nexus.
 ```
 
-## Example Config
+권장 첫 실행:
 
-See `opencode.example.json` for a baseline setup with plugin registration, agent examples, and permissions.
-For instruction delivery through OpenCode config, add `AGENTS.md` to `instructions` or run `nx_setup`.
+```text
+Use nx_init to scan this project and create initial Nexus knowledge.
+```
 
-## Operations Docs
+## 첫 사용
 
-- `docs/operations.md`: runtime workflow, tags, and guardrails
-- `docs/reference-boundaries.md`: what remains as legacy or historical reference
-- `docs/release-checklist.md`: release preparation checklist
+- 미팅: `[meet] 인증 플로우를 어떻게 설계할까?`
+- 결정 기록: `그 방향으로 가자 [d]`
+- 실행: `[run] 합의한 인증 플로우를 구현해줘`
 
-## Structure
+## 태그
 
-- `src/index.ts`: plugin entry (default export only)
-- `src/agents/catalog.ts`: built-in 9-agent definitions
-- `src/skills/catalog.ts`: built-in skill metadata
-- `src/plugin/hooks.ts`: hook guardrails
-- `src/tools/*`: Nexus custom tools (`nx_meet_*`, `nx_task_*`, `nx_core_*`, etc.)
-- `src/tools/workflow.ts`: `nx_init` and `nx_sync` workflow tools
-- `src/tools/setup.ts`: `nx_setup` for OpenCode config + `AGENTS.md` injection
-- `src/shared/*`: paths, state, schemas, utilities
+| 태그 | 용도 | 예시 |
+| --- | --- | --- |
+| `[meet]` | 구현 전 의사결정 모드 | `[meet] DB 마이그레이션 전략 논의` |
+| `[run]` | Nexus task pipeline으로 실행 | `[run] 마이그레이션 계획 구현` |
+| `[d]` | 현재 미팅의 결정 기록 | `2안으로 가자 [d]` |
+| `[rule]` | 팀의 지속 규칙 저장 | `[rule:testing] publish 전에 typecheck 필수` |
 
-## Status
+## 내장 에이전트
 
-This plugin is an OpenCode-native migration of the original `claude-nexus` project, but it is not yet full parity.
+| 카테고리 | 에이전트 | 역할 |
+| --- | --- | --- |
+| HOW | Architect | 아키텍처와 기술 설계 리뷰 |
+| HOW | Designer | UI/UX 및 인터랙션 설계 |
+| HOW | Postdoc | 방법론 설계와 증거 종합 |
+| HOW | Strategist | 제품 방향과 전략 정리 |
+| DO | Engineer | 구현과 디버깅 |
+| DO | Researcher | 독립 조사와 리서치 |
+| DO | Writer | 문서와 작성형 산출물 |
+| CHECK | QA | 테스트, 검증, 리스크 리뷰 |
+| CHECK | Reviewer | 내용 및 사실 검토 |
 
-- Strong today: hook guardrails, task/meet state tools, 9-agent catalog, system prompt injection
-- Partial today: procedural skill behavior, setup/onboarding workflows, code intelligence depth
-- Planned parity work remains for `nx-init`, `nx-sync`, `nx-setup`, richer meet/run workflows, and safer code-intel operations
+## 내장 스킬
 
-## Reference Layers
+| 스킬 | 트리거 | 역할 |
+| --- | --- | --- |
+| `nx-meet` | `[meet]` | 구조화된 논의와 결정 워크플로 |
+| `nx-run` | `[run]` | 태스크 기반 실행 워크플로 |
+| `nx-init` | 도구 | 프로젝트 온보딩과 초기 지식 생성 |
+| `nx-sync` | 도구 | 아카이브된 실행 지식을 `.nexus/core/`로 동기화 |
+| `nx-setup` | 도구 | OpenCode용 `AGENTS.md`, `opencode.json` 설정 |
 
-- Current implementation truth: `docs/operations.md` and `docs/coverage-matrix.md`
-- Historical/source analysis: `nexus-reference-for-opencode.md`
-- Legacy migration notes and leftover source concepts: `docs/reference-boundaries.md`
-- Team compatibility details: `docs/team-compatibility.md`
-- OpenCode group coordination model: `docs/group-orchestration.md`
-- Prompt parity inventory and migration checklist: `docs/prompt-parity-plan.md`
+## OpenCode에 추가되는 것
 
-## Notes
+- HOW / DO / CHECK 역할로 나뉜 9개 Nexus 에이전트 카탈로그
+- `.nexus/state/`에 저장되는 상태 기반 meet/task 워크플로
+- identity / codebase / reference / memory 계층의 `.nexus/core/`
+- edit 도구에 대한 task pipeline 가드레일
+- meeting reminder, run notice, 더 엄격한 cycle-close discipline
+- `nx_meet_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
 
-- `.opencode/agents` and `.opencode/skills` are consumer-project resources.
-- This plugin package focuses on runtime hooks and custom tools.
-- `AGENTS.md` is the primary OpenCode instruction file. `CLAUDE.md` is treated only as a legacy migration input when scanning existing repositories.
+## 지식 구조
+
+`opencode-nexus`는 `.nexus/`에 프로젝트 지식과 워크플로 상태를 저장합니다.
+
+- `core/` — 지속되는 프로젝트 지식
+- `rules/` — 팀 규칙
+- `config.json` — Nexus 설정
+- `history.json` — 아카이브된 사이클 기록
+- `state/` — 현재 meet/task/run 상태
+
+## 중요 참고
+
+- `AGENTS.md`가 OpenCode의 기본 instruction 파일입니다.
+- `CLAUDE.md`는 마이그레이션용 legacy 입력으로만 취급합니다.
+- 이 프로젝트는 `claude-nexus`의 OpenCode 네이티브 마이그레이션이지만 아직 완전 parity는 아닙니다.
+- 현재 강한 부분: hook, task/meet 상태 도구, 에이전트 카탈로그, 시스템 가이드.
+- 아직 부분적인 부분: 더 깊은 code intelligence 범위와 일부 워크플로 parity.
+
+## 문서
+
+- `docs/operations.md` — 런타임 워크플로와 가드레일
+- `docs/coverage-matrix.md` — 구현 범위 현황
+- `docs/prompt-parity-plan.md` — `claude-nexus` 대비 parity 추적
+- `docs/reference-boundaries.md` — legacy 동작과 현재 OpenCode 동작의 경계
+
+## License
+
+MIT

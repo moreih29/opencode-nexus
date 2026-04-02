@@ -1,9 +1,25 @@
 {
   "name": "opencode-nexus",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "Nexus orchestration plugin for OpenCode",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moreih29/opencode-nexus.git"
+  },
+  "homepage": "https://github.com/moreih29/opencode-nexus#readme",
+  "bugs": {
+    "url": "https://github.com/moreih29/opencode-nexus/issues"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "nexus",
+    "agents",
+    "orchestration"
+  ],
   "packageManager": "bun@1.3.9",
   "main": "dist/index.js",
   "files": [
@@ -15,11 +31,15 @@
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "generate:template": "bun run build && bun scripts/generate-template.mjs",
-    "test:e2e": "bun run build && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-phase-guard.mjs && bun scripts/e2e-prompt-parity.mjs"
+    "test:e2e": "bun run build && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-phase-guard.mjs && bun scripts/e2e-prompt-parity.mjs",
+    "prepack": "bun run generate:template"
   },
   "dependencies": {
     "zod": "^3.23.8"
