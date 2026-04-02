@@ -124,21 +124,19 @@ export function createHooks(ctx: PluginContext) {
         return;
       }
       const summary = await readTasksSummary(paths.TASKS_FILE);
-      if (!summary || (summary.pending === 0 && summary.in_progress === 0 && summary.blocked === 0)) {
+      if (!summary || summary.total === 0) {
         await safeUnlink(paths.STOP_WARNED_FILE);
         return;
       }
 
-      const warned = await fileExists(paths.STOP_WARNED_FILE);
-      if (!warned) {
-        await fs.writeFile(paths.STOP_WARNED_FILE, "1\n", "utf8");
-      } else {
-        await safeUnlink(paths.STOP_WARNED_FILE);
-      }
+      const status = getExitGuardStatus(summary);
+      const previous = await readStopWarning(paths.STOP_WARNED_FILE);
+      const repeated = previous === status;
+      await fs.writeFile(paths.STOP_WARNED_FILE, `${status}\n`, "utf8");
 
       output.parts.push({
         type: "text",
-        text: "[nexus] Active tasks remain. Close or update tasks before exiting this cycle (nx_task_close when complete)."
+        text: buildExitWarning(status, repeated)
       } as Record<string, unknown>);
     },
 
@@ -273,6 +271,43 @@ function extractText(parts: Array<{ type?: string; text?: string }>): string {
 
 function isExitCommand(command: string): boolean {
   return /^(exit|quit|:q|\/exit|\/quit)\b/i.test(command.trim());
+}
+
+function getExitGuardStatus(summary: { pending: number; in_progress: number; blocked: number; completed: number; total: number }) {
+  if (summary.pending > 0 || summary.in_progress > 0 || summary.blocked > 0) {
+    return "active" as const;
+  }
+  if (summary.completed > 0 && summary.completed === summary.total) {
+    return "completed-open" as const;
+  }
+  return "clear" as const;
+}
+
+function buildExitWarning(status: "active" | "completed-open" | "clear", repeated: boolean): string {
+  if (status === "active") {
+    return repeated
+      ? "[nexus] Active tasks still remain. Update task status or finish the cycle before exiting; use nx_task_close only after all tasks are complete."
+      : "[nexus] Active task cycle detected. Do not abandon the cycle silently: update blocked/in-progress tasks, finish verification, and use nx_task_close only when the cycle is actually complete.";
+  }
+
+  if (status === "completed-open") {
+    return repeated
+      ? "[nexus] This completed cycle is still open. Archive it with nx_task_close before exiting."
+      : "[nexus] A completed-but-not-closed cycle is still open. Verify if needed, run nx_sync when useful, then archive the cycle with nx_task_close before exiting.";
+  }
+
+  return "[nexus] No active Nexus cycle is blocking exit.";
+}
+
+async function readStopWarning(filePath: string): Promise<string | null> {
+  if (!(await fileExists(filePath))) {
+    return null;
+  }
+  try {
+    return (await fs.readFile(filePath, "utf8")).trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 function pickSessionID(input: unknown): string | null {
