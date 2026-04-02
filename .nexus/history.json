@@ -1,0 +1,1278 @@
+{
+  "cycles": [
+    {
+      "completed_at": "2026-04-02T01:27:56.463Z",
+      "branch": "main",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775093217597-fq8gvs",
+            "title": "Fix project opencode.json plugin registration",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "direct-user-request",
+            "deps": [],
+            "created_at": "2026-04-02T01:26:57.596Z",
+            "updated_at": "2026-04-02T01:27:53.255Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T01:35:47.902Z",
+      "branch": "main",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775093449712-96uxcu",
+            "title": "Fix local plugin entry export for OpenCode loading",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T01:30:49.711Z",
+            "updated_at": "2026-04-02T01:35:43.668Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T01:46:30.112Z",
+      "branch": "main",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775094288427-i27ilt",
+            "title": "Establish local self-hosting plugin path",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "self-hosting setup",
+            "deps": [],
+            "created_at": "2026-04-02T01:44:48.424Z",
+            "updated_at": "2026-04-02T01:46:16.973Z"
+          },
+          {
+            "id": "task-1775094288431-84ag7y",
+            "title": "Update config and docs for local development",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "self-hosting setup",
+            "deps": [],
+            "created_at": "2026-04-02T01:44:48.428Z",
+            "updated_at": "2026-04-02T01:46:16.989Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T02:50:10.451Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 1,
+        "topic": "OpenCode용 opencode-nexus 구현 미팅",
+        "attendees": [],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "OpenCode용 meet 상태머신과 오케스트레이션을 어떻게 구현할 것인가?",
+            "status": "decided",
+            "discussion": [
+              "[lead] OpenCode용 meet는 Claude식 팀 채팅 복제가 아니라 상태 기반 오케스트레이션으로 구현한다. issue 상태를 pending/discussing/researching/decided/deferred/tasked까지 확장하고, discussion은 구조화된 엔트리로 저장해 moderator 요약과 후속 task emission에 활용한다."
+            ],
+            "decision": "Meet runtime will use a structured state machine and discussion records, with explicit summaries and task emission metadata instead of free-form multi-agent chat parity."
+          },
+          {
+            "id": "issue-2",
+            "title": "핵심 command layer와 skill/주입의 역할 경계를 어떻게 나눌 것인가?",
+            "status": "decided",
+            "discussion": [
+              "[lead] 핵심 흐름은 command-first로 정리한다. nx_meet_* 도구를 중심으로 실제 실행 책임을 갖게 하고, skill/system injection은 행동 규칙과 출력 계약 보강에 집중한다. setup은 OpenCode native config와 local self-hosting 개발 모드를 모두 지원해야 한다."
+            ],
+            "decision": "Core workflows will remain command-first through nx_meet/nx_task/nx_setup tools, while skills and system injection provide guidance, mode coaching, and output contracts."
+          },
+          {
+            "id": "issue-3",
+            "title": "plugin/config 파손 상황에서 어떤 fallback/adapter 구조를 둘 것인가?",
+            "status": "decided",
+            "discussion": [
+              "[lead] plugin/config 파손에는 capability check와 degraded profile이 필요하다. 특히 self-hosting 저장소에서는 opencode.json에 plugin 배열을 강제로 넣지 않고 local plugin shim을 우선시해야 하며, 일반 프로젝트에서는 plugin 배열 병합을 유지하는 이중 경로가 안전하다."
+            ],
+            "decision": "Setup/config will support capability detection plus degraded profiles. Self-hosting repositories keep local plugin shims without forcing plugin array writes, while external projects can merge plugin registration normally."
+          }
+        ],
+        "research_summary": "OpenCode에 맞는 meet runtime, command-first 구조, plugin/config fallback을 실제 구현하기 위한 결정을 기록한다. Claude Code의 team semantics를 복제하지 않고 primary/subagent 기반 오케스트레이션으로 재구성하는 방향을 검토했다.",
+        "created_at": "2026-04-02T02:10:48.150Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775096069069-21atpp",
+            "title": "Implement meet runtime state model and issue/task orchestration",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T02:14:29.068Z",
+            "updated_at": "2026-04-02T02:18:53.836Z"
+          },
+          {
+            "id": "task-1775096069078-svycpy",
+            "title": "Implement setup/config capability detection and degraded profiles",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T02:14:29.076Z",
+            "updated_at": "2026-04-02T02:49:21.009Z"
+          },
+          {
+            "id": "task-1775096069173-2avpxb",
+            "title": "Add regression tests and docs for meet/runtime/setup behavior",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T02:14:29.172Z",
+            "updated_at": "2026-04-02T02:49:45.306Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 3,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "OpenCode용 opencode-nexus 구현 미팅"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T02:55:35.491Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775098490991-ubfnxy",
+            "title": "Allow all OpenCode permissions in project config",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T02:54:50.990Z",
+            "updated_at": "2026-04-02T02:55:29.277Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T03:06:25.192Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775098847660-bagyal",
+            "title": "Diagnose meet runtime error in OpenCode",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T03:00:47.658Z",
+            "updated_at": "2026-04-02T03:06:16.372Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T03:14:01.739Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775099573983-0qhi2z",
+            "title": "Disable risky chat notice injection for TUI stability",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T03:12:53.982Z",
+            "updated_at": "2026-04-02T03:13:55.649Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T03:35:12.469Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775100570026-at4wjp",
+            "title": "Add nexus primary agent and default config behavior",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T03:29:30.025Z",
+            "updated_at": "2026-04-02T03:34:43.658Z"
+          },
+          {
+            "id": "task-1775100570038-1pnpsz",
+            "title": "Update prompts/docs/setup for nexus primary",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T03:29:30.037Z",
+            "updated_at": "2026-04-02T03:34:51.795Z"
+          },
+          {
+            "id": "task-1775100570123-jby5qa",
+            "title": "Add regression tests for nexus primary defaulting",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T03:29:30.121Z",
+            "updated_at": "2026-04-02T03:34:57.763Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T03:38:20.435Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775101051881-0w3hy6",
+            "title": "Restrict project primary agents to nexus and plan",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T03:37:31.880Z",
+            "updated_at": "2026-04-02T03:38:04.971Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:03:52.860Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 2,
+        "topic": "Claude Nexus parity for OpenCode with strict .nexus compatibility",
+        "attendees": [
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T03:42:23.412Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "공용 .nexus 파일 포맷의 canonical 범위를 어디까지로 고정할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "공용 .nexus 포맷은 전면 자유 확장보다 계층형 canonical이 적합하다. 공통 필드는 엄격히 고정하고, OpenCode 특화 정보는 명시적 네임스페이스로만 확장하며, 임시/세션/캐시 정보는 shared canonical 밖으로 분리해야 claude-nexus와 완전 호환 요구를 만족시킬 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:43:14.795Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "옵션 1은 호환성은 가장 안전하지만 OpenCode 확장 공간이 너무 작고, 옵션 3은 상태 결합이 커져 양 플랫폼 병행 사용 시 포맷 충돌 위험이 크다. 따라서 공통 코어는 엄격히 고정하고 확장은 명시 네임스페이스로 제한하는 옵션 2가 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:43:22.339Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:45:14.975Z"
+              }
+            ],
+            "decision": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+            "summary": "Use L1 common canonical, L2 namespaced extension, and L3 ephemeral separation to preserve claude-nexus compatibility while allowing OpenCode-specific behavior.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-2",
+            "title": "OpenCode 전용 상태나 최적화 정보는 어떤 분리 원칙으로 저장할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "이슈 2 논의를 위해 OpenCode 전용 상태 저장 방안을 3안으로 비교한다. 전제: L1/L2/L3 경계를 유지하고, claude-nexus가 사용하는 .nexus/core, .nexus/rules, .nexus/state의 읽기/쓰기 호환성을 깨지 않는다. 비교축은 (1) 파일 충돌 위험, (2) Claude 무시 시 안전성, (3) 구현 난이도, (4) 성능 최적화 데이터 활용성이다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T03:45:38.167Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "OpenCode 전용 상태는 canonical 파일과 분리 저장해야 하며, 가장 균형적인 방식은 canonical 옆 sidecar metadata를 두는 것이다. 공통 의미 데이터는 기존 파일에 유지하고, OpenCode 확장 의미 데이터는 *.opencode.json 같은 sidecar로 두며, 대용량 재생성 캐시는 별도 DB로 예외 처리할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:46:12.426Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "state/opencode 서브트리는 단순하지만 canonical과 확장 간 대응 관계가 약하고, 전용 DB는 성능은 좋지만 운영 복잡도가 높다. 따라서 sidecar를 기본 원칙으로 하고, 필요 시 재생성 가능한 성능 캐시만 DB로 분리하는 혼합안이 가장 현실적이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:46:18.669Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:47:21.233Z"
+              }
+            ],
+            "decision": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+            "summary": "Canonical files remain shared truth, sidecars hold OpenCode-only extension meaning, and optional cache/DB layers are limited to disposable optimization data.",
+            "task_refs": [
+              "task-1775102305864-r8fzxz",
+              "task-1775102328958-s0nuvb"
+            ]
+          },
+          {
+            "id": "issue-3",
+            "title": "Claude식 meet/team 경험을 OpenCode에서 어떤 오케스트레이션 모델로 대응할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "Claude식 meet/team 경험을 가장 가깝게 재현하려면 역할별 서브에이전트를 고정 패널처럼 운용하고 participant별 task_id 또는 session handle을 재사용해야 한다. native team object는 없지만 sidecar에 team registry를 두면 follow-up 질문을 같은 participant에게 다시 라우팅할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:48:13.053Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "단일 세션 라운드테이블은 구현은 쉽지만 Claude식 체감이 약하고, 하이브리드 허브는 실용적이지만 연속성이 균일하지 않다. 목표가 claude-nexus 경험 최대 재현이라면 고정 패널형 멀티 서브에이전트를 기본으로 두고, 비용 제어를 위해 일부 선택적 분기 정책을 섞는 모델이 가장 적절하다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:48:24.587Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:51:03.611Z"
+              }
+            ],
+            "decision": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+            "summary": "Use persistent architect/designer/postdoc/strategist panel sessions for follow-up discussion continuity, and call engineer/researcher/writer/qa/reviewer only when execution or verification work is actually needed.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-4",
+            "title": "양 플랫폼 간 상태/규칙/기억 동기화는 어떤 호환성 정책으로 관리할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "양 플랫폼 병행 사용에서는 단순 last-writer-wins보다 base_version 검증과 3-way merge가 필요한 optimistic concurrency 정책이 적합하다. canonical .nexus는 공용 스키마를 유지하고, sidecar는 플랫폼별 확장으로 분리하며, 미해결 충돌은 artifact로 승격해 수동 결정 가능하게 해야 한다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:52:11.486Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "last-writer-wins는 구현은 쉽지만 규칙/기억 변경이 덮어써질 위험이 크고, event-log reducer는 이상적이지만 지금 단계엔 과도하다. 따라서 canonical 우선, optimistic concurrency, 3-way merge, conflict artifact 보존을 조합한 정책이 호환성과 운영 현실성의 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:52:21.974Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:56:53.091Z"
+              }
+            ],
+            "decision": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+            "summary": "Treat platform switching as safe handoff rather than concurrent sync. One active platform writes at a time, canonical state is always sufficient to continue, and OpenCode-only sidecars never become required for correctness.",
+            "task_refs": [
+              "task-1775102329062-ca35em"
+            ]
+          }
+        ],
+        "research_summary": "Goal: deliver as much of the claude-nexus experience as possible in OpenCode while respecting structural differences between the platforms. Non-negotiable constraint: .nexus core, rules, and state files must remain fully compatible with the claude-nexus plugin.",
+        "created_at": "2026-04-02T03:42:15.747Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775102305864-h43vh0",
+            "title": "Implement HOW-panel meet registry and participant continuity scaffolding",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:25.862Z",
+            "updated_at": "2026-04-02T04:03:34.633Z"
+          },
+          {
+            "id": "task-1775102328958-s0nuvb",
+            "title": "Implement canonical-first handoff and sidecar state primitives",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:48.955Z",
+            "updated_at": "2026-04-02T04:03:29.086Z"
+          },
+          {
+            "id": "task-1775102329062-ca35em",
+            "title": "Add docs and regression coverage for compatibility-safe OpenCode behavior",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:49.061Z",
+            "updated_at": "2026-04-02T04:03:41.552Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 4,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Claude Nexus parity for OpenCode with strict .nexus compatibility"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:04:56.737Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 2,
+        "topic": "Claude Nexus parity for OpenCode with strict .nexus compatibility",
+        "attendees": [
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T03:42:23.412Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "공용 .nexus 파일 포맷의 canonical 범위를 어디까지로 고정할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "공용 .nexus 포맷은 전면 자유 확장보다 계층형 canonical이 적합하다. 공통 필드는 엄격히 고정하고, OpenCode 특화 정보는 명시적 네임스페이스로만 확장하며, 임시/세션/캐시 정보는 shared canonical 밖으로 분리해야 claude-nexus와 완전 호환 요구를 만족시킬 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:43:14.795Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "옵션 1은 호환성은 가장 안전하지만 OpenCode 확장 공간이 너무 작고, 옵션 3은 상태 결합이 커져 양 플랫폼 병행 사용 시 포맷 충돌 위험이 크다. 따라서 공통 코어는 엄격히 고정하고 확장은 명시 네임스페이스로 제한하는 옵션 2가 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:43:22.339Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:45:14.975Z"
+              }
+            ],
+            "decision": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+            "summary": "Use L1 common canonical, L2 namespaced extension, and L3 ephemeral separation to preserve claude-nexus compatibility while allowing OpenCode-specific behavior.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-2",
+            "title": "OpenCode 전용 상태나 최적화 정보는 어떤 분리 원칙으로 저장할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "이슈 2 논의를 위해 OpenCode 전용 상태 저장 방안을 3안으로 비교한다. 전제: L1/L2/L3 경계를 유지하고, claude-nexus가 사용하는 .nexus/core, .nexus/rules, .nexus/state의 읽기/쓰기 호환성을 깨지 않는다. 비교축은 (1) 파일 충돌 위험, (2) Claude 무시 시 안전성, (3) 구현 난이도, (4) 성능 최적화 데이터 활용성이다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T03:45:38.167Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "OpenCode 전용 상태는 canonical 파일과 분리 저장해야 하며, 가장 균형적인 방식은 canonical 옆 sidecar metadata를 두는 것이다. 공통 의미 데이터는 기존 파일에 유지하고, OpenCode 확장 의미 데이터는 *.opencode.json 같은 sidecar로 두며, 대용량 재생성 캐시는 별도 DB로 예외 처리할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:46:12.426Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "state/opencode 서브트리는 단순하지만 canonical과 확장 간 대응 관계가 약하고, 전용 DB는 성능은 좋지만 운영 복잡도가 높다. 따라서 sidecar를 기본 원칙으로 하고, 필요 시 재생성 가능한 성능 캐시만 DB로 분리하는 혼합안이 가장 현실적이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:46:18.669Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:47:21.233Z"
+              }
+            ],
+            "decision": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+            "summary": "Canonical files remain shared truth, sidecars hold OpenCode-only extension meaning, and optional cache/DB layers are limited to disposable optimization data.",
+            "task_refs": [
+              "task-1775102305864-r8fzxz",
+              "task-1775102328958-s0nuvb"
+            ]
+          },
+          {
+            "id": "issue-3",
+            "title": "Claude식 meet/team 경험을 OpenCode에서 어떤 오케스트레이션 모델로 대응할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "Claude식 meet/team 경험을 가장 가깝게 재현하려면 역할별 서브에이전트를 고정 패널처럼 운용하고 participant별 task_id 또는 session handle을 재사용해야 한다. native team object는 없지만 sidecar에 team registry를 두면 follow-up 질문을 같은 participant에게 다시 라우팅할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:48:13.053Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "단일 세션 라운드테이블은 구현은 쉽지만 Claude식 체감이 약하고, 하이브리드 허브는 실용적이지만 연속성이 균일하지 않다. 목표가 claude-nexus 경험 최대 재현이라면 고정 패널형 멀티 서브에이전트를 기본으로 두고, 비용 제어를 위해 일부 선택적 분기 정책을 섞는 모델이 가장 적절하다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:48:24.587Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:51:03.611Z"
+              }
+            ],
+            "decision": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+            "summary": "Use persistent architect/designer/postdoc/strategist panel sessions for follow-up discussion continuity, and call engineer/researcher/writer/qa/reviewer only when execution or verification work is actually needed.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-4",
+            "title": "양 플랫폼 간 상태/규칙/기억 동기화는 어떤 호환성 정책으로 관리할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "양 플랫폼 병행 사용에서는 단순 last-writer-wins보다 base_version 검증과 3-way merge가 필요한 optimistic concurrency 정책이 적합하다. canonical .nexus는 공용 스키마를 유지하고, sidecar는 플랫폼별 확장으로 분리하며, 미해결 충돌은 artifact로 승격해 수동 결정 가능하게 해야 한다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:52:11.486Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "last-writer-wins는 구현은 쉽지만 규칙/기억 변경이 덮어써질 위험이 크고, event-log reducer는 이상적이지만 지금 단계엔 과도하다. 따라서 canonical 우선, optimistic concurrency, 3-way merge, conflict artifact 보존을 조합한 정책이 호환성과 운영 현실성의 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:52:21.974Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:56:53.091Z"
+              }
+            ],
+            "decision": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+            "summary": "Treat platform switching as safe handoff rather than concurrent sync. One active platform writes at a time, canonical state is always sufficient to continue, and OpenCode-only sidecars never become required for correctness.",
+            "task_refs": [
+              "task-1775102329062-ca35em"
+            ]
+          }
+        ],
+        "research_summary": "Goal: deliver as much of the claude-nexus experience as possible in OpenCode while respecting structural differences between the platforms. Non-negotiable constraint: .nexus core, rules, and state files must remain fully compatible with the claude-nexus plugin.",
+        "created_at": "2026-04-02T03:42:15.747Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775102305864-h43vh0",
+            "title": "Implement HOW-panel meet registry and participant continuity scaffolding",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:25.862Z",
+            "updated_at": "2026-04-02T04:03:34.633Z"
+          },
+          {
+            "id": "task-1775102328958-s0nuvb",
+            "title": "Implement canonical-first handoff and sidecar state primitives",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:48.955Z",
+            "updated_at": "2026-04-02T04:03:29.086Z"
+          },
+          {
+            "id": "task-1775102329062-ca35em",
+            "title": "Add docs and regression coverage for compatibility-safe OpenCode behavior",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:49.061Z",
+            "updated_at": "2026-04-02T04:03:41.552Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 4,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Claude Nexus parity for OpenCode with strict .nexus compatibility"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:08:22.028Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 2,
+        "topic": "Claude Nexus parity for OpenCode with strict .nexus compatibility",
+        "attendees": [
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T03:42:23.412Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "공용 .nexus 파일 포맷의 canonical 범위를 어디까지로 고정할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "공용 .nexus 포맷은 전면 자유 확장보다 계층형 canonical이 적합하다. 공통 필드는 엄격히 고정하고, OpenCode 특화 정보는 명시적 네임스페이스로만 확장하며, 임시/세션/캐시 정보는 shared canonical 밖으로 분리해야 claude-nexus와 완전 호환 요구를 만족시킬 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:43:14.795Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "옵션 1은 호환성은 가장 안전하지만 OpenCode 확장 공간이 너무 작고, 옵션 3은 상태 결합이 커져 양 플랫폼 병행 사용 시 포맷 충돌 위험이 크다. 따라서 공통 코어는 엄격히 고정하고 확장은 명시 네임스페이스로 제한하는 옵션 2가 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:43:22.339Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:45:14.975Z"
+              }
+            ],
+            "decision": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+            "summary": "Use L1 common canonical, L2 namespaced extension, and L3 ephemeral separation to preserve claude-nexus compatibility while allowing OpenCode-specific behavior.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-2",
+            "title": "OpenCode 전용 상태나 최적화 정보는 어떤 분리 원칙으로 저장할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "이슈 2 논의를 위해 OpenCode 전용 상태 저장 방안을 3안으로 비교한다. 전제: L1/L2/L3 경계를 유지하고, claude-nexus가 사용하는 .nexus/core, .nexus/rules, .nexus/state의 읽기/쓰기 호환성을 깨지 않는다. 비교축은 (1) 파일 충돌 위험, (2) Claude 무시 시 안전성, (3) 구현 난이도, (4) 성능 최적화 데이터 활용성이다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T03:45:38.167Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "OpenCode 전용 상태는 canonical 파일과 분리 저장해야 하며, 가장 균형적인 방식은 canonical 옆 sidecar metadata를 두는 것이다. 공통 의미 데이터는 기존 파일에 유지하고, OpenCode 확장 의미 데이터는 *.opencode.json 같은 sidecar로 두며, 대용량 재생성 캐시는 별도 DB로 예외 처리할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:46:12.426Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "state/opencode 서브트리는 단순하지만 canonical과 확장 간 대응 관계가 약하고, 전용 DB는 성능은 좋지만 운영 복잡도가 높다. 따라서 sidecar를 기본 원칙으로 하고, 필요 시 재생성 가능한 성능 캐시만 DB로 분리하는 혼합안이 가장 현실적이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:46:18.669Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:47:21.233Z"
+              }
+            ],
+            "decision": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+            "summary": "Canonical files remain shared truth, sidecars hold OpenCode-only extension meaning, and optional cache/DB layers are limited to disposable optimization data.",
+            "task_refs": [
+              "task-1775102305864-r8fzxz",
+              "task-1775102328958-s0nuvb"
+            ]
+          },
+          {
+            "id": "issue-3",
+            "title": "Claude식 meet/team 경험을 OpenCode에서 어떤 오케스트레이션 모델로 대응할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "Claude식 meet/team 경험을 가장 가깝게 재현하려면 역할별 서브에이전트를 고정 패널처럼 운용하고 participant별 task_id 또는 session handle을 재사용해야 한다. native team object는 없지만 sidecar에 team registry를 두면 follow-up 질문을 같은 participant에게 다시 라우팅할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:48:13.053Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "단일 세션 라운드테이블은 구현은 쉽지만 Claude식 체감이 약하고, 하이브리드 허브는 실용적이지만 연속성이 균일하지 않다. 목표가 claude-nexus 경험 최대 재현이라면 고정 패널형 멀티 서브에이전트를 기본으로 두고, 비용 제어를 위해 일부 선택적 분기 정책을 섞는 모델이 가장 적절하다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:48:24.587Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:51:03.611Z"
+              }
+            ],
+            "decision": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+            "summary": "Use persistent architect/designer/postdoc/strategist panel sessions for follow-up discussion continuity, and call engineer/researcher/writer/qa/reviewer only when execution or verification work is actually needed.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-4",
+            "title": "양 플랫폼 간 상태/규칙/기억 동기화는 어떤 호환성 정책으로 관리할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "양 플랫폼 병행 사용에서는 단순 last-writer-wins보다 base_version 검증과 3-way merge가 필요한 optimistic concurrency 정책이 적합하다. canonical .nexus는 공용 스키마를 유지하고, sidecar는 플랫폼별 확장으로 분리하며, 미해결 충돌은 artifact로 승격해 수동 결정 가능하게 해야 한다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:52:11.486Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "last-writer-wins는 구현은 쉽지만 규칙/기억 변경이 덮어써질 위험이 크고, event-log reducer는 이상적이지만 지금 단계엔 과도하다. 따라서 canonical 우선, optimistic concurrency, 3-way merge, conflict artifact 보존을 조합한 정책이 호환성과 운영 현실성의 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:52:21.974Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:56:53.091Z"
+              }
+            ],
+            "decision": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+            "summary": "Treat platform switching as safe handoff rather than concurrent sync. One active platform writes at a time, canonical state is always sufficient to continue, and OpenCode-only sidecars never become required for correctness.",
+            "task_refs": [
+              "task-1775102329062-ca35em",
+              "task-1775102842067-v6a43s"
+            ]
+          }
+        ],
+        "research_summary": "Goal: deliver as much of the claude-nexus experience as possible in OpenCode while respecting structural differences between the platforms. Non-negotiable constraint: .nexus core, rules, and state files must remain fully compatible with the claude-nexus plugin.",
+        "created_at": "2026-04-02T03:42:15.747Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775102305864-h43vh0",
+            "title": "Implement HOW-panel meet registry and participant continuity scaffolding",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:25.862Z",
+            "updated_at": "2026-04-02T04:03:34.633Z"
+          },
+          {
+            "id": "task-1775102328958-s0nuvb",
+            "title": "Implement canonical-first handoff and sidecar state primitives",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:48.955Z",
+            "updated_at": "2026-04-02T04:03:29.086Z"
+          },
+          {
+            "id": "task-1775102329062-ca35em",
+            "title": "Add docs and regression coverage for compatibility-safe OpenCode behavior",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:49.061Z",
+            "updated_at": "2026-04-02T04:03:41.552Z"
+          },
+          {
+            "id": "task-1775102842067-v6a43s",
+            "title": "Clear stuck run phase and close completed cycle",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T04:07:22.065Z",
+            "updated_at": "2026-04-02T04:08:03.148Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 4,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Claude Nexus parity for OpenCode with strict .nexus compatibility"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:08:38.765Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "meet": {
+        "id": 2,
+        "topic": "Claude Nexus parity for OpenCode with strict .nexus compatibility",
+        "attendees": [
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T03:42:23.412Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "공용 .nexus 파일 포맷의 canonical 범위를 어디까지로 고정할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "공용 .nexus 포맷은 전면 자유 확장보다 계층형 canonical이 적합하다. 공통 필드는 엄격히 고정하고, OpenCode 특화 정보는 명시적 네임스페이스로만 확장하며, 임시/세션/캐시 정보는 shared canonical 밖으로 분리해야 claude-nexus와 완전 호환 요구를 만족시킬 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:43:14.795Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "옵션 1은 호환성은 가장 안전하지만 OpenCode 확장 공간이 너무 작고, 옵션 3은 상태 결합이 커져 양 플랫폼 병행 사용 시 포맷 충돌 위험이 크다. 따라서 공통 코어는 엄격히 고정하고 확장은 명시 네임스페이스로 제한하는 옵션 2가 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:43:22.339Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:45:14.975Z"
+              }
+            ],
+            "decision": "Adopt layered canonical boundaries for shared .nexus files: strict common canonical fields, explicit OpenCode extension namespace, and ephemeral/runtime data kept outside shared canonical files.",
+            "summary": "Use L1 common canonical, L2 namespaced extension, and L3 ephemeral separation to preserve claude-nexus compatibility while allowing OpenCode-specific behavior.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-2",
+            "title": "OpenCode 전용 상태나 최적화 정보는 어떤 분리 원칙으로 저장할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "이슈 2 논의를 위해 OpenCode 전용 상태 저장 방안을 3안으로 비교한다. 전제: L1/L2/L3 경계를 유지하고, claude-nexus가 사용하는 .nexus/core, .nexus/rules, .nexus/state의 읽기/쓰기 호환성을 깨지 않는다. 비교축은 (1) 파일 충돌 위험, (2) Claude 무시 시 안전성, (3) 구현 난이도, (4) 성능 최적화 데이터 활용성이다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T03:45:38.167Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "OpenCode 전용 상태는 canonical 파일과 분리 저장해야 하며, 가장 균형적인 방식은 canonical 옆 sidecar metadata를 두는 것이다. 공통 의미 데이터는 기존 파일에 유지하고, OpenCode 확장 의미 데이터는 *.opencode.json 같은 sidecar로 두며, 대용량 재생성 캐시는 별도 DB로 예외 처리할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:46:12.426Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "state/opencode 서브트리는 단순하지만 canonical과 확장 간 대응 관계가 약하고, 전용 DB는 성능은 좋지만 운영 복잡도가 높다. 따라서 sidecar를 기본 원칙으로 하고, 필요 시 재생성 가능한 성능 캐시만 DB로 분리하는 혼합안이 가장 현실적이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:46:18.669Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:47:21.233Z"
+              }
+            ],
+            "decision": "Store OpenCode-specific state with sidecar files next to canonical .nexus files by default, and use separate cache/DB storage only for regenerable performance data.",
+            "summary": "Canonical files remain shared truth, sidecars hold OpenCode-only extension meaning, and optional cache/DB layers are limited to disposable optimization data.",
+            "task_refs": [
+              "task-1775102305864-r8fzxz",
+              "task-1775102328958-s0nuvb"
+            ]
+          },
+          {
+            "id": "issue-3",
+            "title": "Claude식 meet/team 경험을 OpenCode에서 어떤 오케스트레이션 모델로 대응할 것인가?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "Claude식 meet/team 경험을 가장 가깝게 재현하려면 역할별 서브에이전트를 고정 패널처럼 운용하고 participant별 task_id 또는 session handle을 재사용해야 한다. native team object는 없지만 sidecar에 team registry를 두면 follow-up 질문을 같은 participant에게 다시 라우팅할 수 있다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:48:13.053Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "단일 세션 라운드테이블은 구현은 쉽지만 Claude식 체감이 약하고, 하이브리드 허브는 실용적이지만 연속성이 균일하지 않다. 목표가 claude-nexus 경험 최대 재현이라면 고정 패널형 멀티 서브에이전트를 기본으로 두고, 비용 제어를 위해 일부 선택적 분기 정책을 섞는 모델이 가장 적절하다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:48:24.587Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:51:03.611Z"
+              }
+            ],
+            "decision": "Map Claude-style meet/team behavior to a fixed HOW-panel model in OpenCode: keep HOW subagents as persistent participant sessions during meet, while DO/CHECK specialists are invoked on demand.",
+            "summary": "Use persistent architect/designer/postdoc/strategist panel sessions for follow-up discussion continuity, and call engineer/researcher/writer/qa/reviewer only when execution or verification work is actually needed.",
+            "task_refs": []
+          },
+          {
+            "id": "issue-4",
+            "title": "양 플랫폼 간 상태/규칙/기억 동기화는 어떤 호환성 정책으로 관리할 것인가?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "architect",
+                "message": "양 플랫폼 병행 사용에서는 단순 last-writer-wins보다 base_version 검증과 3-way merge가 필요한 optimistic concurrency 정책이 적합하다. canonical .nexus는 공용 스키마를 유지하고, sidecar는 플랫폼별 확장으로 분리하며, 미해결 충돌은 artifact로 승격해 수동 결정 가능하게 해야 한다.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T03:52:11.486Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "last-writer-wins는 구현은 쉽지만 규칙/기억 변경이 덮어써질 위험이 크고, event-log reducer는 이상적이지만 지금 단계엔 과도하다. 따라서 canonical 우선, optimistic concurrency, 3-way merge, conflict artifact 보존을 조합한 정책이 호환성과 운영 현실성의 균형점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T03:52:21.974Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T03:56:53.091Z"
+              }
+            ],
+            "decision": "Adopt a canonical-first handoff policy for alternating Claude Code and OpenCode usage: canonical .nexus files remain the shared source of truth, platform-specific sidecars are best-effort only, and ephemeral state must always be disposable and regenerable.",
+            "summary": "Treat platform switching as safe handoff rather than concurrent sync. One active platform writes at a time, canonical state is always sufficient to continue, and OpenCode-only sidecars never become required for correctness.",
+            "task_refs": [
+              "task-1775102329062-ca35em",
+              "task-1775102842067-v6a43s"
+            ]
+          }
+        ],
+        "research_summary": "Goal: deliver as much of the claude-nexus experience as possible in OpenCode while respecting structural differences between the platforms. Non-negotiable constraint: .nexus core, rules, and state files must remain fully compatible with the claude-nexus plugin.",
+        "created_at": "2026-04-02T03:42:15.747Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775102305864-h43vh0",
+            "title": "Implement HOW-panel meet registry and participant continuity scaffolding",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:25.862Z",
+            "updated_at": "2026-04-02T04:03:34.633Z"
+          },
+          {
+            "id": "task-1775102328958-s0nuvb",
+            "title": "Implement canonical-first handoff and sidecar state primitives",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:48.955Z",
+            "updated_at": "2026-04-02T04:03:29.086Z"
+          },
+          {
+            "id": "task-1775102329062-ca35em",
+            "title": "Add docs and regression coverage for compatibility-safe OpenCode behavior",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T03:58:49.061Z",
+            "updated_at": "2026-04-02T04:03:41.552Z"
+          },
+          {
+            "id": "task-1775102842067-v6a43s",
+            "title": "Clear stuck run phase and close completed cycle",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T04:07:22.065Z",
+            "updated_at": "2026-04-02T04:08:03.148Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 4,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Claude Nexus parity for OpenCode with strict .nexus compatibility"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:11:35.981Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775103011954-la3vyw",
+            "title": "Make task close robust to missing or reset run phase",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-4",
+            "deps": [],
+            "created_at": "2026-04-02T04:10:11.953Z",
+            "updated_at": "2026-04-02T04:11:27.822Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:19:04.895Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775103174683-6n3dhu",
+            "title": "Implement HOW panel participant resume routing",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:12:54.681Z",
+            "updated_at": "2026-04-02T04:18:45.000Z"
+          },
+          {
+            "id": "task-1775103174684-orhv2h",
+            "title": "Add docs and regression coverage for participant resume routing",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:12:54.682Z",
+            "updated_at": "2026-04-02T04:18:45.000Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:23:48.462Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775103649285-xrkvd7",
+            "title": "Implement explicit HOW participant resume routing helpers",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:20:49.283Z",
+            "updated_at": "2026-04-02T04:23:35.500Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:30:25.241Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775104013188-ycrhr7",
+            "title": "Add resume-guided HOW follow-up helper flow",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:26:53.187Z",
+            "updated_at": "2026-04-02T04:30:20.450Z"
+          },
+          {
+            "id": "task-1775104013216-s5mcvv",
+            "title": "Add docs and tests for resume-guided meet follow-up",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:26:53.213Z",
+            "updated_at": "2026-04-02T04:29:48.326Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:35:01.410Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775104360691-098on8",
+            "title": "Implement meet participant follow-up helper tool",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:32:40.688Z",
+            "updated_at": "2026-04-02T04:34:54.597Z"
+          },
+          {
+            "id": "task-1775104360695-2rnsim",
+            "title": "Add docs and tests for follow-up helper flow",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:32:40.695Z",
+            "updated_at": "2026-04-02T04:34:54.635Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T04:39:50.730Z",
+      "branch": "opencode-nexus-meet-runtime",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775104617224-79bdhr",
+            "title": "Add tests and docs for fully guided follow-up flow",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T04:36:57.223Z",
+            "updated_at": "2026-04-02T04:39:35.400Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    }
+  ]
+}
