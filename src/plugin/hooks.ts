@@ -349,13 +349,13 @@ async function buildStatefulNotice(
       ? [
           "[nexus] Meet session is active.",
           meetReminder ?? "",
-          "Continue one issue at a time. Record major deliberation with nx_meet_discuss, compare options with trade-offs, and use [d] -> nx_meet_decide only after discussion is logged."
+          "Continue one issue at a time. Record major deliberation with nx_meet_discuss, compare options with trade-offs, and use [d] -> nx_meet_decide only after discussion is logged. Do not open the next issue until the current issue is decided or explicitly deferred."
         ]
           .filter(Boolean)
           .join(" ")
       : [
           "[nexus] Meet mode detected.",
-          "Research first, then start with nx_meet_start(topic, research_summary, issues).",
+          "Research first, then start with nx_meet_start(topic, research_summary, issues). Do not open discussion until the current issue has grounded research.",
           "If non-lead attendees are needed, start grouped coordination before starting the meet.",
           "Keep the agenda one issue at a time and decide only after discussing trade-offs."
         ].join(" ");
@@ -373,6 +373,7 @@ async function buildStatefulNotice(
         "[nexus] Run mode detected. No task cycle yet.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Create a task branch before substantial execution.` : "",
         "TASK PIPELINE: check meet decisions, decompose work, register each task with nx_task_add, then edit.",
+        "If decomposition yields multiple tasks or multiple target files, do not continue as Lead solo; delegate code execution units to Engineer.",
         "Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
         "After implementation, update task states, verify, optionally nx_sync, and close with nx_task_close."
       ].join(" ");
@@ -383,7 +384,7 @@ async function buildStatefulNotice(
         branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
         `Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`,
         taskSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
-        "Keep edits scoped to active tasks, use nx_briefing before specialist delegation, and update status as each unit completes."
+        "Keep edits scoped to active tasks, involve Engineer for code execution units once work is decomposed, use nx_briefing before specialist delegation, and update status as each unit completes."
       ].join(" ");
     }
     const qa = await evaluateQaAutoTrigger(projectRoot, []);

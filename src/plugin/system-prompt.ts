@@ -39,6 +39,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- HOW agents advise on approach, UX, research method, and strategy; they do not own implementation state.",
     "- DO agents execute scoped work against active tasks only.",
     "- CHECK agents verify and report PASS/FAIL plus severity; they do not silently fix application code.",
+    "- Multi-task or multi-file execution must not stay Lead solo once decomposition is required; involve Engineer for code execution units.",
     "- Use nx_briefing(role, hint?) before specialist delegation when context or prior decisions matter.",
     "- Reuse an existing team_name coordination label before inventing a new one.",
     "- All grouped execution is lead-mediated; subagents do not directly coordinate each other."
@@ -102,9 +103,9 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
   if (mode === "meet") {
     return [
       "MODE PLAYBOOK (meet):",
-      "- Research before forming the agenda.",
+      "- Research before forming the agenda and before opening the current issue discussion.",
       "- Continue an existing meet session when one exists.",
-      "- Discuss one issue at a time and log significant reasoning with nx_meet_discuss.",
+      "- Discuss one issue at a time and log significant reasoning with nx_meet_discuss before recording a decision.",
       "- Present options with pros, cons, trade-offs, and a recommendation before seeking a decision.",
       "- Record final decisions with [d] and nx_meet_decide.",
       "- Offer [run] only after all issues are decided and gaps are checked."
@@ -116,6 +117,7 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
       "MODE PLAYBOOK (run):",
       "- If no tasks exist yet, decompose the work and call nx_task_add before editing files.",
       "- Link execution tasks back to meet_issue when they originate from a meet decision.",
+      "- Once decomposition yields multiple tasks or multiple files, do not continue as Lead solo; delegate code units to Engineer.",
       "- Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
       "- Serialize overlapping file work; parallelize only independent work.",
       "- Trigger QA or Reviewer when verification risk is non-trivial.",
