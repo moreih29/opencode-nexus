@@ -17,6 +17,7 @@ export function createNexusPaths(projectRoot: string) {
     HISTORY_FILE: path.join(NEXUS_ROOT, "history.json"),
     CONFIG_FILE: path.join(NEXUS_ROOT, "config.json"),
     MEET_FILE: path.join(STATE_ROOT, "meet.json"),
+    MEET_SIDECAR_FILE: path.join(STATE_ROOT, "meet.opencode.json"),
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),
     RUN_FILE: path.join(STATE_ROOT, "run.json"),
     AGENT_TRACKER_FILE: path.join(STATE_ROOT, "agent-tracker.json"),

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AgentTrackerSchema, TasksFileSchema, type TaskStatus } from "./schema";
-import type { NexusPaths } from "./paths";
+import { AgentTrackerSchema, TasksFileSchema, type TaskStatus } from "./schema.js";
+import type { NexusPaths } from "./paths.js";
 
 export interface TasksSummary {
   total: number;

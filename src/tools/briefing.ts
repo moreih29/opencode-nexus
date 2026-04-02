@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { createNexusPaths } from "../shared/paths";
-import { readJsonFile } from "../shared/json-store";
-import { matchesHint } from "../shared/markdown";
+import { createNexusPaths } from "../shared/paths.js";
+import { readJsonFile } from "../shared/json-store.js";
+import { matchesHint } from "../shared/markdown.js";
 
 const z = tool.schema;
 

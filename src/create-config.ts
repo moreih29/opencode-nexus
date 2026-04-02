@@ -1,4 +1,5 @@
-import { NEXUS_AGENT_CATALOG } from "./agents/catalog";
+import { NEXUS_AGENT_CATALOG } from "./agents/catalog.js";
+import { NEXUS_PRIMARY_AGENT_ID, NEXUS_PRIMARY_DESCRIPTION, NEXUS_PRIMARY_PROMPT } from "./agents/primary.js";
 
 type ConfigLike = Record<string, unknown>;
 
@@ -6,6 +7,20 @@ export function createConfigHook() {
   return async (config: ConfigLike): Promise<void> => {
     const currentAgent = toRecord(config.agent);
     const nextAgent: Record<string, unknown> = { ...currentAgent };
+
+    if (!nextAgent[NEXUS_PRIMARY_AGENT_ID]) {
+      nextAgent[NEXUS_PRIMARY_AGENT_ID] = {
+        description: NEXUS_PRIMARY_DESCRIPTION,
+        mode: "primary",
+        prompt: NEXUS_PRIMARY_PROMPT,
+        color: "accent",
+        permission: {
+          task: {
+            "*": "allow"
+          }
+        }
+      };
+    }
 
     for (const profile of NEXUS_AGENT_CATALOG) {
       if (nextAgent[profile.id]) {
@@ -32,7 +47,7 @@ export function createConfigHook() {
     };
 
     if (!config.default_agent) {
-      config.default_agent = "build";
+      config.default_agent = NEXUS_PRIMARY_AGENT_ID;
     }
   };
 }

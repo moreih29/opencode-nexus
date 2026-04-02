@@ -1,5 +1,5 @@
 import { tool } from "@opencode-ai/plugin";
-import { buildDelegationTemplate } from "../orchestration/delegation";
+import { buildDelegationTemplate } from "../orchestration/delegation.js";
 
 const z = tool.schema;
 

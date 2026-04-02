@@ -57,6 +57,10 @@ export function detectNexusTag(prompt: string): NexusTagMode {
   return null;
 }
 
+export function hasExplicitNexusTag(prompt: string): boolean {
+  return /\[(meet|run|d|rule(?::[^\]]+)?)\]/i.test(prompt);
+}
+
 export function detectRuleTags(prompt: string): string[] | null {
   const match = prompt.match(/\[rule:([^\]]+)\]/i);
   if (!match) {

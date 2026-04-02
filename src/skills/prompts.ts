@@ -1,4 +1,4 @@
-import type { NexusSkillProfile } from "./catalog";
+import type { NexusSkillProfile } from "./catalog.js";
 
 export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
   "nx-meet": [
@@ -27,10 +27,11 @@ export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
     "2. Research: inspect code, prior decisions, and relevant reference material before forming the agenda. Use researcher help when the answer is not already grounded, and do not open discussion until research is sufficient to support the current issue.",
     "3. Team Setup: confirm or resume the attendee list, then start or continue the meet session. In OpenCode, use shared team_name labels only for grouped subagent coordination.",
     "4. Discussion: always proceed one issue at a time. Summarize the current state, gather viewpoints, and log significant exchanges with nx_meet_discuss before seeking a decision. Do not open the next issue until the current one is decided or explicitly deferred.",
-    "5. Options: synthesize alternatives with pros, cons, trade-offs, best-fit cases, and a recommendation that explains why the rejected options fall short.",
-    "6. Decision: wait for the user's response, then record the selected issue decision with [d] and nx_meet_decide. Discussion should be logged before the decision.",
-    "7. Gap Check: when all listed issues are decided, compare the issue list with the original topic. Add missing issues with nx_meet_update before closing the meeting if needed.",
-    "8. Transition Offer: once all issues are decided and no gap remains, offer [run]. Explain that every execution task derived from the meeting should link back to its originating meet_issue.",
+    "5. Follow-up Continuity: when the user asks a follow-up to a prior HOW participant, prefer nx_meet_followup to produce delegation-ready resume guidance. Use nx_meet_resume only when raw continuity details are enough.",
+    "6. Options: synthesize alternatives with pros, cons, trade-offs, best-fit cases, and a recommendation that explains why the rejected options fall short.",
+    "7. Decision: wait for the user's response, then record the selected issue decision with [d] and nx_meet_decide. Discussion should be logged before the decision.",
+    "8. Gap Check: when all listed issues are decided, compare the issue list with the original topic. Add missing issues with nx_meet_update before closing the meeting if needed.",
+    "9. Transition Offer: once all issues are decided and no gap remains, offer [run]. Explain that every execution task derived from the meeting should link back to its originating meet_issue.",
     "meet -> run Transition:",
     "- Preserve HOW guidance across the transition.",
     "- Re-register execution work with nx_task_add(meet_issue=...).",
@@ -46,7 +47,8 @@ export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
   ].join("\n"),
   "nx-run": [
     "<role>",
-    "Execution norm for [run]. Lead composes agents dynamically based on user direction and drives the execution pipeline from intake to completion under strict task controls.",
+     "Execution norm for [run]. Lead composes agents dynamically based on user direction and drives the execution pipeline from intake to completion under strict task controls.",
+      "When the nexus primary is available, it should serve as that lead by default.",
     "</role>",
     "<constraints>",
     "- NEVER modify files through Bash-based file editing; use proper edit tools only.",
@@ -183,7 +185,8 @@ export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
     "1. Scope Selection: choose project or user scope and derive all target paths from that choice.",
     "2. Statusline / local config policy: store the chosen preset in Nexus config, but adapt settings only through OpenCode-compatible config fields.",
     "3. AGENTS Injection: read the generated Nexus template, replace only the marker block, and preserve all surrounding instructions.",
-    "4. Config Merge: update opencode.json plugin and instructions entries without dropping unrelated user settings. Preserve unrelated keys and append plugin/instructions entries rather than replacing them.",
+     "4. Config Merge: update opencode.json plugin and instructions entries without dropping unrelated user settings. Preserve unrelated keys and append plugin/instructions entries rather than replacing them.",
+      "4a. Primary Agent: prefer `nexus` as the default primary agent when no explicit default_agent is already configured.",
     "5. Optional Init: after setup, optionally run nx_init for the selected project scope. User-scope setup should not auto-run project initialization.",
     "6. Completion Summary: report generated files, chosen scope, resolved target paths, and any optional next steps.",
     "OpenCode Mapping:",

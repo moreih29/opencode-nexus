@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { createNexusPaths } from "../shared/paths";
+import { createNexusPaths } from "../shared/paths.js";
 
 const z = tool.schema;
 

@@ -45,6 +45,7 @@ for (const token of [
   "MUST NOT handle multi-task or multi-file execution as Lead solo once decomposition is required.",
   "MUST involve at least one Engineer for code execution units.",
   "MUST log discussion before decision; nx_meet_decide never substitutes for the discussion record.",
+  "prefer nx_meet_followup to produce delegation-ready resume guidance",
   "Generated identity drafts remain drafts until the user confirms or replaces them.",
   "target paths",
   "git working tree changes",
@@ -66,7 +67,8 @@ for (const token of [
 for (const token of [
   "Detailed role and skill procedures live in AGENTS.md",
   "Multi-task or multi-file execution must not stay Lead solo once decomposition is required; involve Engineer for code execution units.",
-  "Research before forming the agenda and before opening the current issue discussion."
+  "Research before forming the agenda and before opening the current issue discussion.",
+  "followupReady roles"
 ]) {
   assert.match(systemPrompt, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }

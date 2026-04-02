@@ -1,4 +1,4 @@
-import { readJsonFile, writeJsonFile } from "./json-store";
+import { readJsonFile, writeJsonFile } from "./json-store.js";
 
 export interface HistoryCycle {
   completed_at: string;

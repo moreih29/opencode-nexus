@@ -1,8 +1,8 @@
 import type { Plugin } from "@opencode-ai/plugin";
-import { createConfigHook } from "./create-config";
-import { createHooks } from "./create-hooks";
-import { createPluginState } from "./plugin-state";
-import { createTools } from "./create-tools";
+import { createConfigHook } from "./create-config.js";
+import { createHooks } from "./create-hooks.js";
+import { createPluginState } from "./plugin-state.js";
+import { createTools } from "./create-tools.js";
 
 const OpenCodeNexusPlugin: Plugin = async (ctx) => {
   const state = createPluginState();

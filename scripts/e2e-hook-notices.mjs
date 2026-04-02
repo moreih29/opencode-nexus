@@ -18,7 +18,11 @@ await ensureNexusStructure(paths);
 
 const naturalMeet = { parts: [{ type: "text", text: "회의로 먼저 방향을 정하자" }] };
 await hooks["chat.message"]({ sessionID: "s1" }, naturalMeet);
-assert.match(naturalMeet.parts.at(-1).text, /Meet mode detected/i);
+assert.equal(naturalMeet.parts.length, 1);
+
+const taggedMeet = { parts: [{ type: "text", text: "[meet] 방향을 먼저 정하자" }] };
+await hooks["chat.message"]({ sessionID: "s1-tag" }, taggedMeet);
+assert.equal(taggedMeet.parts.length, 1);
 
 await fs.writeFile(
   paths.MEET_FILE,
@@ -38,17 +42,15 @@ await fs.writeFile(
 
 const meetReminder = { parts: [{ type: "text", text: "계속 진행하자" }] };
 await hooks["chat.message"]({ sessionID: "s2" }, meetReminder);
-assert.match(meetReminder.parts.at(-1).text, /Meet session/i);
-assert.match(meetReminder.parts.at(-1).text, /one-issue-at-a-time/i);
-assert.match(meetReminder.parts.at(-1).text, /Do not open the next issue/i);
+assert.equal(meetReminder.parts.length, 1);
 
 const attendeePrompt = { parts: [{ type: "text", text: "아키텍트 참석시켜" }] };
 await hooks["chat.message"]({ sessionID: "s3" }, attendeePrompt);
-assert.match(attendeePrompt.parts.at(-1).text, /nx_meet_join/);
+assert.equal(attendeePrompt.parts.length, 1);
 
 const decidePrompt = { parts: [{ type: "text", text: "[d] 이걸로 결정하자" }] };
 await hooks["chat.message"]({ sessionID: "s3b" }, decidePrompt);
-assert.match(decidePrompt.parts.at(-1).text, /nx_meet_discuss/);
+assert.equal(decidePrompt.parts.length, 1);
 
 await fs.unlink(paths.MEET_FILE);
 await fs.writeFile(
@@ -73,12 +75,10 @@ await fs.writeFile(
 
 const taskReminder = { parts: [{ type: "text", text: "다음 작업 이어서 하자" }] };
 await hooks["chat.message"]({ sessionID: "s4" }, taskReminder);
-assert.match(taskReminder.parts.at(-1).text, /Active task cycle/i);
-assert.match(taskReminder.parts.at(-1).text, /Resolve blocked tasks/i);
+assert.equal(taskReminder.parts.length, 1);
 
 const runPrompt = { parts: [{ type: "text", text: "[run] 구현 계속해" }] };
 await hooks["chat.message"]({ sessionID: "s5" }, runPrompt);
-assert.match(runPrompt.parts.at(-1).text, /nx_briefing/);
-assert.match(runPrompt.parts.at(-1).text, /Lead solo/i);
+assert.equal(runPrompt.parts.length, 1);
 
 console.log("e2e hook notices passed");

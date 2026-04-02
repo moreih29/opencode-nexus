@@ -1,5 +1,5 @@
-import { readJsonFile, writeJsonFile } from "./json-store";
-import { AgentTrackerSchema, type AgentTrackerItem } from "./schema";
+import { readJsonFile, writeJsonFile } from "./json-store.js";
+import { AgentTrackerSchema, type AgentTrackerItem } from "./schema.js";
 
 export async function readAgentTracker(filePath: string): Promise<AgentTrackerItem[]> {
   const raw = await readJsonFile<unknown>(filePath, []);

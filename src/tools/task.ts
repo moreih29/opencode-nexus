@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { appendHistory } from "../shared/history";
-import { createNexusPaths } from "../shared/paths";
-import { readJsonFile, writeJsonFile } from "../shared/json-store";
-import { setRunPhase, writeRunState } from "../shared/run-state";
-import { fileExists } from "../shared/state";
-import { TasksFileSchema, type TaskItem, type TasksFile } from "../shared/schema";
+import { appendHistory } from "../shared/history.js";
+import { createNexusPaths } from "../shared/paths.js";
+import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
+import { setRunPhase, writeRunState } from "../shared/run-state.js";
+import { fileExists } from "../shared/state.js";
+import { MeetFileSchema, TasksFileSchema, type MeetFile, type TaskItem, type TasksFile } from "../shared/schema.js";
 
 const z = tool.schema;
 
@@ -38,6 +38,7 @@ export const nxTaskAdd = tool({
     tasksFile.tasks.push(task);
     TasksFileSchema.parse(tasksFile);
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
+    await syncMeetIssueTaskLink(paths.MEET_FILE, args.meet_issue, id);
     await setRunPhase(paths.RUN_FILE, "execute", "task added", true);
 
     const meetActive = await fileExists(paths.MEET_FILE);
@@ -157,7 +158,7 @@ export const nxTaskClose = tool({
       });
     }
 
-    await setRunPhase(paths.RUN_FILE, "complete", "cycle closed", false);
+    await setRunPhase(paths.RUN_FILE, "complete", "cycle closed", true);
 
     await safeUnlink(paths.MEET_FILE);
     await safeUnlink(paths.TASKS_FILE);
@@ -185,6 +186,24 @@ async function safeUnlink(filePath: string): Promise<void> {
   } catch {
     // noop
   }
+}
+
+async function syncMeetIssueTaskLink(meetFile: string, issueID: string | undefined, taskID: string): Promise<void> {
+  if (!issueID || !(await fileExists(meetFile))) {
+    return;
+  }
+
+  const meet = MeetFileSchema.parse(await readJsonFile<MeetFile>(meetFile, {} as MeetFile));
+  const issue = meet.issues.find((item) => item.id === issueID);
+  if (!issue) {
+    return;
+  }
+
+  issue.task_refs = Array.from(new Set([...(issue.task_refs ?? []), taskID]));
+  if (issue.decision) {
+    issue.status = "tasked";
+  }
+  await writeJsonFile(meetFile, meet);
 }
 
 async function readCurrentBranch(projectRoot: string): Promise<string> {

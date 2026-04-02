@@ -1,6 +1,6 @@
-import { readJsonFile, writeJsonFile } from "./json-store";
-import { fileExists } from "./state";
-import { RunStateSchema, type RunPhase, type RunState } from "./schema";
+import { readJsonFile, writeJsonFile } from "./json-store.js";
+import { fileExists } from "./state.js";
+import { RunStateSchema, type RunPhase, type RunState } from "./schema.js";
 
 const TRANSITIONS: Record<RunPhase, RunPhase[]> = {
   intake: ["design", "execute"],

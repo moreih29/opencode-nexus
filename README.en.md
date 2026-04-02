@@ -41,6 +41,38 @@ Then run setup inside your project:
 Use nx_setup to configure this repository for opencode-nexus.
 ```
 
+`nx_setup` now supports setup profiles.
+
+- `auto` default: adds the package plugin in normal projects, but prefers the local plugin shim and skips package plugin registration in self-hosting repositories.
+- `full`: merge package plugin and instructions
+- `minimal`: instruction-focused minimal setup
+- `legacy-compat`: keep legacy package plugin registration behavior
+
+When the plugin injects config, the preferred default primary is `nexus` instead of `build`. `nexus` is the Nexus-aware orchestration lead that prioritizes state, task discipline, and delegation.
+
+## Developing Inside This Repository
+
+Inside this repository, use the local plugin shim in `.opencode/plugins/opencode-nexus.js` instead of the npm package entry.
+
+- The repo `opencode.json` keeps only `instructions`; plugin loading is handled by `.opencode/plugins/`.
+- The local shim points to `../../dist/index.js`, so `bun run build` must succeed first.
+- After changing source files, run `bun run build` again before checking behavior in OpenCode.
+
+Recommended self-hosting flow:
+
+```text
+1. bun install
+2. bun run build
+3. launch OpenCode from this repository root
+4. confirm Nexus tools such as nx_context or nx_setup are available
+```
+
+Important:
+
+- Do not add `"plugin": ["opencode-nexus"]` back into this repo's `opencode.json` while developing locally. That can load both the npm plugin and the local plugin and make validation ambiguous.
+- Use the npm plugin config from the Quick Start section only in other projects that consume the published package.
+- In this repository, `nx_setup(profile="auto")` detects that conflict and avoids writing the package plugin entry back into `opencode.json`.
+
 Recommended first run:
 
 ```text
@@ -89,11 +121,17 @@ Use nx_init to scan this project and create initial Nexus knowledge.
 ## What It Adds To OpenCode
 
 - 9-agent Nexus catalog mapped to HOW / DO / CHECK roles
+- Default `nexus` primary paired with specialist subagents
 - Stateful meet and task workflow stored in `.nexus/state/`
+- HOW-panel continuity through OpenCode sidecar state (`meet.opencode.json`) separate from canonical `.nexus`
+- Resume hints per HOW participant via stored `task_id` / `session_id` handles when OpenCode provides them
+- `nx_meet_resume` to inspect a HOW participant's current resume handle before follow-up delegation
+- `nx_meet_followup` to produce delegation-ready HOW participant follow-up input
 - `.nexus/core/` knowledge layers for identity, codebase, reference, and memory
 - Task pipeline guardrails for edit tools
 - Meeting reminders, run notices, and stronger cycle-close discipline
 - Nexus custom tools such as `nx_meet_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, and `nx_setup`
+- Structured meet discussion records and meet -> task linkage state
 
 ## Knowledge Layout
 

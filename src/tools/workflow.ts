@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { tool } from "@opencode-ai/plugin";
-import { createNexusPaths } from "../shared/paths";
-import { ensureNexusStructure, fileExists } from "../shared/state";
-import { readJsonFile } from "../shared/json-store";
+import { createNexusPaths } from "../shared/paths.js";
+import { ensureNexusStructure, fileExists } from "../shared/state.js";
+import { readJsonFile } from "../shared/json-store.js";
 
 const execFileAsync = promisify(execFile);
 const z = tool.schema;

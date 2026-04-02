@@ -1,4 +1,4 @@
-import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
+import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
 
 export function isKnownNexusAgent(agentType: string): boolean {
   return NEXUS_AGENT_CATALOG.some((a) => a.id === agentType.toLowerCase());

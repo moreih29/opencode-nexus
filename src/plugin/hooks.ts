@@ -1,16 +1,17 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { NEXUS_AGENT_CATALOG } from "../agents/catalog";
-import { canJoinMeetWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy";
-import { NEXUS_SKILL_CATALOG } from "../skills/catalog";
-import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger";
-import { readRunState, setRunPhase } from "../shared/run-state";
-import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker";
-import { createNexusPaths, isNexusInternalPath } from "../shared/paths";
-import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state";
-import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser";
-import { buildNexusSystemPrompt } from "./system-prompt";
-import type { NexusPluginState } from "../plugin-state";
+import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
+import { canJoinMeetWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
+import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
+import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
+import { readRunState, setRunPhase } from "../shared/run-state.js";
+import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
+import { loadCanonicalMeet, syncMeetSidecar } from "../shared/meet-sidecar.js";
+import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
+import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
+import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
+import { buildNexusSystemPrompt } from "./system-prompt.js";
+import type { NexusPluginState } from "../plugin-state.js";
 
 interface PluginContext {
   directory: string;
@@ -91,6 +92,7 @@ export function createHooks(ctx: PluginContext) {
         return;
       }
       await markLatestTeamCompleted(paths.AGENT_TRACKER_FILE, agentType, output.output.slice(0, 500));
+      await updateMeetParticipantContinuity(paths, input.args, output);
     },
 
     "chat.message": async (_input: unknown, output: ChatOutput) => {
@@ -103,17 +105,6 @@ export function createHooks(ctx: PluginContext) {
       if (sessionID) {
         ctx.state.lastPromptBySession.set(sessionID, prompt);
       }
-
-      const mode = detectNexusTag(prompt);
-      const notice = await buildStatefulNotice(prompt, mode, paths, projectRoot);
-      if (!notice) {
-        return;
-      }
-
-      output.parts.push({
-        type: "text",
-        text: `\n\n${notice}`
-      });
     },
 
     "command.execute.before": async (
@@ -250,6 +241,68 @@ async function trackSubagentStart(args: Record<string, unknown>, trackerFile: st
     purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined,
     started_at: new Date().toISOString()
   });
+}
+
+async function updateMeetParticipantContinuity(
+  paths: ReturnType<typeof createNexusPaths>,
+  args: Record<string, unknown>,
+  output: { title: string; output: string; metadata: unknown }
+): Promise<void> {
+  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
+  if (!agentType || !isHowAgent(agentType)) {
+    return;
+  }
+
+  const meet = await loadCanonicalMeet(paths.MEET_FILE);
+  if (!meet) {
+    return;
+  }
+
+  const handles = extractParticipantHandles(output.metadata);
+  await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet, {
+    speaker: agentType,
+    message: output.output.slice(0, 500),
+    taskID: handles.taskID,
+    sessionID: handles.sessionID,
+    teamName: pickString(args, ["team_name", "team"]) ?? undefined
+  });
+}
+
+function extractParticipantHandles(metadata: unknown): { taskID?: string; sessionID?: string } {
+  if (!metadata || typeof metadata !== "object") {
+    return {};
+  }
+
+  const source = metadata as Record<string, unknown>;
+  return {
+    taskID: pickNestedString(source, ["task_id", "taskID", "taskId", "id"]),
+    sessionID: pickNestedString(source, ["session_id", "sessionID", "sessionId"])
+  };
+}
+
+function pickNestedString(source: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const direct = source[key];
+    if (typeof direct === "string" && direct.trim().length > 0) {
+      return direct;
+    }
+  }
+
+  for (const value of Object.values(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
+    const nested = pickNestedString(value as Record<string, unknown>, keys);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
+function isHowAgent(agentType: string): boolean {
+  return NEXUS_AGENT_CATALOG.some((agent) => agent.category === "how" && agent.id === agentType.toLowerCase());
 }
 
 function pickString(source: Record<string, unknown>, keys: string[]): string | null {
@@ -441,16 +494,17 @@ async function buildMeetReminder(meetFile: string): Promise<string | null> {
   try {
     const raw = JSON.parse(await fs.readFile(meetFile, "utf8")) as {
       topic?: unknown;
-      issues?: Array<{ id?: unknown; title?: unknown; status?: unknown }>;
+      issues?: Array<{ id?: unknown; title?: unknown; status?: unknown; decision?: unknown; task_refs?: unknown[] }>;
     };
     const issues = Array.isArray(raw.issues) ? raw.issues : [];
-    const discussing = issues.find((issue) => issue.status === "discussing");
-    const pending = issues.filter((issue) => issue.status === "pending");
-    const current = discussing ?? pending[0];
+    const active = issues.find((issue) => issue.status === "researching" || issue.status === "discussing");
+    const queued = issues.find((issue) => issue.status === "pending" || issue.status === "deferred");
+    const current = active ?? queued;
+    const decidedCount = issues.filter((issue) => issue.status === "decided" || issue.status === "tasked").length;
     const currentText = current
-      ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\".`
-      : "All issues are decided.";
-    return `[nexus] Meet session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Use one-issue-at-a-time discussion, record important reasoning in nx_meet_discuss, and do not open the next issue until the current issue is decided or explicitly deferred.`;
+      ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\" (${String(current.status ?? "unknown")}).`
+      : "All issues are decided or already linked to execution.";
+    return `[nexus] Meet session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Decided ${decidedCount}/${issues.length}. Use one-issue-at-a-time discussion, record important reasoning in nx_meet_discuss, and do not open the next issue until the current issue is decided or explicitly deferred.`;
   } catch {
     return null;
   }

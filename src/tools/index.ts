@@ -1,9 +1,9 @@
-import { nxArtifactWrite } from "./artifact";
-import { nxAstReplace, nxAstSearch } from "./ast";
-import { nxBriefing } from "./briefing";
-import { nxContext } from "./context";
-import { nxCoreRead, nxCoreWrite } from "./core-store";
-import { nxDelegateTemplate } from "./delegation";
+import { nxArtifactWrite } from "./artifact.js";
+import { nxAstReplace, nxAstSearch } from "./ast.js";
+import { nxBriefing } from "./briefing.js";
+import { nxContext } from "./context.js";
+import { nxCoreRead, nxCoreWrite } from "./core-store.js";
+import { nxDelegateTemplate } from "./delegation.js";
 import {
   nxLspCodeActions,
   nxLspDiagnostics,
@@ -14,16 +14,18 @@ import {
   nxLspRename,
   nxLspSymbols,
   nxLspWorkspaceSymbols
-} from "./lsp";
-import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet";
-import { nxRulesRead, nxRulesWrite } from "./rules-store";
-import { nxSetup } from "./setup";
-import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task";
-import { nxInit, nxSync } from "./workflow";
+} from "./lsp.js";
+import { nxMeetDecide, nxMeetDiscuss, nxMeetFollowup, nxMeetJoin, nxMeetResume, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet.js";
+import { nxRulesRead, nxRulesWrite } from "./rules-store.js";
+import { nxSetup } from "./setup.js";
+import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task.js";
+import { nxInit, nxSync } from "./workflow.js";
 
 export const nexusTools = {
   nx_meet_start: nxMeetStart,
   nx_meet_status: nxMeetStatus,
+  nx_meet_resume: nxMeetResume,
+  nx_meet_followup: nxMeetFollowup,
   nx_meet_update: nxMeetUpdate,
   nx_meet_discuss: nxMeetDiscuss,
   nx_meet_decide: nxMeetDecide,

@@ -2,8 +2,13 @@
   "$schema": "https://opencode.ai/config.json",
   "plugin": ["opencode-nexus"],
   "instructions": ["AGENTS.md"],
-  "default_agent": "build",
+  "default_agent": "nexus",
   "agent": {
+    "nexus": {
+      "description": "Nexus-aware orchestration lead for meet, run, delegation, and verification workflows",
+      "mode": "primary",
+      "color": "accent"
+    },
     "architect": {
       "description": "Technical design and architecture review",
       "mode": "subagent",

@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { createNexusPaths } from "../shared/paths";
-import { ensureTagsFrontmatter, extractTags } from "../shared/markdown";
+import { createNexusPaths } from "../shared/paths.js";
+import { ensureTagsFrontmatter, extractTags } from "../shared/markdown.js";
 
 const z = tool.schema;
 const LAYERS = ["identity", "codebase", "reference", "memory"] as const;

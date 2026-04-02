@@ -1,5 +1,5 @@
-import type { NexusAgentProfile } from "../agents/catalog";
-import type { NexusSkillProfile } from "../skills/catalog";
+import type { NexusAgentProfile } from "../agents/catalog.js";
+import type { NexusSkillProfile } from "../skills/catalog.js";
 
 interface BuildSystemInput {
   mode: "meet" | "run" | "decide" | "rule" | "idle";
@@ -61,6 +61,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Enforce task pipeline for code changes.",
     "- Keep HOW agents in analysis/design lane; DO/CHECK execute and verify.",
     "- Prefer explicit state transitions over ad-hoc execution.",
+    "- When the nexus primary is available, treat it as the preferred orchestration lead.",
     "Context:",
     `- Active mode: ${mode}`,
     phaseLine,
@@ -95,9 +96,11 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
   if (mode === "meet") {
     return [
       "MODE PLAYBOOK (meet):",
-      "- Research before forming the agenda and before opening the current issue discussion.",
-      "- Continue an existing meet session when one exists.",
-      "- Discuss one issue at a time and log significant reasoning with nx_meet_discuss before recording a decision.",
+        "- Research before forming the agenda and before opening the current issue discussion.",
+        "- Continue an existing meet session when one exists.",
+        "- When a follow-up targets a prior HOW participant, prefer nx_meet_followup. It packages resume hints into delegation-ready guidance; fall back to nx_meet_resume when you only need raw continuity details.",
+        "- Check nx_context or nx_meet_status for followupReady roles before deciding whether to resume an existing HOW participant or start fresh.",
+        "- Discuss one issue at a time and log significant reasoning with nx_meet_discuss before recording a decision.",
       "- Present options with pros, cons, trade-offs, and a recommendation before seeking a decision.",
       "- Record final decisions with [d] and nx_meet_decide.",
       "- Offer [run] only after all issues are decided and gaps are checked."

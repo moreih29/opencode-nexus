@@ -1,4 +1,4 @@
-import type { RunPhase } from "../shared/schema";
+import type { RunPhase } from "../shared/schema.js";
 
 export function nextRunPhase(current: RunPhase, signal: "plan_ready" | "implementation_done" | "verify_failed" | "verify_passed"): RunPhase {
   if (current === "intake" && signal === "plan_ready") {
