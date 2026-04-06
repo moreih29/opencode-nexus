@@ -124,7 +124,7 @@ export const SKILL_PROMPTS: Record<NexusSkillProfile["id"], string> = {
     "Process:",
     "1. Mode Detection: identify whether core knowledge exists and whether reset or cleanup is requested.",
     "2. Project Scan: detect top-level structure, tech stack, scripts, docs, and recent git activity. Separate primary docs from legacy migration inputs.",
-    "3. Identity Establishment: draft mission, design, and roadmap from the scan, return confirmation questions for missing fields, and treat identity as settled only when mission, design, and roadmap are explicitly provided by the user.",
+    "3. Identity Establishment: draft mission, design, and roadmap from the scan, return confirmation questions for missing fields, and treat identity as settled only when mission, design, and roadmap are explicitly provided by the user. Generated identity drafts remain drafts until the user confirms or replaces them.",
     "4. Codebase Knowledge Generation: create architecture, development, and tooling summaries based only on verified evidence from the repository.",
     "5. Optional Rules Setup: offer development rule scaffolding when requested, but do not force it.",
     "6. Completion Summary: report mode, generated files, scan output, confirmation questions, and recommended next steps such as [meet], [run], and nx_sync.",
