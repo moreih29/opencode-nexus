@@ -2,12 +2,34 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
 import { appendHistory } from "../shared/history.js";
+import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
 import { fileExists } from "../shared/state.js";
 import { MeetFileSchema, TasksFileSchema, type MeetFile, type TaskItem, type TasksFile } from "../shared/schema.js";
 
 const z = tool.schema;
+
+interface PipelineEvaluatorSnapshot {
+  hasTasksFile: boolean;
+  hasTaskCycle: boolean;
+  tasks: Array<{ id?: string; status: TaskItem["status"] }>;
+  qaTriggerReasons: string[];
+}
+
+interface PipelineEvaluatorResult {
+  taskCycleState: "none" | "empty" | "active" | "completed-open";
+  editsAllowed: boolean;
+  canCloseCycle: boolean;
+  shouldTriggerQa: boolean;
+  nextGuidanceKey:
+    | "task_cycle_required"
+    | "add_first_task"
+    | "resume_active_cycle"
+    | "resolve_blocked_tasks"
+    | "close_cycle"
+    | "spawn_qa_then_close";
+}
 
 export const nxTaskAdd = tool({
   description: "Add a task to active cycle",
@@ -42,7 +64,18 @@ export const nxTaskAdd = tool({
     const meetActive = await fileExists(paths.MEET_FILE);
     const linkageNote = meetActive && !args.meet_issue ? " Link this task to its meet issue with meet_issue when possible." : "";
 
-    return `Added task ${id}: ${args.title}${linkageNote}`;
+    return JSON.stringify(
+      {
+        nexus_task_id: id,
+        title: args.title,
+        status: task.status,
+        owner: task.owner ?? null,
+        meet_issue: task.meet_issue ?? null,
+        message: `Added task ${id}: ${args.title}${linkageNote}`
+      },
+      null,
+      2
+    );
   }
 });
 
@@ -88,6 +121,11 @@ export const nxTaskUpdate = tool({
     const task = tasksFile.tasks.find((item) => item.id === args.id);
 
     if (!task) {
+      if (isOpenCodeSessionID(args.id)) {
+        throw new Error(
+          `Task not found: ${args.id}. This looks like an OpenCode session id (ses_...). nx_task_update expects a Nexus task id (task-...).`
+        );
+      }
       throw new Error(`Task not found: ${args.id}`);
     }
 
@@ -104,7 +142,16 @@ export const nxTaskUpdate = tool({
     }
     await writeJsonFile(paths.REOPEN_TRACKER_FILE, tracker);
 
-    return args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`;
+    return JSON.stringify(
+      {
+        nexus_task_id: args.id,
+        status: args.status,
+        note: args.note ?? null,
+        message: args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`
+      },
+      null,
+      2
+    );
   }
 });
 
@@ -119,8 +166,17 @@ export const nxTaskClose = tool({
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
     const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
 
-    if (tasks && tasks.tasks.some((task) => task.status !== "completed")) {
-      throw new Error("Cannot close cycle before all tasks are completed.");
+    if (tasks) {
+      const evaluation = await evaluatePipelineSnapshot({
+        hasTasksFile: true,
+        hasTaskCycle: true,
+        tasks: tasks.tasks.map((task) => ({ id: task.id, status: task.status })),
+        qaTriggerReasons: []
+      });
+
+      if (!evaluation.canCloseCycle && evaluation.taskCycleState !== "empty") {
+        throw new Error("Cannot close cycle before all tasks are completed.");
+      }
     }
 
     const taskCount = tasks?.tasks.length ?? 0;
@@ -247,4 +303,12 @@ async function readTracker(filePath: string): Promise<{ reopenCount: number; blo
     reopenCount: Number(tracker.reopenCount ?? 0),
     blockedTransitions: Number(tracker.blockedTransitions ?? 0)
   };
+}
+
+function isOpenCodeSessionID(value: string): boolean {
+  return value.startsWith("ses_");
+}
+
+async function evaluatePipelineSnapshot(snapshot: PipelineEvaluatorSnapshot): Promise<PipelineEvaluatorResult> {
+  return evaluatePipelineSnapshotPure(snapshot);
 }
