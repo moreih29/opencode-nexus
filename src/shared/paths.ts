@@ -7,6 +7,7 @@ export function createNexusPaths(projectRoot: string) {
   const CORE_ROOT = path.join(NEXUS_ROOT, "core");
   const RULES_ROOT = path.join(NEXUS_ROOT, "rules");
   const STATE_ROOT = path.join(NEXUS_ROOT, "state");
+  const LOGS_ROOT = path.join(NEXUS_ROOT, "logs");
 
   return {
     PROJECT_ROOT: projectRoot,
@@ -14,15 +15,18 @@ export function createNexusPaths(projectRoot: string) {
     CORE_ROOT,
     RULES_ROOT,
     STATE_ROOT,
+    LOGS_ROOT,
     HISTORY_FILE: path.join(NEXUS_ROOT, "history.json"),
     CONFIG_FILE: path.join(NEXUS_ROOT, "config.json"),
     MEET_FILE: path.join(STATE_ROOT, "meet.json"),
     MEET_SIDECAR_FILE: path.join(STATE_ROOT, "meet.opencode.json"),
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),
     AGENT_TRACKER_FILE: path.join(STATE_ROOT, "agent-tracker.json"),
+    ORCHESTRATION_CORE_FILE: path.join(STATE_ROOT, "orchestration.opencode.json"),
     REOPEN_TRACKER_FILE: path.join(STATE_ROOT, "reopen-tracker.json"),
     STOP_WARNED_FILE: path.join(STATE_ROOT, "stop-warned"),
-    ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts")
+    ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts"),
+    AUDIT_LOGS_ROOT: path.join(LOGS_ROOT, "opencode-audit")
   };
 }
 

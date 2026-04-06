@@ -119,6 +119,46 @@ export const AgentTrackerItemSchema = z.object({
 
 export const AgentTrackerSchema = z.array(AgentTrackerItemSchema);
 
+export const InvocationLifecycleStatusSchema = z.enum(["running", "completed", "failed", "cancelled"]);
+
+export const InvocationContinuityHandlesSchema = z
+  .object({
+    child_session_id: z.string().optional(),
+    child_task_id: z.string().optional(),
+    resume_session_id: z.string().optional(),
+    resume_task_id: z.string().optional(),
+    resume_handles: z.record(z.string()).default({})
+  })
+  .transform((handles) => ({
+    ...handles,
+    resume_handles: handles.resume_handles ?? {}
+  }));
+
+export const OrchestrationInvocationSchema = z
+  .object({
+    invocation_id: z.string(),
+    agent_type: z.string(),
+    status: InvocationLifecycleStatusSchema,
+    coordination_label: z.string().optional(),
+    team_name: z.string().optional(),
+    purpose: z.string().optional(),
+    continuity: InvocationContinuityHandlesSchema.default({}),
+    started_at: z.string(),
+    updated_at: z.string(),
+    ended_at: z.string().optional(),
+    last_message: z.string().optional()
+  })
+  .transform((invocation) => ({
+    ...invocation,
+    continuity: invocation.continuity ?? { resume_handles: {} }
+  }));
+
+export const OrchestrationCoreStateSchema = z.object({
+  schema_version: z.literal(1),
+  updated_at: z.string(),
+  invocations: z.array(OrchestrationInvocationSchema)
+});
+
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskItem = z.infer<typeof TaskItemSchema>;
 export type TasksFile = z.infer<typeof TasksFileSchema>;
@@ -128,6 +168,10 @@ export type MeetDiscussionKind = z.infer<typeof MeetDiscussionKindSchema>;
 export type MeetFile = z.infer<typeof MeetFileSchema>;
 export type MeetSidecar = z.infer<typeof MeetSidecarSchema>;
 export type AgentTrackerItem = z.infer<typeof AgentTrackerItemSchema>;
+export type InvocationLifecycleStatus = z.infer<typeof InvocationLifecycleStatusSchema>;
+export type InvocationContinuityHandles = z.infer<typeof InvocationContinuityHandlesSchema>;
+export type OrchestrationInvocation = z.infer<typeof OrchestrationInvocationSchema>;
+export type OrchestrationCoreState = z.infer<typeof OrchestrationCoreStateSchema>;
 
 function normalizeDiscussionEntry(entry: string | MeetDiscussionEntry): MeetDiscussionEntry {
   if (typeof entry !== "string") {
