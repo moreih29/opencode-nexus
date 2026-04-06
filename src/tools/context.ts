@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
+import { readMeetParticipantContinuityFromCore } from "../orchestration/meet-continuity-adapter.js";
 import { summarizeCoordinationGroups } from "../shared/agent-tracker.js";
 import { readMeetSidecar } from "../shared/meet-sidecar.js";
 import { createNexusPaths } from "../shared/paths.js";
@@ -26,6 +27,20 @@ export const nxContext = tool({
 
     const activeMode = hasMeet ? "meet" : hasTasks ? "run" : "idle";
     const currentIssue = meet?.issues?.find((issue) => issue.status === "discussing") ?? meet?.issues?.find((issue) => issue.status === "pending") ?? null;
+    const mergedParticipants = meetSidecar
+      ? await Promise.all(
+          meetSidecar.panel.participants.map(async (participant) => {
+            const coreParticipant = await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, participant.role);
+
+            return {
+              role: participant.role,
+              task_id: coreParticipant?.task_id ?? null,
+              session_id: coreParticipant?.session_id ?? null,
+              last_summary: coreParticipant?.last_summary ?? participant.last_summary ?? null
+            };
+          })
+        )
+      : [];
 
     return JSON.stringify(
       {
@@ -38,14 +53,20 @@ export const nxContext = tool({
           ? {
               policy: meetSidecar.handoff.policy,
               canonicalReady: meetSidecar.handoff.canonical_ready,
-              howPanelRoles: meetSidecar.panel.participants.map((item) => item.role),
-              resumableParticipants: meetSidecar.panel.participants
-                .filter((item) => item.task_id || item.session_id)
-                .map((item) => ({ role: item.role, task_id: item.task_id ?? null, session_id: item.session_id ?? null })),
-              followupReady: meetSidecar.panel.participants.some((item) => item.task_id || item.session_id || item.last_summary),
-              suggestedFollowupRoles: meetSidecar.panel.participants
+              panelMembership: {
+                roles: meetSidecar.panel.participants.map((item) => item.role)
+              },
+              resumability: {
+                participants: mergedParticipants
+                  .filter((item) => item.task_id || item.session_id)
+                  .map((item) => ({ role: item.role, task_id: item.task_id ?? null, session_id: item.session_id ?? null }))
+              },
+              followupSuggestions: mergedParticipants
                 .filter((item) => item.task_id || item.session_id || item.last_summary)
-                .map((item) => item.role)
+                .map((item) => ({
+                  role: item.role,
+                  reason: item.task_id || item.session_id ? "continuity" : "summary-only"
+                }))
             }
           : null,
         coordinationGroups,
