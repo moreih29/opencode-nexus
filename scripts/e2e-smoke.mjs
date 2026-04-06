@@ -43,8 +43,9 @@ await nxMeetDiscuss.execute({ issue_id: "issue-1", speaker: "architect", message
 await nxMeetDiscuss.execute({ issue_id: "issue-1", speaker: "lead", message: "Recommend explicit task linkage.", kind: "summary" }, ctx);
 await nxMeetDecide.execute({ issue_id: "issue-1", decision: "Use explicit meet-to-task linkage.", summary: "Link task ids back to the originating issue." }, ctx);
 
-const addText = await nxTaskAdd.execute({ title: "Implement", owner: "engineer", meet_issue: "issue-1" }, ctx);
-assert.match(addText, /Added task/);
+const addText = JSON.parse(await nxTaskAdd.execute({ title: "Implement", owner: "engineer", meet_issue: "issue-1" }, ctx));
+assert.match(addText.message, /Added task/);
+assert.equal(addText.nexus_task_id.startsWith("task-"), true);
 
 const tasksRaw = JSON.parse(await fs.readFile(paths.TASKS_FILE, "utf8"));
 assert.equal(tasksRaw.tasks.length, 1);

@@ -36,8 +36,9 @@ await fs.writeFile(
 
 const ctx = { directory: root, worktree: root };
 await nxMeetJoin.execute({ role: "architect", name: "Architect" }, ctx);
-const addResult = await nxTaskAdd.execute({ title: "Implement workflow" }, ctx);
-assert.match(addResult, /Link this task to its meet issue/);
+const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Implement workflow" }, ctx));
+assert.match(addResult.message, /Link this task to its meet issue/);
+assert.equal(addResult.nexus_task_id.startsWith("task-"), true);
 
 await hooks["tool.execute.before"](
   { tool: "task" },
@@ -57,23 +58,95 @@ await hooks["tool.execute.after"](
   { title: "ok", output: "Prefer canonical-first handoff.", metadata: { task_id: "task-architect-1", session_id: "session-architect-1" } }
 );
 
+const meetSidecar = JSON.parse(await fs.readFile(paths.MEET_SIDECAR_FILE, "utf8"));
+const now = new Date().toISOString();
+const participants = (Array.isArray(meetSidecar?.panel?.participants) ? meetSidecar.panel.participants : [])
+  .map((item) => {
+    if (item.role === "architect") {
+      return {
+        ...item,
+        task_id: "task-architect-sidecar-stale",
+        session_id: "session-architect-sidecar-stale",
+        last_summary: "Stale sidecar continuity",
+        updated_at: now
+      };
+    }
+    return item;
+  })
+  .concat([
+    {
+      role: "strategist",
+      task_id: "task-strategist-sidecar-1",
+      session_id: "session-strategist-sidecar-1",
+      last_summary: "Sidecar-only strategist context",
+      updated_at: now
+    }
+  ]);
+
+await fs.writeFile(
+  paths.MEET_SIDECAR_FILE,
+  JSON.stringify(
+    {
+      ...meetSidecar,
+      panel: {
+        ...meetSidecar.panel,
+        participants
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+
 const contextResult = JSON.parse(await nxContext.execute({}, ctx));
 const resumeResult = JSON.parse(await nxMeetResume.execute({ role: "architect", question: "Can you justify the handoff rule?" }, ctx));
 const followupResult = JSON.parse(await nxMeetFollowup.execute({ role: "architect", question: "Can you justify the handoff rule?" }, ctx));
+const strategistResumeResult = await nxMeetResume.execute({ role: "strategist", question: "What should we do next?" }, ctx);
+const strategistFollowupResult = JSON.parse(await nxMeetFollowup.execute({ role: "strategist", question: "What should we do next?" }, ctx));
+const membershipRoles = contextResult.handoff.panelMembership.roles;
+const architectContinuity = contextResult.handoff.resumability.participants.find((item) => item.role === "architect");
+const strategistContinuity = contextResult.handoff.resumability.participants.find((item) => item.role === "strategist");
+const architectFollowup = contextResult.handoff.followupSuggestions.find((item) => item.role === "architect");
+const strategistFollowup = contextResult.handoff.followupSuggestions.find((item) => item.role === "strategist");
+
+for (const field of ["branch", "branchGuard", "activeMode", "meetTopic", "currentIssue", "handoff", "coordinationGroups", "tasksSummary"]) {
+  assert.equal(Object.hasOwn(contextResult, field), true);
+}
+for (const field of ["policy", "canonicalReady", "panelMembership", "resumability", "followupSuggestions"]) {
+  assert.equal(Object.hasOwn(contextResult.handoff, field), true);
+}
+for (const legacyField of ["howPanelRoles", "resumableParticipants", "followupReady", "suggestedFollowupRoles"]) {
+  assert.equal(Object.hasOwn(contextResult.handoff, legacyField), false);
+}
+
 assert.equal(contextResult.branchGuard, true);
 assert.equal(contextResult.meetTopic, "Procedural parity");
 assert.equal(contextResult.currentIssue.id, "issue-1");
 assert.equal(contextResult.handoff.policy, "canonical-first");
-assert.equal(contextResult.handoff.howPanelRoles.includes("architect"), true);
-assert.equal(contextResult.handoff.followupReady, true);
-assert.equal(contextResult.handoff.suggestedFollowupRoles.includes("architect"), true);
-assert.equal(contextResult.handoff.resumableParticipants[0].role, "architect");
-assert.equal(contextResult.handoff.resumableParticipants[0].task_id, "task-architect-1");
+assert.equal(membershipRoles.includes("architect"), true);
+assert.equal(membershipRoles.includes("strategist"), true);
+assert.equal(Boolean(architectContinuity), true);
+assert.equal(architectContinuity.task_id, "task-architect-1");
+assert.equal(architectContinuity.session_id, "session-architect-1");
+assert.equal(Boolean(strategistContinuity), false);
+assert.equal(Boolean(architectFollowup), true);
+assert.equal(architectFollowup.reason, "continuity");
+assert.equal(Boolean(strategistFollowup), true);
+assert.equal(strategistFollowup.reason, "summary-only");
 assert.equal(resumeResult.role, "architect");
 assert.equal(resumeResult.task_id, "task-architect-1");
 assert.equal(resumeResult.session_id, "session-architect-1");
 assert.equal(resumeResult.recommendation.mode, "resume-existing");
 assert.match(resumeResult.recommendation.suggested_prompt, /justify the handoff rule/i);
+assert.equal(
+  strategistResumeResult,
+  "No participant continuity found for strategist.",
+  "meet sidecar membership should not make strategist resumable without orchestration continuity"
+);
+assert.equal(strategistFollowupResult.recommendation.mode, "rehydrate-from-summary");
+assert.equal(strategistFollowupResult.delegation.resume_task_id, null);
+assert.equal(strategistFollowupResult.delegation.resume_session_id, null);
 assert.equal(followupResult.delegation.subagent_type, "architect");
 assert.equal(followupResult.delegation.resume_task_id, "task-architect-1");
 assert.equal(followupResult.recommendation.mode, "resume-existing");

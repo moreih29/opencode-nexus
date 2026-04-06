@@ -36,4 +36,15 @@ await hooks["tool.execute.before"](
   { args: { subagent_type: "engineer", team_name: "impl-team", description: "do work" } }
 );
 
+await hooks["tool.execute.before"](
+  { tool: "task" },
+  {
+    args: {
+      subagent_type: "engineer",
+      description: "do work",
+      command: "[run] Engineer work team_name:impl-team"
+    }
+  }
+);
+
 console.log("e2e team policy passed");
