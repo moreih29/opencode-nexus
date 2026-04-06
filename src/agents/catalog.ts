@@ -47,7 +47,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     name: "Engineer",
     category: "do",
     description: "Implementation and debugging",
-    model: "openai/gpt-5.3-codex-spark",
+    model: "openai/gpt-5.3-codex",
     disallowedTools: ["nx_task_add"]
   },
   {
@@ -55,7 +55,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     name: "Researcher",
     category: "do",
     description: "Independent web and document research",
-    model: "openai/gpt-5.3-codex-spark",
+    model: "openai/gpt-5.3-codex",
     disallowedTools: ["nx_task_add"]
   },
   {
@@ -63,7 +63,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     name: "Writer",
     category: "do",
     description: "Technical writing and documentation",
-    model: "openai/gpt-5.3-codex-spark",
+    model: "openai/gpt-5.3-codex",
     disallowedTools: ["nx_task_add"]
   },
   {
@@ -71,7 +71,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     name: "QA",
     category: "check",
     description: "Verification, testing, and quality checks",
-    model: "openai/gpt-5.3-codex-spark",
+    model: "openai/gpt-5.3-codex",
     disallowedTools: ["nx_task_add"]
   },
   {
@@ -79,7 +79,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     name: "Reviewer",
     category: "check",
     description: "Fact-checking and content validation",
-    model: "openai/gpt-5.3-codex-spark",
+    model: "openai/gpt-5.3-codex",
     disallowedTools: ["nx_task_add"]
   }
 ];
