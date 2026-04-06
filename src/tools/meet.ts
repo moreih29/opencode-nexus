@@ -1,5 +1,6 @@
 import { tool } from "@opencode-ai/plugin";
 import { appendHistory, nextMeetId } from "../shared/history.js";
+import { readMeetParticipantContinuityFromCore, type MeetParticipantContinuity } from "../orchestration/meet-continuity-adapter.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
 import { readMeetSidecar, summarizeMeetSidecar, syncMeetSidecar } from "../shared/meet-sidecar.js";
@@ -78,6 +79,24 @@ export const nxMeetStatus = tool({
     const meet = await readMeet(paths.MEET_FILE);
     const issues = summarizeIssues(meet);
     const sidecar = await readMeetSidecar(paths.MEET_SIDECAR_FILE);
+    const followupParticipants = sidecar
+      ? await Promise.all(
+          sidecar.panel.participants.map(async (item) =>
+            mergeParticipantContinuity(
+              item.role,
+              await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, item.role),
+              {
+                role: item.role,
+                task_id: item.task_id ?? null,
+                session_id: item.session_id ?? null,
+                last_summary: item.last_summary ?? null,
+                updated_at: item.updated_at,
+                source: "meet-sidecar"
+              }
+            )
+          )
+        )
+      : [];
 
     return JSON.stringify(
       {
@@ -89,9 +108,9 @@ export const nxMeetStatus = tool({
         decided_ratio: `${issues.decided + issues.tasked}/${issues.total}`,
         opencode: {
           ...summarizeMeetSidecar(sidecar),
-          followup_ready_roles: sidecar?.panel.participants
-            .filter((item) => item.task_id || item.session_id || item.last_summary)
-            .map((item) => item.role) ?? []
+          followup_ready_roles: followupParticipants
+            .filter((item) => item.resumable || item.last_summary)
+            .map((item) => item.role)
         }
       },
       null,
@@ -108,25 +127,30 @@ export const nxMeetResume = tool({
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
+    const coreParticipant = await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
     const sidecar = await readMeetSidecar(paths.MEET_SIDECAR_FILE);
-    if (!sidecar) {
+    const sidecarParticipant = pickParticipantFromSidecar(sidecar, args.role);
+    if (!coreParticipant && !sidecar) {
       return "No OpenCode meet sidecar available.";
     }
 
-    const participant = sidecar.panel.participants.find((item) => item.role.toLowerCase() === args.role.toLowerCase());
-    if (!participant) {
+    if (!coreParticipant) {
       return `No participant continuity found for ${args.role}.`;
     }
+
+    const participant = mergeParticipantContinuity(args.role, coreParticipant, sidecarParticipant);
 
     return JSON.stringify(
       {
         role: participant.role,
-        strategy: sidecar.panel.strategy,
+        strategy: sidecar?.panel.strategy ?? "how-fixed-panel",
         task_id: participant.task_id ?? null,
         session_id: participant.session_id ?? null,
+        opencode_task_tool_resume_handle: participant.session_id ?? null,
         last_summary: participant.last_summary ?? null,
         updated_at: participant.updated_at,
-        resumable: Boolean(participant.task_id || participant.session_id),
+        continuity_source: participant.source,
+        resumable: participant.resumable,
         recommendation: buildResumeRecommendation(participant, args.question)
       },
       null,
@@ -145,8 +169,9 @@ export const nxMeetFollowup = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const sidecar = await readMeetSidecar(paths.MEET_SIDECAR_FILE);
+    const coreParticipant = await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
     const meet = await readCanonicalFollowupMeet(paths.MEET_FILE);
-    const participant = sidecar?.panel.participants.find((item) => item.role.toLowerCase() === args.role.toLowerCase());
+    const participant = mergeParticipantContinuity(args.role, coreParticipant, pickParticipantFromSidecar(sidecar, args.role));
     const recommendation = buildResumeRecommendation(participant ?? { role: args.role }, args.question);
     const issue = args.issue_id
       ? meet?.issues.find((item) => item.id === args.issue_id) ?? null
@@ -164,12 +189,14 @@ export const nxMeetFollowup = tool({
             }
           : null,
         recommendation,
+        continuity_source: participant?.source ?? "none",
         delegation: {
           subagent_type: args.role.toLowerCase(),
           team_name: "meet-panel",
           description: args.question,
           resume_task_id: recommendation.suggested_task_id,
           resume_session_id: recommendation.suggested_session_id,
+          opencode_task_tool_resume_handle: recommendation.suggested_session_id,
           prompt: recommendation.suggested_prompt
         }
       },
@@ -389,6 +416,48 @@ function buildResumeRecommendation(
     suggested_prompt: resumable
       ? `Resume the existing ${participant.role} participant and continue this follow-up: ${followUp}`
       : `Rehydrate the ${participant.role} participant from the last summary and continue this follow-up: ${followUp}`
+  };
+}
+
+function pickParticipantFromSidecar(
+  sidecar: Awaited<ReturnType<typeof readMeetSidecar>>,
+  role: string
+): MeetParticipantContinuity | null {
+  if (!sidecar) {
+    return null;
+  }
+  const participant = sidecar.panel.participants.find((item) => item.role.toLowerCase() === role.toLowerCase());
+  if (!participant) {
+    return null;
+  }
+  return {
+    role: participant.role,
+    task_id: participant.task_id ?? null,
+    session_id: participant.session_id ?? null,
+    last_summary: participant.last_summary ?? null,
+    updated_at: participant.updated_at,
+    source: "meet-sidecar"
+  };
+}
+
+function mergeParticipantContinuity(
+  role: string,
+  coreParticipant: MeetParticipantContinuity | null,
+  sidecarParticipant: MeetParticipantContinuity | null
+) {
+  const task_id = coreParticipant?.task_id ?? null;
+  const session_id = coreParticipant?.session_id ?? null;
+  const sidecarSummary = sidecarParticipant?.last_summary?.trim() ? sidecarParticipant.last_summary : null;
+  const source = coreParticipant ? coreParticipant.source : sidecarSummary ? "meet-sidecar" : "none";
+
+  return {
+    role: coreParticipant?.role ?? sidecarParticipant?.role ?? role,
+    task_id,
+    session_id,
+    last_summary: coreParticipant?.last_summary ?? sidecarSummary,
+    updated_at: coreParticipant?.updated_at ?? (source === "meet-sidecar" ? sidecarParticipant?.updated_at ?? null : null),
+    source,
+    resumable: Boolean(task_id || session_id)
   };
 }
 

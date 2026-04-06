@@ -1,10 +1,18 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
+import { registerEnd, registerStart } from "../orchestration/core.js";
+import {
+  buildRunContinuityAdapterHints,
+  injectMissingRunResumeArgs,
+  selectRunContinuityFromCore
+} from "../orchestration/run-continuity-adapter.js";
+import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
 import { canJoinMeetWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
+import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, toAuditRecord } from "../shared/audit-log.js";
 import { loadCanonicalMeet, syncMeetSidecar } from "../shared/meet-sidecar.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
@@ -30,12 +38,44 @@ interface ChatOutput {
   parts: Array<{ type?: string; text?: string }>;
 }
 
+type PipelineTaskStatus = "pending" | "in_progress" | "completed" | "blocked";
+
+interface PipelineEvaluatorSnapshot {
+  hasTasksFile: boolean;
+  hasTaskCycle: boolean;
+  tasks: Array<{ id?: string; status: PipelineTaskStatus }>;
+  qaTriggerReasons: string[];
+}
+
+interface PipelineEvaluatorResult {
+  taskCycleState: "none" | "empty" | "active" | "completed-open";
+  editsAllowed: boolean;
+  canCloseCycle: boolean;
+  shouldTriggerQa: boolean;
+  nextGuidanceKey:
+    | "task_cycle_required"
+    | "add_first_task"
+    | "resume_active_cycle"
+    | "resolve_blocked_tasks"
+    | "close_cycle"
+    | "spawn_qa_then_close";
+}
+
+let pipelineEvaluatorLoader: Promise<((snapshot: PipelineEvaluatorSnapshot) => PipelineEvaluatorResult) | null> | null = null;
+
 export function createHooks(ctx: PluginContext) {
   const projectRoot = ctx.worktree ?? ctx.directory;
   const paths = createNexusPaths(projectRoot);
 
   return {
     event: async ({ event }: { event: { type: string } }) => {
+      await writeAuditEntry(paths, {
+        kind: "event",
+        event_type: event.type,
+        session_id: pickSessionID(event),
+        payload: toAuditRecord(event)
+      });
+
       if (event.type === "session.created") {
         await ensureNexusStructure(paths);
         await resetAgentTracker(paths.AGENT_TRACKER_FILE);
@@ -43,6 +83,42 @@ export function createHooks(ctx: PluginContext) {
     },
 
     "tool.execute.before": async (input: ToolInput, output: ToolOutput) => {
+      if (input.tool === "task") {
+        output.args = await injectRunContinuityForTask(paths, output.args);
+      }
+
+      const sessionID = pickSessionID(input) ?? pickSessionID(output.args);
+      const subagentInvocation = input.tool === "task" ? registerSubagentInvocation(ctx.state, output.args, sessionID) : null;
+
+      await writeAuditEntry(paths, {
+        kind: "tool.execute.before",
+        tool: input.tool,
+        session_id: sessionID,
+        args: toAuditRecord(output.args),
+        subagent: subagentInvocation
+          ? {
+              invocation_id: subagentInvocation.invocationID,
+              agent_type: subagentInvocation.agentType,
+              team_name: subagentInvocation.teamName,
+              fingerprint: subagentInvocation.fingerprint
+            }
+          : null
+      });
+
+      if (subagentInvocation) {
+        await appendSubagentAuditLog(paths, sessionID, subagentInvocation.invocationID, {
+          ts: new Date().toISOString(),
+          kind: "subagent.lifecycle",
+          phase: "before",
+          invocation_id: subagentInvocation.invocationID,
+          started_at: subagentInvocation.startedAt,
+          agent_type: subagentInvocation.agentType,
+          team_name: subagentInvocation.teamName,
+          session_id: sessionID,
+          args: toAuditRecord(output.args)
+        });
+      }
+
       if (input.tool === "nx_meet_start") {
         await validateMeetStart(output.args, paths.AGENT_TRACKER_FILE);
       }
@@ -54,8 +130,11 @@ export function createHooks(ctx: PluginContext) {
 
       if (input.tool === "nx_task_close") {
         const summary = await readTasksSummary(paths.TASKS_FILE);
-        if (summary && (summary.pending > 0 || summary.in_progress > 0 || summary.blocked > 0)) {
-          throw new Error("Cannot close cycle with active tasks. Complete or unblock remaining tasks first.");
+        if (summary) {
+          const evaluation = await evaluatePipelineFromSummary(summary);
+          if (!evaluation.canCloseCycle && evaluation.taskCycleState !== "empty") {
+            throw new Error("Cannot close cycle with active tasks. Complete or unblock remaining tasks first.");
+          }
         }
       }
 
@@ -69,11 +148,12 @@ export function createHooks(ctx: PluginContext) {
       }
 
       const summary = await readTasksSummary(paths.TASKS_FILE);
-      if (!summary) {
+      const evaluation = await evaluatePipelineFromSummary(summary);
+      if (!evaluation.editsAllowed && evaluation.nextGuidanceKey === "task_cycle_required") {
         throw new Error("Task pipeline is required. Run nx_task_add before editing files.");
       }
 
-      if (summary.total > 0 && summary.pending === 0 && summary.in_progress === 0) {
+      if (!evaluation.editsAllowed && (evaluation.nextGuidanceKey === "close_cycle" || evaluation.nextGuidanceKey === "spawn_qa_then_close")) {
         throw new Error("All tasks are completed. Run nx_task_close or create a new task cycle.");
       }
     },
@@ -82,6 +162,48 @@ export function createHooks(ctx: PluginContext) {
       input: ToolInput & { args: Record<string, unknown> },
       output: { title: string; output: string; metadata: unknown }
     ) => {
+      const subagentInvocation = input.tool === "task" ? resolveSubagentInvocation(ctx.state, input.args) : null;
+      const sessionID = pickSessionID(input) ?? pickSessionID(output.metadata) ?? subagentInvocation?.sessionID ?? null;
+      const taskHandles = input.tool === "task" ? extractParticipantHandles(output.metadata) : {};
+
+      await writeAuditEntry(paths, {
+        kind: "tool.execute.after",
+        tool: input.tool,
+        session_id: sessionID,
+        title: output.title,
+        output_preview: output.output.slice(0, 1000),
+        metadata: toAuditRecord(output.metadata),
+        subagent: subagentInvocation
+          ? {
+              invocation_id: subagentInvocation.invocationID,
+              started_at: subagentInvocation.startedAt,
+              agent_type: subagentInvocation.agentType,
+              team_name: subagentInvocation.teamName,
+              fingerprint: subagentInvocation.fingerprint,
+              task_id: taskHandles.taskID ?? null,
+              session_id: taskHandles.sessionID ?? null
+            }
+          : null
+      });
+
+      if (subagentInvocation) {
+        await appendSubagentAuditLog(paths, sessionID, subagentInvocation.invocationID, {
+          ts: new Date().toISOString(),
+          kind: "subagent.lifecycle",
+          phase: "after",
+          invocation_id: subagentInvocation.invocationID,
+          started_at: subagentInvocation.startedAt,
+          agent_type: subagentInvocation.agentType,
+          team_name: subagentInvocation.teamName,
+          session_id: sessionID,
+          subagent_task_id: taskHandles.taskID ?? null,
+          subagent_session_id: taskHandles.sessionID ?? null,
+          title: output.title,
+          output_preview: output.output.slice(0, 1000),
+          metadata: toAuditRecord(output.metadata)
+        });
+      }
+
       if (input.tool !== "task") {
         return;
       }
@@ -91,6 +213,7 @@ export function createHooks(ctx: PluginContext) {
         return;
       }
       await markLatestTeamCompleted(paths.AGENT_TRACKER_FILE, agentType, output.output.slice(0, 500));
+      await updateRunParticipantContinuity(paths, input.args, output, taskHandles, subagentInvocation?.invocationID ?? null);
       await updateMeetParticipantContinuity(paths, input.args, output);
     },
 
@@ -119,7 +242,8 @@ export function createHooks(ctx: PluginContext) {
         return;
       }
 
-      const status = getExitGuardStatus(summary);
+      const evaluation = await evaluatePipelineFromSummary(summary);
+      const status = getExitGuardStatus(evaluation);
       const previous = await readStopWarning(paths.STOP_WARNED_FILE);
       const repeated = previous === status;
       await fs.writeFile(paths.STOP_WARNED_FILE, `${status}\n`, "utf8");
@@ -210,7 +334,7 @@ async function enforceTaskTeamPolicy(
     return;
   }
 
-  const teamName = pickString(args, ["team_name", "team"]);
+  const teamName = pickCoordinationLabel(args);
   if (!teamName) {
     throw new Error(`Run mode requires a shared team_name coordination label for ${agentType} subagent tasks.`);
   }
@@ -222,7 +346,7 @@ async function trackSubagentStart(args: Record<string, unknown>, trackerFile: st
     return;
   }
 
-  const teamName = pickString(args, ["team_name", "team"]);
+  const teamName = pickCoordinationLabel(args);
   await appendAgentTracker(trackerFile, {
     agent_type: agentType,
     state: teamName ? "team-spawning" : "running",
@@ -250,13 +374,114 @@ async function updateMeetParticipantContinuity(
   }
 
   const handles = extractParticipantHandles(output.metadata);
+  const continuityInvocationID = createMeetContinuityInvocationID(agentType);
+  const coordinationLabel = pickCoordinationLabel(args) ?? undefined;
+  await registerStart(paths.ORCHESTRATION_CORE_FILE, {
+    invocation_id: continuityInvocationID,
+    agent_type: agentType,
+    coordination_label: coordinationLabel,
+    team_name: coordinationLabel,
+    purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined
+  });
+  await registerEnd(paths.ORCHESTRATION_CORE_FILE, {
+    invocation_id: continuityInvocationID,
+    status: "completed",
+    last_message: output.output.slice(0, 500),
+    runtime_metadata: output.metadata,
+    continuity: {
+      child_task_id: handles.taskID,
+      child_session_id: handles.sessionID
+    }
+  });
+
   await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet, {
     speaker: agentType,
     message: output.output.slice(0, 500),
     taskID: handles.taskID,
     sessionID: handles.sessionID,
-    teamName: pickString(args, ["team_name", "team"]) ?? undefined
+    teamName: coordinationLabel
   });
+}
+
+async function updateRunParticipantContinuity(
+  paths: ReturnType<typeof createNexusPaths>,
+  args: Record<string, unknown>,
+  output: { title: string; output: string; metadata: unknown },
+  handles: { taskID?: string; sessionID?: string },
+  existingInvocationID: string | null
+): Promise<void> {
+  if (!(await isRunMode(paths))) {
+    return;
+  }
+
+  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
+  if (!agentType || !isDoOrCheckAgent(agentType)) {
+    return;
+  }
+
+  const coordinationLabel = pickCoordinationLabel(args) ?? undefined;
+  const invocationID = existingInvocationID ?? createRunContinuityInvocationID(agentType, coordinationLabel);
+  await registerStart(paths.ORCHESTRATION_CORE_FILE, {
+    invocation_id: invocationID,
+    agent_type: agentType,
+    coordination_label: coordinationLabel,
+    team_name: coordinationLabel,
+    purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined
+  });
+  await registerEnd(paths.ORCHESTRATION_CORE_FILE, {
+    invocation_id: invocationID,
+    status: "completed",
+    last_message: output.output.slice(0, 500),
+    runtime_metadata: output.metadata,
+    continuity: {
+      child_task_id: handles.taskID,
+      child_session_id: handles.sessionID
+    }
+  });
+}
+
+function createMeetContinuityInvocationID(agentType: string): string {
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).slice(2, 8);
+  return `meet-continuity-${agentType.toLowerCase()}-${timestamp}-${nonce}`;
+}
+
+function createRunContinuityInvocationID(agentType: string, coordinationLabel?: string): string {
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).slice(2, 8);
+  const label = (coordinationLabel ?? "solo").replace(/[^A-Za-z0-9._-]/g, "-").toLowerCase();
+  return `run-continuity-${agentType.toLowerCase()}-${label}-${timestamp}-${nonce}`;
+}
+
+async function injectRunContinuityForTask(
+  paths: ReturnType<typeof createNexusPaths>,
+  args: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (!(await isRunMode(paths))) {
+    return args;
+  }
+
+  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
+  if (!agentType) {
+    return args;
+  }
+
+  const continuity = await selectRunContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, {
+    agent_type: agentType,
+    coordination_label: pickCoordinationLabel(args) ?? undefined
+  });
+
+  if (!continuity) {
+    return args;
+  }
+
+  const hints = buildRunContinuityAdapterHints(continuity);
+  return injectMissingRunResumeArgs(args, hints);
+}
+
+async function isRunMode(paths: ReturnType<typeof createNexusPaths>): Promise<boolean> {
+  const [hasMeet, hasTasks] = await Promise.all([fileExists(paths.MEET_FILE), fileExists(paths.TASKS_FILE)]);
+  return hasTasks && !hasMeet;
 }
 
 function extractParticipantHandles(metadata: unknown): { taskID?: string; sessionID?: string } {
@@ -296,6 +521,13 @@ function isHowAgent(agentType: string): boolean {
   return NEXUS_AGENT_CATALOG.some((agent) => agent.category === "how" && agent.id === agentType.toLowerCase());
 }
 
+function isDoOrCheckAgent(agentType: string): boolean {
+  const normalized = agentType.toLowerCase();
+  return NEXUS_AGENT_CATALOG.some(
+    (agent) => (agent.category === "do" || agent.category === "check") && agent.id === normalized
+  );
+}
+
 function pickString(source: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const value = source[key];
@@ -317,11 +549,11 @@ function isExitCommand(command: string): boolean {
   return /^(exit|quit|:q|\/exit|\/quit)\b/i.test(command.trim());
 }
 
-function getExitGuardStatus(summary: { pending: number; in_progress: number; blocked: number; completed: number; total: number }) {
-  if (summary.pending > 0 || summary.in_progress > 0 || summary.blocked > 0) {
+function getExitGuardStatus(result: PipelineEvaluatorResult) {
+  if (result.nextGuidanceKey === "resume_active_cycle" || result.nextGuidanceKey === "resolve_blocked_tasks") {
     return "active" as const;
   }
-  if (summary.completed > 0 && summary.completed === summary.total) {
+  if (result.nextGuidanceKey === "close_cycle" || result.nextGuidanceKey === "spawn_qa_then_close") {
     return "completed-open" as const;
   }
   return "clear" as const;
@@ -358,8 +590,114 @@ function pickSessionID(input: unknown): string | null {
   if (!input || typeof input !== "object") {
     return null;
   }
-  const value = (input as { sessionID?: unknown }).sessionID;
-  return typeof value === "string" && value.length > 0 ? value : null;
+
+  const source = input as Record<string, unknown>;
+  const direct = source.sessionID;
+  if (typeof direct === "string" && direct.length > 0) {
+    return direct;
+  }
+
+  const snake = source.session_id;
+  if (typeof snake === "string" && snake.length > 0) {
+    return snake;
+  }
+
+  for (const value of Object.values(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
+    const nested = pickSessionID(value);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
+async function writeAuditEntry(
+  paths: ReturnType<typeof createNexusPaths>,
+  entry: Record<string, unknown>
+): Promise<void> {
+  const record: Record<string, unknown> = {
+    ts: new Date().toISOString(),
+    ...entry
+  };
+  await appendGlobalAuditLog(paths, record);
+  await appendSessionAuditLog(paths, typeof record.session_id === "string" ? record.session_id : null, record);
+}
+
+function registerSubagentInvocation(
+  state: NexusPluginState,
+  args: Record<string, unknown>,
+  sessionID: string | null
+): { invocationID: string; startedAt: string; agentType: string | null; teamName: string | null; fingerprint: string; sessionID: string | null } {
+  const startedAt = new Date().toISOString();
+  state.invocationCounter += 1;
+  const invocationID = `subagent-${state.invocationCounter}`;
+  const fingerprint = buildSubagentFingerprint(args);
+  const queue = state.pendingSubagentInvocations.get(fingerprint) ?? [];
+  queue.push({ invocationID, startedAt, sessionID });
+  state.pendingSubagentInvocations.set(fingerprint, queue);
+  return {
+    invocationID,
+    startedAt,
+    agentType: pickString(args, ["subagent_type", "agent", "type"]),
+    teamName: pickCoordinationLabel(args),
+    fingerprint,
+    sessionID
+  };
+}
+
+function resolveSubagentInvocation(
+  state: NexusPluginState,
+  args: Record<string, unknown>
+): { invocationID: string; startedAt: string; sessionID: string | null; agentType: string | null; teamName: string | null; fingerprint: string } | null {
+  const fingerprint = buildSubagentFingerprint(args);
+  const queue = state.pendingSubagentInvocations.get(fingerprint) ?? [];
+  const pending = queue.shift();
+  if (queue.length > 0) {
+    state.pendingSubagentInvocations.set(fingerprint, queue);
+  } else {
+    state.pendingSubagentInvocations.delete(fingerprint);
+  }
+  if (!pending) {
+    return null;
+  }
+  return {
+    invocationID: pending.invocationID,
+    startedAt: pending.startedAt,
+    sessionID: pending.sessionID,
+    agentType: pickString(args, ["subagent_type", "agent", "type"]),
+    teamName: pickCoordinationLabel(args),
+    fingerprint
+  };
+}
+
+function buildSubagentFingerprint(args: Record<string, unknown>): string {
+  const signature = {
+    agentType: pickString(args, ["subagent_type", "agent", "type"]),
+    teamName: pickCoordinationLabel(args),
+    description: pickString(args, ["description", "task", "prompt"]),
+    resumeTaskID: pickString(args, ["resume_task_id", "resumeTaskID", "resumeTaskId"]),
+    resumeSessionID: pickString(args, ["resume_session_id", "resumeSessionID", "resumeSessionId"])
+  };
+  return JSON.stringify(signature);
+}
+
+function pickCoordinationLabel(args: Record<string, unknown>): string | null {
+  const direct = pickString(args, ["team_name", "team"]);
+  if (direct) {
+    return direct;
+  }
+
+  const command = pickString(args, ["command"]);
+  if (!command) {
+    return null;
+  }
+
+  const match = command.match(/(?:^|\s)(?:team_name|team):([A-Za-z0-9._-]+)/);
+  return match?.[1] ?? null;
 }
 
 async function safeUnlink(filePath: string): Promise<void> {
@@ -408,7 +746,8 @@ async function buildStatefulNotice(
       return meetReminder;
     }
     if (taskSummary) {
-      if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
+      const evaluation = await evaluatePipelineFromSummary(taskSummary);
+      if (evaluation.nextGuidanceKey === "resume_active_cycle" || evaluation.nextGuidanceKey === "resolve_blocked_tasks") {
         return [
           "[nexus] Active task cycle detected.",
           `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}`,
@@ -416,7 +755,9 @@ async function buildStatefulNotice(
           "Resume work, update task states with nx_task_update, verify when complete, and close with nx_task_close after optional nx_sync."
         ].join(" ");
       }
-      return "[nexus] A completed task cycle is still open. Verify if needed, run nx_sync when useful, then nx_task_close before starting a new edit cycle.";
+      if (evaluation.nextGuidanceKey === "close_cycle" || evaluation.nextGuidanceKey === "spawn_qa_then_close") {
+        return "[nexus] A completed task cycle is still open. Verify if needed, run nx_sync when useful, then nx_task_close before starting a new edit cycle.";
+      }
     }
     return null;
   }
@@ -447,7 +788,13 @@ async function buildStatefulNotice(
   }
 
   if (mode === "run") {
-    if (!taskSummary) {
+    let qaReasons: string[] = [];
+    let evaluation = await evaluatePipelineFromSummary(taskSummary, qaReasons);
+    if (taskSummary && evaluation.nextGuidanceKey === "close_cycle") {
+      qaReasons = (await evaluateQaAutoTrigger(projectRoot, [])).reasons;
+      evaluation = await evaluatePipelineFromSummary(taskSummary, qaReasons);
+    }
+    if (evaluation.nextGuidanceKey === "task_cycle_required") {
       return [
         "[nexus] Run mode detected. No task cycle yet.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Create a task branch before substantial execution.` : "",
@@ -457,20 +804,27 @@ async function buildStatefulNotice(
         "After implementation, update task states, verify, optionally nx_sync, and close with nx_task_close."
       ].join(" ");
     }
-    if (taskSummary.pending > 0 || taskSummary.in_progress > 0 || taskSummary.blocked > 0) {
+    if (evaluation.nextGuidanceKey === "resume_active_cycle" || evaluation.nextGuidanceKey === "resolve_blocked_tasks") {
+      const activeSummary = taskSummary ?? { pending: 0, in_progress: 0, blocked: 0 };
       return [
         "[nexus] Run mode detected.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
-        `Active tasks: pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}.`,
-        taskSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
+        `Active tasks: pending=${activeSummary.pending}, in_progress=${activeSummary.in_progress}, blocked=${activeSummary.blocked}.`,
+        activeSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
         "Keep edits scoped to active tasks, do not continue as Lead solo once work is decomposed, involve Engineer for code execution units, use nx_briefing before specialist delegation, and update status as each unit completes."
       ].join(" ");
     }
-    const qa = await evaluateQaAutoTrigger(projectRoot, []);
-    if (qa.shouldSpawn) {
-      return `[nexus] Run mode detected. All tasks completed. Spawn QA before close (reasons: ${qa.reasons.join(",")}), then consider nx_sync before nx_task_close.`;
+    if (evaluation.nextGuidanceKey === "spawn_qa_then_close") {
+      const reasonText = qaReasons.join(",");
+      return `[nexus] Run mode detected. All tasks completed. Spawn QA before close (reasons: ${reasonText}), then consider nx_sync before nx_task_close.`;
     }
-    return "[nexus] Run mode detected. All tasks completed. Verify if needed, consider nx_sync, then use nx_task_close to archive the cycle.";
+    if (evaluation.nextGuidanceKey === "close_cycle") {
+      return "[nexus] Run mode detected. All tasks completed. Verify if needed, consider nx_sync, then use nx_task_close to archive the cycle.";
+    }
+    if (evaluation.nextGuidanceKey === "add_first_task") {
+      return "[nexus] Run mode detected. Start by registering the first execution unit with nx_task_add before editing files.";
+    }
+    return fallback;
   }
 
   if (mode === "rule") {
@@ -479,6 +833,46 @@ async function buildStatefulNotice(
   }
 
   return fallback;
+}
+
+async function evaluatePipelineFromSummary(
+  summary: { pending: number; in_progress: number; blocked: number; completed: number; total: number } | null,
+  qaTriggerReasons: string[] = []
+): Promise<PipelineEvaluatorResult> {
+  const snapshot: PipelineEvaluatorSnapshot = {
+    hasTasksFile: summary !== null,
+    hasTaskCycle: summary !== null,
+    tasks: expandSummaryTasks(summary),
+    qaTriggerReasons
+  };
+  return evaluatePipelineSnapshot(snapshot);
+}
+
+function expandSummaryTasks(
+  summary: { pending: number; in_progress: number; blocked: number; completed: number } | null
+): Array<{ status: PipelineTaskStatus }> {
+  if (!summary) {
+    return [];
+  }
+
+  const tasks: Array<{ status: PipelineTaskStatus }> = [];
+  for (let i = 0; i < summary.pending; i += 1) {
+    tasks.push({ status: "pending" });
+  }
+  for (let i = 0; i < summary.in_progress; i += 1) {
+    tasks.push({ status: "in_progress" });
+  }
+  for (let i = 0; i < summary.blocked; i += 1) {
+    tasks.push({ status: "blocked" });
+  }
+  for (let i = 0; i < summary.completed; i += 1) {
+    tasks.push({ status: "completed" });
+  }
+  return tasks;
+}
+
+async function evaluatePipelineSnapshot(snapshot: PipelineEvaluatorSnapshot): Promise<PipelineEvaluatorResult> {
+  return evaluatePipelineSnapshotPure(snapshot);
 }
 
 async function buildMeetReminder(meetFile: string): Promise<string | null> {
