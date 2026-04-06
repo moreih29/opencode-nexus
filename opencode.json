@@ -11,6 +11,42 @@
     },
     "nexus": {
       "mode": "primary"
+    },
+    "architect": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "designer": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "postdoc": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "strategist": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "engineer": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "researcher": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "writer": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "qa": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "reviewer": {
+      "mode": "subagent",
+      "model": "opencode-go/minimax-m2.7"
     }
   },
   "permission": {

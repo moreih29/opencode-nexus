@@ -1620,6 +1620,1356 @@
           "nx-init/nx-sync 설계 결함 조사"
         ]
       }
+    },
+    {
+      "completed_at": "2026-04-02T11:49:27.884Z",
+      "branch": "subagent-audit-logs",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775130257452-s34e50",
+            "title": "Add experimental session and subagent audit logging",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T11:44:17.450Z",
+            "updated_at": "2026-04-02T11:49:24.303Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T11:55:46.901Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 5,
+        "topic": "Subagent audit log exercise",
+        "attendees": [],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "Collect short commentary from HOW agents",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": "issue-2",
+            "title": "Write sample files under audit logs",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": [
+              "task-1775130753598-zjp9g9"
+            ]
+          },
+          {
+            "id": "issue-3",
+            "title": "Review and lightly refine the written files",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": [
+              "task-1775130753606-d3j2i3"
+            ]
+          },
+          {
+            "id": "issue-4",
+            "title": "Research latest PyTorch version",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          }
+        ],
+        "research_summary": "We are testing deterministic OpenCode hook-level logging. Need to observe what identifiers and payloads are exposed while exercising several subagents.",
+        "created_at": "2026-04-02T11:52:33.574Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775130753598-zjp9g9",
+            "title": "Engineer writes audit experiment file",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-2",
+            "deps": [],
+            "created_at": "2026-04-02T11:52:33.598Z",
+            "updated_at": "2026-04-02T11:55:29.178Z"
+          },
+          {
+            "id": "task-1775130753606-d3j2i3",
+            "title": "Reviewer reviews and lightly refines written files",
+            "status": "completed",
+            "owner": "reviewer",
+            "meet_issue": "issue-3",
+            "deps": [],
+            "created_at": "2026-04-02T11:52:33.605Z",
+            "updated_at": "2026-04-02T11:55:29.245Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Subagent audit log exercise"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T12:00:13.029Z",
+      "branch": "subagent-audit-logs",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775131129028-08eju3",
+            "title": "Update subagent model mapping from unsupported spark model",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T11:58:49.028Z",
+            "updated_at": "2026-04-02T11:59:56.190Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T12:47:13.413Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 6,
+        "topic": "Shared subagent-team orchestration module",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T12:23:44.084Z"
+          },
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T12:26:16.819Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "Should meet and run share a common subagent-team orchestration module, and if so what should that module own?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "Lead",
+                "message": "Research summary: audit logs confirm that subagent invocations create child sessions with parent-child linkage, actual model identity, tool events, streamed output, and failure records. team_name is only a coordination label, while continuity comes from child session ids and resume handles. Both meet and run already act like lead-mediated team orchestration, but the implementation is split across mode-specific flows rather than a shared orchestration module.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T12:23:50.562Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "Position: yes, unify meet and run behind a shared subagent-team orchestration module with thin mode adapters. Audit-field signals suggest continuity depends on child session_id/invocation correlation while team_name is only a coordination label, so shared ownership should cover invocation lifecycle, correlation IDs, resume handles, model/tool contracts, and audit envelope emission. Keep meet/run semantics mode-local: meet owns issue/discussion/HOW-panel policies; run owns task DAG, status transitions, and execution guardrails. Migrate via strangler pattern with compatibility shim, dual-write/compare logs, shadow mode first on meet then run, feature-flagged per mode, and instant rollback to legacy path.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T12:26:22.182Z"
+              },
+              {
+                "speaker": "architect",
+                "message": "Position: Yes, unify meet/run behind a shared subagent-team orchestration core, while preserving strict mode adapters. Recommended architecture is Shared Core + Thin Mode Adapters (Option A) over Shared Utilities Only (Option B) and Full Unified Runtime (Option C). Shared owns lifecycle/correlation/resume/audit/policy hooks; mode-specific owns meet issue/decision semantics and run task/dependency/gating semantics. Safest migration: facade -> dual-write audits with invariant checks -> shadow per mode -> flag-guarded cutover with instant rollback and fail-closed fallback to legacy paths.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T12:26:43.124Z"
+              },
+              {
+                "speaker": "Architect",
+                "message": "Position: yes, unify meet/run behind a shared subagent-team orchestration core while preserving strict mode adapters. Options evaluated: (A) shared core + thin mode adapters (recommended), (B) shared utilities only, (C) full unified runtime/state machine. Shared ownership should include lifecycle, correlation/resume routing, audit envelope, and cross-cutting policies. Mode-specific ownership should retain meet decision workflow semantics and run task/dependency pipeline semantics. Safest migration: facade -> dual-write audits -> shadow execution -> feature-flagged cutover with rollback and invariant checks.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T12:27:04.473Z"
+              },
+              {
+                "speaker": "Architect",
+                "message": "Recommendation: meet and run should share a common subagent-team orchestration module only for cross-cutting orchestration concerns. Preferred shape is a shared core plus thin mode adapters. Shared core should own subagent lifecycle, correlation and resume ids, audit envelope emission, and policy hooks such as timeout/retry. meet should keep issue/discussion/decision semantics and HOW-panel continuity; run should keep task/dependency/status/closure semantics and execution gating. Safer alternatives were shared utilities only or a full unified runtime/state machine, but the first leaves drift risk and the second has the highest blast radius.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-02T12:27:33.135Z"
+              },
+              {
+                "speaker": "Lead",
+                "message": "Trade-off summary: shared utilities only is cheaper but does not remove drift; full runtime unification is conceptually clean but likely to regress mode-specific behavior. Shared core plus adapters gives the best risk/reward and aligns with audit-log evidence showing a common lifecycle substrate under different mode semantics. Suggested migration: facade with no behavior change, dual-write audit logs, shadow mode invariant checks, then feature-flagged cutover with rollback.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T12:27:33.187Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt a shared subagent-team orchestration core with thin meet/run adapters",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T12:27:40.531Z"
+              }
+            ],
+            "decision": "Adopt a shared subagent-team orchestration core with thin meet/run adapters",
+            "summary": "Unify only cross-cutting orchestration concerns such as subagent lifecycle, correlation/resume identifiers, audit envelope emission, and policy hooks. Preserve meet-specific issue/discussion/decision continuity and run-specific task/dependency/status/closure behavior. Migrate via facade, dual-write, shadow invariants, and feature-flagged cutover.",
+            "task_refs": [
+              "task-1775133208773-uhlys2",
+              "task-1775133208813-oxt1jg",
+              "task-1775133364881-f8r74k",
+              "task-1775133861132-g7zpdl"
+            ]
+          }
+        ],
+        "research_summary": "Audit logs now show that each subagent invocation creates a child session with parent-child linkage, model identity, tool activity, and resumable session handles. team_name groups related calls but is not itself the persistence key for subagent conversation continuity. Meet and run both already behave like lead-coordinated team orchestration, but the logic is split and not yet represented as one shared orchestration module.",
+        "created_at": "2026-04-02T12:23:44.084Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775132158009-9katrr",
+            "title": "Document subagent audit fields",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T12:15:58.009Z",
+            "updated_at": "2026-04-02T12:16:31.885Z"
+          },
+          {
+            "id": "task-1775133208773-uhlys2",
+            "title": "Design tests-first plan for shared orchestration core",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T12:33:28.772Z",
+            "updated_at": "2026-04-02T12:35:50.285Z"
+          },
+          {
+            "id": "task-1775133208813-oxt1jg",
+            "title": "Implement shared orchestration core module",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775132922201-zdhv4z"
+            ],
+            "created_at": "2026-04-02T12:33:28.813Z",
+            "updated_at": "2026-04-02T12:41:50.456Z"
+          },
+          {
+            "id": "task-1775133364881-f8r74k",
+            "title": "Implement tests for shared orchestration core",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775133208773-uhlys2"
+            ],
+            "created_at": "2026-04-02T12:36:04.881Z",
+            "updated_at": "2026-04-02T12:42:25.996Z"
+          },
+          {
+            "id": "task-1775133861132-g7zpdl",
+            "title": "Align orchestration core e2e tests to filePath API contract",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T12:44:21.132Z",
+            "updated_at": "2026-04-02T12:47:06.260Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 5,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Shared subagent-team orchestration module"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T12:52:02.165Z",
+      "branch": "subagent-audit-logs",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775134180671-0gweqd",
+            "title": "Add follow-up tests for orchestration core continuity edge cases",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T12:49:40.671Z",
+            "updated_at": "2026-04-02T12:51:53.278Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T12:56:38.533Z",
+      "branch": "subagent-audit-logs",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775134495752-p23h7o",
+            "title": "Fix team_name schema mismatch for subagent task execution",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T12:54:55.752Z",
+            "updated_at": "2026-04-02T12:56:38.519Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T13:11:04.272Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 7,
+        "topic": "Apply orchestration core to meet continuity",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T12:59:22.496Z"
+          },
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T13:02:45.021Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "How should meet mode adopt orchestration core continuity with tests-first validation and minimal adapter risk?",
+            "status": "discussing",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "Tests-first plan: add a meet continuity e2e that simulates HOW subagent completion through hooks, then verify nxMeetResume and nxMeetFollowup read core-derived handles even when sidecar is intentionally desynced. Keep sidecar as a debug mirror and fallback only. Minimal implementation: add a small meet continuity adapter, dual-write from hook updates, and switch meet read paths to core-first with sidecar fallback. Inspect orchestration-core state, meet sidecar, and audit logs during validation.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T13:03:00.986Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775134787893-qz9tv1",
+              "task-1775134981049-62raxy",
+              "task-1775135015931-0p075j"
+            ]
+          }
+        ],
+        "research_summary": "The shared orchestration core now tracks subagent invocation lifecycle and runtime-observed continuity handles (child session id, child task id, resume handles). Current meet continuity still reads from meet-sidecar directly. We want meet mode to use the orchestration core as the continuity source while keeping development-time audit logging to verify behavior.",
+        "created_at": "2026-04-02T12:59:22.496Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775134762496-edzwlf",
+            "title": "Verify meet continuity integration",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T12:59:22.495Z",
+            "updated_at": "2026-04-02T13:11:04.239Z"
+          },
+          {
+            "id": "task-1775134787893-qz9tv1",
+            "title": "Design tests-first meet-to-core continuity integration",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T12:59:47.893Z",
+            "updated_at": "2026-04-02T13:02:30.507Z"
+          },
+          {
+            "id": "task-1775134981049-62raxy",
+            "title": "Implement meet continuity integration with orchestration core",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775134787893-qz9tv1"
+            ],
+            "created_at": "2026-04-02T13:03:01.048Z",
+            "updated_at": "2026-04-02T13:09:32.486Z"
+          },
+          {
+            "id": "task-1775135015931-0p075j",
+            "title": "Add meet continuity core e2e coverage",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775134787893-qz9tv1"
+            ],
+            "created_at": "2026-04-02T13:03:35.930Z",
+            "updated_at": "2026-04-02T13:08:10.881Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Apply orchestration core to meet continuity"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T13:27:41.623Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 8,
+        "topic": "Apply orchestration core to run mode",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T13:13:48.846Z"
+          },
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T13:16:46.469Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "How should run mode be rewritten around orchestration-core-first continuity with tests-first validation and minimal regression risk?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Architect plan adopted: run mode should become orchestration-core-first for continuity selection. Add tests first to verify before-hook resume injection, explicit override preservation, no-core safety, after-hook continuity refresh, and persistence across hook recreation. Keep agent-tracker and audit logs for observability, but not as continuity authority. Implement via a thin run continuity adapter plus hook wiring.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T13:16:59.992Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt orchestration-core-first continuity for run mode",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T13:27:12.637Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775135628894-p5jxh1",
+              "task-1775135628957-am5m39",
+              "task-1775135628959-qrtk2l",
+              "task-1775135806469-ykoabs",
+              "task-1775135806474-uzliw2",
+              "task-1775135855777-33e6np",
+              "task-1775135957189-21lwaw",
+              "task-1775135957198-86esmn"
+            ],
+            "decision": "Adopt orchestration-core-first continuity for run mode",
+            "summary": "Run mode now selects continuity from orchestration core first, injects missing resume handles before task execution, and refreshes continuity from observed task completion metadata. Team labels remain grouping and policy signals, while audit logs and agent tracker stay available for observability."
+          }
+        ],
+        "research_summary": "The shared orchestration core already tracks subagent lifecycle and runtime-observed continuity handles. Meet mode now reads continuity core-first with sidecar fallback. Run mode still relies on team labels, agent tracker summaries, and ad hoc delegation/context paths rather than orchestration-core-first continuity selection.",
+        "created_at": "2026-04-02T13:13:48.846Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775135628894-p5jxh1",
+            "title": "Design tests-first run-to-core integration",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T13:13:48.894Z",
+            "updated_at": "2026-04-02T13:16:46.470Z"
+          },
+          {
+            "id": "task-1775135628957-am5m39",
+            "title": "Implement run core integration",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T13:13:48.957Z",
+            "updated_at": "2026-04-02T13:27:34.938Z"
+          },
+          {
+            "id": "task-1775135628959-qrtk2l",
+            "title": "Verify run core integration",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T13:13:48.959Z",
+            "updated_at": "2026-04-02T13:27:12.598Z"
+          },
+          {
+            "id": "task-1775135806474-kkzvkm",
+            "title": "Wire run continuity through hooks",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775135628894-p5jxh1"
+            ],
+            "created_at": "2026-04-02T13:16:46.474Z",
+            "updated_at": "2026-04-02T13:21:46.380Z"
+          },
+          {
+            "id": "task-1775135855777-33e6np",
+            "title": "Implement run continuity adapter module",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775135628957-am5m39"
+            ],
+            "created_at": "2026-04-02T13:17:35.777Z",
+            "updated_at": "2026-04-02T13:18:56.463Z"
+          },
+          {
+            "id": "task-1775135957189-21lwaw",
+            "title": "Implement run continuity adapter",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775135628894-p5jxh1"
+            ],
+            "created_at": "2026-04-02T13:19:17.188Z",
+            "updated_at": "2026-04-02T13:19:33.655Z"
+          },
+          {
+            "id": "task-1775135957198-86esmn",
+            "title": "Add run continuity e2e coverage",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775135628957-am5m39"
+            ],
+            "created_at": "2026-04-02T13:19:17.198Z",
+            "updated_at": "2026-04-02T13:24:40.704Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 7,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Apply orchestration core to run mode"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T13:36:53.744Z",
+      "branch": "subagent-audit-logs",
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775136949383-kb2z3v",
+            "title": "Add resume_handles forwarding and alias-preservation tests",
+            "status": "completed",
+            "owner": "lead",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T13:35:49.383Z",
+            "updated_at": "2026-04-02T13:36:53.735Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "completed_at": "2026-04-02T13:48:04.521Z",
+      "branch": "carry-over",
+      "meet": {
+        "id": 9,
+        "topic": "Next deterministic refactor candidates",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T13:43:07.375Z"
+          },
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-02T13:43:07.394Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "Which remaining area is the highest-value deterministic refactor target under the criteria: weak tests, fragmented/commonizable logic, and avoidable LLM nondeterminism?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Candidate set from code review: (1) nx_context still summarizes handoff from meet-sidecar instead of orchestration core; (2) meet-sidecar continues to persist duplicate continuity state that now overlaps with orchestration core, increasing drift risk; (3) system-prompt and skill prompt files duplicate orchestration rules and mode playbooks in text, which is deterministic in principle but currently spread across multiple prompt builders and can drift away from actual code paths.",
+                "kind": "research",
+                "recorded_at": "2026-04-02T13:43:27.293Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Next best deterministic refactor target is nx_context core-first continuity derivation",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T13:44:48.396Z"
+              }
+            ],
+            "task_refs": [],
+            "decision": "Next best deterministic refactor target is nx_context core-first continuity derivation",
+            "summary": "Refactor nx_context to read handoff and resumable participant summaries from orchestration core first, with explicit sidecar fallback and source observability. After that, reduce meet-sidecar duplicate continuity persistence, then consolidate duplicated orchestration prompt text."
+          }
+        ],
+        "research_summary": "Recent work moved meet and run continuity onto the orchestration core with explicit tests and deterministic hook-level state. Remaining likely refactor targets are places that still duplicate state, rely on sidecar summaries instead of core-derived facts, or encode operational behavior in duplicated prompt text rather than deterministic modules. Initial evidence points to nx_context still reading meet-sidecar directly, meet-sidecar itself persisting overlapping continuity data already present in orchestration core, and system/skill prompt playbooks duplicating run/meet policy text that can drift from deterministic behavior.",
+        "created_at": "2026-04-02T13:43:07.375Z"
+      }
+    },
+    {
+      "completed_at": "2026-04-02T13:58:34.227Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 10,
+        "topic": "Refactor nx_context to orchestration-core-first",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T13:48:04.523Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "How should nx_context be refactored to orchestration-core-first with tests-first verification and minimal blast radius?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Architect plan adopted: strengthen e2e-context first to prove core-first precedence and sidecar fallback per role, then implement minimal nx_context core-first merge logic while preserving output shape. Use focused regression checks against meet/run continuity e2es afterward.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T13:51:41.800Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt orchestration-core-first continuity summaries in nx_context",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T13:58:34.112Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775137684530-dp0uv4",
+              "task-1775137684564-lw44cc",
+              "task-1775137925396-81gii6",
+              "task-1775137925402-sk9kns"
+            ],
+            "decision": "Adopt orchestration-core-first continuity summaries in nx_context",
+            "summary": "nx_context now derives resumable participant and follow-up summaries from orchestration core first, with sidecar fallback per role. Tests-first e2e coverage proves core precedence on mismatch while preserving sidecar fallback and existing context envelope shape."
+          }
+        ],
+        "research_summary": "Meet and run continuity now use orchestration core as source-of-truth, but nx_context still derives handoff/resumable participant summary from meet-sidecar. This creates a last-mile drift risk. The refactor target is to make nx_context core-first with explicit sidecar fallback and source observability, using tests-first implementation.",
+        "created_at": "2026-04-02T13:48:04.523Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775137684530-dp0uv4",
+            "title": "Design tests-first nx_context core-first refactor",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T13:48:04.530Z",
+            "updated_at": "2026-04-02T13:51:41.834Z"
+          },
+          {
+            "id": "task-1775137684564-lw44cc",
+            "title": "Verify nx_context core-first integration",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T13:48:04.564Z",
+            "updated_at": "2026-04-02T13:58:34.112Z"
+          },
+          {
+            "id": "task-1775137925396-81gii6",
+            "title": "Add nx_context core-first e2e coverage",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775137684530-dp0uv4"
+            ],
+            "created_at": "2026-04-02T13:52:05.395Z",
+            "updated_at": "2026-04-02T13:54:26.247Z"
+          },
+          {
+            "id": "task-1775137925402-sk9kns",
+            "title": "Implement nx_context core-first merge logic",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775137684530-dp0uv4"
+            ],
+            "created_at": "2026-04-02T13:52:05.402Z",
+            "updated_at": "2026-04-02T13:56:56.150Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Refactor nx_context to orchestration-core-first"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T14:50:44.825Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 11,
+        "topic": "Rename orchestration state and strengthen meet.opencode projection",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T14:37:09.231Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "How should we execute the orchestration filename rename and meet.opencode membership/projection consolidation with tests-first sequencing and minimal regression risk?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Architect plan adopted: first add failing tests for new orchestration filename and the stricter source-of-truth split, then implement the canonical path rename plus legacy read fallback, then tighten meet.opencode projection ownership, then align consumers and run full regressions.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T14:40:05.539Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt orchestration.opencode.json as canonical orchestration state and keep meet.opencode.json as non-authoritative meet projection",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T14:50:19.050Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775140660357-ack2y7",
+              "task-1775140660380-ypcdc4",
+              "task-1775140661068-ynqxww",
+              "task-1775140805545-gptgxa",
+              "task-1775140805548-ipl8zg",
+              "task-1775140805567-ibxm5j",
+              "task-1775140844824-t2j3j2",
+              "task-1775141080706-zj1582"
+            ],
+            "decision": "Adopt orchestration.opencode.json as canonical orchestration state and keep meet.opencode.json as non-authoritative meet projection",
+            "summary": "The orchestration continuity file is now OpenCode-scoped and legacy-readable via fallback, while meet.opencode.json remains responsible for meet panel membership and handoff/view state only. Resumability decisions now come exclusively from orchestration state, and regression tests cover canonical path migration, stale sidecar rejection, and context alignment."
+          }
+        ],
+        "research_summary": "Decision basis: keep orchestration state separate from meet projection, but make platform ownership explicit. Rename `orchestration-core.v1.json` to an OpenCode-scoped filename such as `orchestration.opencode.json`. Strengthen `meet.opencode.json` as the meet projection file that owns panel membership and handoff/view state, while continuity remains sourced from orchestration state. Implementation should be tests-first, with parallelized engineering units where dependencies allow, and final QA verification.",
+        "created_at": "2026-04-02T14:37:09.231Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775140629231-gmgvxh",
+            "title": "Implement meet.opencode membership/projection consolidation",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T14:37:09.229Z",
+            "updated_at": "2026-04-02T14:50:27.026Z"
+          },
+          {
+            "id": "task-1775140660357-ack2y7",
+            "title": "Design tests-first plan for orchestration rename and meet projection consolidation",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T14:37:40.357Z",
+            "updated_at": "2026-04-02T14:40:05.546Z"
+          },
+          {
+            "id": "task-1775140660380-ypcdc4",
+            "title": "Implement orchestration filename rename",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T14:37:40.380Z",
+            "updated_at": "2026-04-02T14:50:37.380Z"
+          },
+          {
+            "id": "task-1775140661068-ynqxww",
+            "title": "Verify orchestration rename and meet projection consolidation",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T14:37:41.068Z",
+            "updated_at": "2026-04-02T14:50:27.036Z"
+          },
+          {
+            "id": "task-1775140805548-ipl8zg",
+            "title": "Implement orchestration path migration and legacy fallback",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775140660357-ack2y7"
+            ],
+            "created_at": "2026-04-02T14:40:05.547Z",
+            "updated_at": "2026-04-02T14:49:24.233Z"
+          },
+          {
+            "id": "task-1775140805567-ibxm5j",
+            "title": "Align meet/context consumers to projection-only meet.opencode",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775140660357-ack2y7"
+            ],
+            "created_at": "2026-04-02T14:40:05.567Z",
+            "updated_at": "2026-04-02T14:49:24.292Z"
+          },
+          {
+            "id": "task-1775140844824-t2j3j2",
+            "title": "Add failing e2e tests for orchestration state split decisions",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775140660357-ack2y7"
+            ],
+            "created_at": "2026-04-02T14:40:44.824Z",
+            "updated_at": "2026-04-02T14:44:08.882Z"
+          },
+          {
+            "id": "task-1775141080707-1x30sy",
+            "title": "Implement legacy-compatible orchestration path migration",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775140660357-ack2y7"
+            ],
+            "created_at": "2026-04-02T14:44:40.706Z",
+            "updated_at": "2026-04-02T14:46:38.452Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 8,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Rename orchestration state and strengthen meet.opencode projection"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T23:29:19.295Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 12,
+        "topic": "Reshape nx_context handoff and drop orchestration legacy fallback",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T23:21:39.685Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "How should nx_context be reshaped with tests-first verification, and how should orchestration legacy fallback be removed safely in the same change?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Architect plan adopted: tests first. Update e2e-context to assert separated sections for panelMembership, resumability, and followup reasons, and update orchestration filename migration test to assert legacy fallback is gone. Then implement context reshape and fallback removal in parallel, followed by focused regressions and QA.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T23:23:38.690Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Adopt separated handoff sections in nx_context and remove orchestration legacy fallback",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T23:29:00.352Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775172099689-illouk",
+              "task-1775172099695-6gc5vt",
+              "task-1775172099705-hsl6pf",
+              "task-1775172218727-gg28mo",
+              "task-1775172267809-dcs32u",
+              "task-1775172339774-8oxp38",
+              "task-1775172339787-0z4bt3"
+            ],
+            "decision": "Adopt separated handoff sections in nx_context and remove orchestration legacy fallback",
+            "summary": "nx_context now exposes panel membership, resumability, and follow-up suggestions as distinct sections with explicit reasons, reducing semantic ambiguity. Orchestration state reads now honor only the canonical orchestration.opencode.json path, with no legacy orchestration-core.v1.json fallback."
+          }
+        ],
+        "research_summary": "Current nx_context mixes panel membership, resumability, and follow-up suggestion in one handoff block. We want a clearer structure that separates panel membership, resumability, and follow-up reasons while preserving operational usefulness. In the same phase, we can drop legacy fallback for `orchestration-core.v1.json` because no user migration compatibility is required yet.",
+        "created_at": "2026-04-02T23:21:39.685Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775172099689-illouk",
+            "title": "Design tests-first nx_context reshape and legacy fallback removal",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:21:39.689Z",
+            "updated_at": "2026-04-02T23:23:38.728Z"
+          },
+          {
+            "id": "task-1775172099695-6gc5vt",
+            "title": "Remove orchestration legacy fallback",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:21:39.695Z",
+            "updated_at": "2026-04-02T23:29:10.991Z"
+          },
+          {
+            "id": "task-1775172099705-hsl6pf",
+            "title": "Verify nx_context reshape and fallback removal",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:21:39.705Z",
+            "updated_at": "2026-04-02T23:29:00.322Z"
+          },
+          {
+            "id": "task-1775172267809-dcs32u",
+            "title": "Write failing e2e tests for nx_context contract and no-legacy-fallback",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:24:27.809Z",
+            "updated_at": "2026-04-02T23:25:18.931Z"
+          },
+          {
+            "id": "task-1775172339774-8oxp38",
+            "title": "Implement nx_context separated handoff sections",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775172099689-illouk"
+            ],
+            "created_at": "2026-04-02T23:25:39.774Z",
+            "updated_at": "2026-04-02T23:28:04.266Z"
+          },
+          {
+            "id": "task-1775172339787-0z4bt3",
+            "title": "Remove orchestration-core legacy read fallback",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775172099689-illouk"
+            ],
+            "created_at": "2026-04-02T23:25:39.787Z",
+            "updated_at": "2026-04-02T23:29:11.018Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 6,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Reshape nx_context handoff and drop orchestration legacy fallback"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-02T23:39:13.243Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 13,
+        "topic": "Investigate recurring task/id errors",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-02T23:32:03.603Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "What is the root cause of the recurring id-related errors during task creation and subagent coordination, and what minimal fix should we implement?",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Architect hypotheses adopted: separate Nexus task ids from OpenCode task-tool resume handles using a 3-lane test matrix (Nexus-only, task-tool-only, integration lineage). Most likely root cause is contract confusion because task tool task_id validates as a session handle (`ses...`) while Nexus task ids are `task-...` strings.",
+                "kind": "summary",
+                "recorded_at": "2026-04-02T23:33:16.196Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "Treat Nexus task ids and OpenCode task-tool resume handles as separate ID classes",
+                "kind": "decision",
+                "recorded_at": "2026-04-02T23:38:47.155Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775172744248-rt8ey9",
+              "task-1775172744273-um4895",
+              "task-1775172827964-3tb6oa",
+              "task-1775172828099-aig8zh",
+              "task-1775172879632-f4l1ro",
+              "task-1775172879667-pgzric",
+              "task-1775172908859-0y2bpf"
+            ],
+            "decision": "Treat Nexus task ids and OpenCode task-tool resume handles as separate ID classes",
+            "summary": "Root cause was not broken Nexus task persistence but mixing two different id domains: Nexus task ids (`task-...`) for nx_task_* tools and OpenCode session handles (`ses_...`) for resuming the external task tool. We added targeted tests, clearer nx_task_update errors for ses_ misuse, and explicit meet output fields that identify the OpenCode task-tool resume handle."
+          }
+        ],
+        "research_summary": "During recent work we repeatedly hit id-related errors while coordinating tasks and subagents, including task lookups that did not match expected ids and task tool invocations that rejected provided ids. We need a tests-first investigation to determine whether the issue is in Nexus task-state handling, OpenCode task tool contract expectations, or our wrapper logic around ids.",
+        "created_at": "2026-04-02T23:32:03.603Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775172723603-e0uqqk",
+            "title": "Verify id error fix",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:32:03.601Z",
+            "updated_at": "2026-04-02T23:38:47.156Z"
+          },
+          {
+            "id": "task-1775172744248-rt8ey9",
+            "title": "Design tests-first investigation for id errors",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:32:24.248Z",
+            "updated_at": "2026-04-02T23:39:00.565Z"
+          },
+          {
+            "id": "task-1775172744273-um4895",
+            "title": "Investigate and fix id error root cause",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-02T23:32:24.273Z",
+            "updated_at": "2026-04-02T23:39:00.579Z"
+          },
+          {
+            "id": "task-1775172827964-3tb6oa",
+            "title": "Add id-lineage regression tests",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775172744248-rt8ey9"
+            ],
+            "created_at": "2026-04-02T23:33:47.962Z",
+            "updated_at": "2026-04-02T23:39:09.574Z"
+          },
+          {
+            "id": "task-1775172828099-aig8zh",
+            "title": "Implement id-class guards and clearer delegation output",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775172744248-rt8ey9"
+            ],
+            "created_at": "2026-04-02T23:33:48.099Z",
+            "updated_at": "2026-04-02T23:37:35.644Z"
+          },
+          {
+            "id": "task-1775172879632-f4l1ro",
+            "title": "Add regression tests for id-class separation",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775172744248-rt8ey9"
+            ],
+            "created_at": "2026-04-02T23:34:39.631Z",
+            "updated_at": "2026-04-02T23:36:21.785Z"
+          },
+          {
+            "id": "task-1775172908859-0y2bpf",
+            "title": "Implement id-class separation fix in task and meet tools",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775172827964-3tb6oa"
+            ],
+            "created_at": "2026-04-02T23:35:08.859Z",
+            "updated_at": "2026-04-02T23:36:55.675Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 7,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Investigate recurring task/id errors"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-03T00:36:02.320Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 14,
+        "topic": "Modularize pipeline stage evaluation",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-03T00:20:05.084Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "How should we extract a deterministic pipeline evaluator module with tests-first validation and minimal regression risk?",
+            "status": "discussing",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Architect plan adopted: extract a pure pipeline stage evaluator over a normalized snapshot, lock it with table-driven tests first, then wire hooks/task close/notice selection to that evaluator while keeping qa-trigger as a signal provider. Final validation is targeted regressions plus full e2e sweep.",
+                "kind": "summary",
+                "recorded_at": "2026-04-03T00:22:38.331Z"
+              }
+            ],
+            "task_refs": [
+              "task-1775175605086-7gbi0r",
+              "task-1775175605113-76vo1n",
+              "task-1775175758360-8ldm3r",
+              "task-1775175937694-67r7k9",
+              "task-1775175984744-78fso5"
+            ]
+          }
+        ],
+        "research_summary": "Current task/run pipeline logic is fragmented across hooks, task tools, system prompts, tag notices, and qa-trigger logic. The shared deterministic core is a stage evaluator that can answer what phase the cycle is in, what actions are allowed next, whether edits are allowed, whether close is allowed, and whether QA should be triggered. We want a tests-first refactor that extracts this evaluator and reuses it across hooks and prompt/notice generation with minimal behavior drift.",
+        "created_at": "2026-04-03T00:20:05.084Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775173703475-gowbwl",
+            "title": "Make Nexus task outputs explicit",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "",
+            "deps": [],
+            "created_at": "2026-04-02T23:48:23.475Z",
+            "updated_at": "2026-04-02T23:49:49.882Z"
+          },
+          {
+            "id": "task-1775175605086-7gbi0r",
+            "title": "Design tests-first plan for pipeline evaluator refactor",
+            "status": "completed",
+            "owner": "architect",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-03T00:20:05.084Z",
+            "updated_at": "2026-04-03T00:22:38.331Z"
+          },
+          {
+            "id": "task-1775175605113-76vo1n",
+            "title": "Verify pipeline evaluator refactor",
+            "status": "completed",
+            "owner": "qa",
+            "meet_issue": "issue-1",
+            "deps": [],
+            "created_at": "2026-04-03T00:20:05.112Z",
+            "updated_at": "2026-04-03T00:36:02.294Z"
+          },
+          {
+            "id": "task-1775175758360-8ldm3r",
+            "title": "Add failing tests for pipeline evaluator contract",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775175605086-7gbi0r"
+            ],
+            "created_at": "2026-04-03T00:22:38.359Z",
+            "updated_at": "2026-04-03T00:25:30.683Z"
+          },
+          {
+            "id": "task-1775175937694-67r7k9",
+            "title": "Wire hooks notices and close-guards to pipeline evaluator",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775175605086-7gbi0r"
+            ],
+            "created_at": "2026-04-03T00:25:37.694Z",
+            "updated_at": "2026-04-03T00:30:46.994Z"
+          },
+          {
+            "id": "task-1775175984744-78fso5",
+            "title": "Implement pure pipeline evaluator snapshot contract",
+            "status": "completed",
+            "owner": "engineer",
+            "meet_issue": "issue-1",
+            "deps": [
+              "task-1775175605086-7gbi0r"
+            ],
+            "created_at": "2026-04-03T00:26:24.743Z",
+            "updated_at": "2026-04-03T00:27:32.596Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 6,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Modularize pipeline stage evaluation"
+        ]
+      }
+    },
+    {
+      "completed_at": "2026-04-05T01:31:21.642Z",
+      "branch": "subagent-audit-logs",
+      "meet": {
+        "id": 15,
+        "topic": "Next shared-core extraction candidates",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-03T01:58:21.113Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": "issue-1",
+            "title": "What is the next best common feature to extract now that orchestration core and pipeline evaluator are in place?",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "Next best common extraction is a shared continuity-to-output adapter for meet/context",
+                "kind": "decision",
+                "recorded_at": "2026-04-03T01:59:28.085Z"
+              }
+            ],
+            "task_refs": [],
+            "decision": "Next best common extraction is a shared continuity-to-output adapter for meet/context",
+            "summary": "Extract a pure adapter that canonicalizes continuity output fields and precedence rules across meet and context. Defer run guidance formatting and pipeline snapshot shaping for now because they are lower correctness risk than continuity contract drift."
+          }
+        ],
+        "research_summary": "Recent refactors extracted orchestration continuity and a deterministic pipeline evaluator, then rewired meet/run/context to use them. The next likely refactor target should again satisfy: deterministic behavior available in principle, current logic fragmented across multiple files, and weak or drift-prone coupling between code and prompts/views. Initial candidates from code review include repeated task-summary expansion and pipeline snapshot shaping, repeated continuity-to-output mapping across meet/context/run, and remaining prompt/notice duplication for guidance keys and user-facing notices.",
+        "created_at": "2026-04-03T01:58:21.113Z"
+      },
+      "tasks": {
+        "tasks": [
+          {
+            "id": "task-1775349561068-ya9hfj",
+            "title": "Update subagent models to minimax-m2.7",
+            "status": "completed",
+            "created_at": "2026-04-05T00:39:21.068Z",
+            "updated_at": "2026-04-05T00:39:35.173Z"
+          }
+        ]
+      },
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 1,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": [
+          "Next shared-core extraction candidates"
+        ]
+      }
     }
   ]
 }

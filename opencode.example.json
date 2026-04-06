@@ -12,7 +12,7 @@
     "architect": {
       "description": "Technical design and architecture review",
       "mode": "subagent",
-      "model": "openai/gpt-5.3-codex",
+      "model": "opencode-go/minimax-m2.7",
       "tools": {
         "edit": false,
         "write": false,
@@ -25,7 +25,7 @@
     "engineer": {
       "description": "Code implementation and debugging",
       "mode": "subagent",
-      "model": "openai/gpt-5.3-codex-spark",
+      "model": "opencode-go/minimax-m2.7",
       "tools": {
         "nx_task_add": false
       }
@@ -33,7 +33,7 @@
     "qa": {
       "description": "Verification and test-focused review",
       "mode": "subagent",
-      "model": "openai/gpt-5.3-codex-spark",
+      "model": "opencode-go/minimax-m2.7",
       "tools": {
         "nx_task_add": false
       }
