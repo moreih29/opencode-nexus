@@ -20,18 +20,18 @@ const naturalMeet = { parts: [{ type: "text", text: "회의로 먼저 방향을 
 await hooks["chat.message"]({ sessionID: "s1" }, naturalMeet);
 assert.equal(naturalMeet.parts.length, 1);
 
-const taggedMeet = { parts: [{ type: "text", text: "[meet] 방향을 먼저 정하자" }] };
+const taggedMeet = { parts: [{ type: "text", text: "[plan] 방향을 먼저 정하자" }] };
 await hooks["chat.message"]({ sessionID: "s1-tag" }, taggedMeet);
 assert.equal(taggedMeet.parts.length, 1);
 
 await fs.writeFile(
-  paths.MEET_FILE,
+  paths.PLAN_FILE,
   JSON.stringify(
     {
       id: 1,
       topic: "Hook test",
       attendees: [{ role: "lead", name: "Lead", joined_at: new Date().toISOString() }],
-      issues: [{ id: "issue-1", title: "Decide API shape", status: "pending", discussion: [] }],
+      issues: [{ id: 1, title: "Decide API shape", status: "pending", discussion: [] }],
       created_at: new Date().toISOString()
     },
     null,
@@ -40,9 +40,9 @@ await fs.writeFile(
   "utf8"
 );
 
-const meetReminder = { parts: [{ type: "text", text: "계속 진행하자" }] };
-await hooks["chat.message"]({ sessionID: "s2" }, meetReminder);
-assert.equal(meetReminder.parts.length, 1);
+const planReminder = { parts: [{ type: "text", text: "계속 진행하자" }] };
+await hooks["chat.message"]({ sessionID: "s2" }, planReminder);
+assert.equal(planReminder.parts.length, 1);
 
 const attendeePrompt = { parts: [{ type: "text", text: "아키텍트 참석시켜" }] };
 await hooks["chat.message"]({ sessionID: "s3" }, attendeePrompt);
@@ -52,14 +52,14 @@ const decidePrompt = { parts: [{ type: "text", text: "[d] 이걸로 결정하자
 await hooks["chat.message"]({ sessionID: "s3b" }, decidePrompt);
 assert.equal(decidePrompt.parts.length, 1);
 
-await fs.unlink(paths.MEET_FILE);
+await fs.unlink(paths.PLAN_FILE);
 await fs.writeFile(
   paths.TASKS_FILE,
   JSON.stringify(
     {
       tasks: [
         {
-          id: "task-1",
+          id: 1,
           title: "Implement hook parity",
           status: "blocked",
           created_at: new Date().toISOString(),

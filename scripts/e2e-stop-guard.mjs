@@ -17,7 +17,7 @@ const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 await fs.writeFile(
   paths.TASKS_FILE,
-  JSON.stringify({ tasks: [{ id: "t1", title: "x", status: "pending", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
+  JSON.stringify({ tasks: [{ id: 1, title: "x", status: "pending", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
   "utf8"
 );
 
@@ -33,7 +33,7 @@ assert.match(out2.parts[0].text, /Active tasks still remain/i);
 
 await fs.writeFile(
   paths.TASKS_FILE,
-  JSON.stringify({ tasks: [{ id: "t2", title: "done", status: "completed", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
+  JSON.stringify({ tasks: [{ id: 2, title: "done", status: "completed", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
   "utf8"
 );
 

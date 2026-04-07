@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxMeetStart } from "../dist/tools/meet.js";
+import { nxPlanStart } from "../dist/tools/meet.js";
 import { nxTaskAdd, nxTaskClose, nxTaskUpdate } from "../dist/tools/task.js";
 import { nxInit, nxSync } from "../dist/tools/workflow.js";
 
@@ -56,7 +56,7 @@ assert.equal(initResult.identityNeedsConfirmation, false);
 assert.equal(initResult.instructionFiles.primary, "AGENTS.md");
 assert.equal(initResult.instructionFiles.legacy, "CLAUDE.md");
 
-await nxMeetStart.execute(
+await nxPlanStart.execute(
   {
     topic: "Init sync",
     research_summary: "repo scan complete",
@@ -65,7 +65,7 @@ await nxMeetStart.execute(
   },
   ctx
 );
-await nxTaskAdd.execute({ title: "Implement sync flow", meet_issue: "issue-1" }, ctx);
+await nxTaskAdd.execute({ title: "Implement sync flow", plan_issue: 1 }, ctx);
 const tasksFile = JSON.parse(await fs.readFile(paths.TASKS_FILE, "utf8"));
 await nxTaskUpdate.execute({ id: tasksFile.tasks[0].id, status: "completed" }, ctx);
 await nxTaskClose.execute({ archive: true }, ctx);

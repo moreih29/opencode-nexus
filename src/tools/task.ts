@@ -6,14 +6,14 @@ import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pip
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
 import { fileExists } from "../shared/state.js";
-import { MeetFileSchema, TasksFileSchema, type MeetFile, type TaskItem, type TasksFile } from "../shared/schema.js";
+import { PlanFileSchema, TasksFileSchema, type PlanFile, type TaskItem, type TasksFile } from "../shared/schema.js";
 
 const z = tool.schema;
 
 interface PipelineEvaluatorSnapshot {
   hasTasksFile: boolean;
   hasTaskCycle: boolean;
-  tasks: Array<{ id?: string; status: TaskItem["status"] }>;
+  tasks: Array<{ id?: number; status: TaskItem["status"] }>;
   qaTriggerReasons: string[];
 }
 
@@ -36,33 +36,50 @@ export const nxTaskAdd = tool({
   args: {
     title: z.string(),
     owner: z.string().optional(),
-    meet_issue: z.string().optional(),
-    deps: z.array(z.string()).optional()
+    plan_issue: z.number().optional(),
+    deps: z.array(z.number()).optional(),
+    context: z.string().optional(),
+    approach: z.string().optional(),
+    acceptance: z.string().optional(),
+    risk: z.string().optional(),
+    goal: z.string().optional(),
+    decisions: z.array(z.string()).optional()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const now = new Date().toISOString();
 
     const tasksFile = await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] });
-    const id = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = (tasksFile.tasks.length > 0 ? Math.max(...tasksFile.tasks.map(t => t.id)) : 0) + 1;
     const task: TaskItem = {
       id,
       title: args.title,
       status: "pending",
       owner: args.owner,
-      meet_issue: args.meet_issue,
+      plan_issue: args.plan_issue,
       deps: args.deps,
       created_at: now,
-      updated_at: now
+      updated_at: now,
+      context: args.context,
+      approach: args.approach,
+      acceptance: args.acceptance,
+      risk: args.risk
     };
+
+    if (args.goal !== undefined) {
+      tasksFile.goal = args.goal;
+    }
+    if (args.decisions !== undefined) {
+      tasksFile.decisions = [...(tasksFile.decisions ?? []), ...args.decisions];
+    }
 
     tasksFile.tasks.push(task);
     TasksFileSchema.parse(tasksFile);
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
-    await syncMeetIssueTaskLink(paths.MEET_FILE, args.meet_issue, id);
+    await syncPlanIssueTaskLink(paths.PLAN_FILE, args.plan_issue, id);
 
-    const meetActive = await fileExists(paths.MEET_FILE);
-    const linkageNote = meetActive && !args.meet_issue ? " Link this task to its meet issue with meet_issue when possible." : "";
+    const planActive = await fileExists(paths.PLAN_FILE);
+    const linkageNote = planActive && !args.plan_issue ? " Link this task to its plan issue with plan_issue when possible." : "";
 
     return JSON.stringify(
       {
@@ -70,7 +87,7 @@ export const nxTaskAdd = tool({
         title: args.title,
         status: task.status,
         owner: task.owner ?? null,
-        meet_issue: task.meet_issue ?? null,
+        plan_issue: task.plan_issue ?? null,
         message: `Added task ${id}: ${args.title}${linkageNote}`
       },
       null,
@@ -110,7 +127,7 @@ export const nxTaskList = tool({
 export const nxTaskUpdate = tool({
   description: "Update task status",
   args: {
-    id: z.string(),
+    id: z.number(),
     status: z.enum(["pending", "in_progress", "completed", "blocked"]),
     note: z.string().optional()
   },
@@ -121,11 +138,6 @@ export const nxTaskUpdate = tool({
     const task = tasksFile.tasks.find((item) => item.id === args.id);
 
     if (!task) {
-      if (isOpenCodeSessionID(args.id)) {
-        throw new Error(
-          `Task not found: ${args.id}. This looks like an OpenCode session id (ses_...). nx_task_update expects a Nexus task id (task-...).`
-        );
-      }
       throw new Error(`Task not found: ${args.id}`);
     }
 
@@ -162,7 +174,7 @@ export const nxTaskClose = tool({
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    const meet = await readJsonFile<Record<string, unknown> | null>(paths.MEET_FILE, null);
+    const plan = await readJsonFile<Record<string, unknown> | null>(paths.PLAN_FILE, null);
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
     const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
 
@@ -180,8 +192,8 @@ export const nxTaskClose = tool({
     }
 
     const taskCount = tasks?.tasks.length ?? 0;
-    const decisionCount = Array.isArray((meet as { issues?: unknown[] } | null)?.issues)
-      ? ((meet as { issues: Array<{ decision?: unknown }> }).issues.filter((issue) => issue.decision).length)
+    const decisionCount = Array.isArray((plan as { issues?: unknown[] } | null)?.issues)
+      ? ((plan as { issues: Array<{ decision?: unknown }> }).issues.filter((issue) => issue.decision).length)
       : 0;
 
     const memoryHint = {
@@ -190,21 +202,21 @@ export const nxTaskClose = tool({
       hadLoopDetection: tracker.reopenCount > 0 || tracker.blockedTransitions > 0,
       reopenCount: tracker.reopenCount,
       blockedTransitions: tracker.blockedTransitions,
-      cycleTopics: [typeof (meet as { topic?: unknown } | null)?.topic === "string" ? (meet as { topic: string }).topic : ""]
+      cycleTopics: [typeof (plan as { topic?: unknown } | null)?.topic === "string" ? (plan as { topic: string }).topic : ""]
         .filter(Boolean)
     };
 
-    if (args.archive && (meet || tasks)) {
+    if (args.archive && (plan || tasks)) {
       await appendHistory(paths.HISTORY_FILE, {
         completed_at: new Date().toISOString(),
         branch: await readCurrentBranch(context.worktree ?? context.directory),
-        meet: meet ?? undefined,
+        plan: plan ?? undefined,
         tasks: tasks ?? undefined,
         memoryHint
       });
     }
 
-    await safeUnlink(paths.MEET_FILE);
+    await safeUnlink(paths.PLAN_FILE);
     await safeUnlink(paths.TASKS_FILE);
     await safeUnlink(paths.STOP_WARNED_FILE);
     await writeJsonFile(paths.REOPEN_TRACKER_FILE, { reopenCount: 0, blockedTransitions: 0 });
@@ -231,13 +243,13 @@ async function safeUnlink(filePath: string): Promise<void> {
   }
 }
 
-async function syncMeetIssueTaskLink(meetFile: string, issueID: string | undefined, taskID: string): Promise<void> {
-  if (!issueID || !(await fileExists(meetFile))) {
+async function syncPlanIssueTaskLink(planFile: string, issueID: number | undefined, taskID: number): Promise<void> {
+  if (!issueID || !(await fileExists(planFile))) {
     return;
   }
 
-  const meet = MeetFileSchema.parse(await readJsonFile<MeetFile>(meetFile, {} as MeetFile));
-  const issue = meet.issues.find((item) => item.id === issueID);
+  const plan = PlanFileSchema.parse(await readJsonFile<PlanFile>(planFile, {} as PlanFile));
+  const issue = plan.issues.find((item) => item.id === issueID);
   if (!issue) {
     return;
   }
@@ -246,7 +258,7 @@ async function syncMeetIssueTaskLink(meetFile: string, issueID: string | undefin
   if (issue.decision) {
     issue.status = "tasked";
   }
-  await writeJsonFile(meetFile, meet);
+  await writeJsonFile(planFile, plan);
 }
 
 async function readCurrentBranch(projectRoot: string): Promise<string> {

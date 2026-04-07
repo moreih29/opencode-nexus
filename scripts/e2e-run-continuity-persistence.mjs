@@ -24,7 +24,7 @@ await fs.writeFile(
           title: "Run continuity persistence",
           status: "in_progress",
           owner: "engineer",
-          meet_issue: "issue-1",
+          plan_issue: 1,
           deps: [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

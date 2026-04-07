@@ -12,6 +12,6 @@ export function requiresTeamInRunMode(agentType: string): boolean {
   return agent.category === "do" || agent.category === "check";
 }
 
-export function canJoinMeetWithoutTeam(role: string): boolean {
+export function canJoinPlanWithoutTeam(role: string): boolean {
   return role.toLowerCase() === "lead";
 }

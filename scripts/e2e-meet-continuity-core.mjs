@@ -7,7 +7,7 @@ import { createHooks } from "../dist/plugin/hooks.js";
 import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxMeetFollowup, nxMeetJoin, nxMeetResume, nxMeetStart } from "../dist/tools/meet.js";
+import { nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart } from "../dist/tools/meet.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-meet-core-first-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });
@@ -19,7 +19,7 @@ await ensureNexusStructure(paths);
 
 const hooks = createHooks({ directory: root, worktree: root, state: createPluginState() });
 
-const started = await nxMeetStart.execute(
+const started = await nxPlanStart.execute(
   {
     topic: "Core continuity precedence",
     research_summary: "Validate continuity source ordering.",
@@ -28,11 +28,11 @@ const started = await nxMeetStart.execute(
   },
   ctx
 );
-assert.match(started, /Meet started/);
+assert.match(started, /Plan started/);
 
 const delegationArgs = {
   subagent_type: "architect",
-  team_name: "meet-panel",
+  team_name: "plan-panel",
   description: "Validate continuity precedence"
 };
 
@@ -60,18 +60,18 @@ await hooks["tool.execute.after"](
 
 await logState("after hook completion", paths);
 
-const sidecar = await readJson(paths.MEET_SIDECAR_FILE);
+const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
 const architect = sidecar.panel.participants.find((item) => item.role.toLowerCase() === "architect");
 assert.ok(architect, "architect participant must exist in sidecar after meet start");
 architect.task_id = "sidecar-task-architect-desync";
 architect.session_id = "sidecar-session-architect-desync";
 architect.updated_at = new Date().toISOString();
-await fs.writeFile(paths.MEET_SIDECAR_FILE, `${JSON.stringify(sidecar, null, 2)}\n`, "utf8");
+await fs.writeFile(paths.PLAN_SIDECAR_FILE, `${JSON.stringify(sidecar, null, 2)}\n`, "utf8");
 
 await logState("after intentional sidecar desync", paths);
 
 const resumeArchitect = parseToolJson(
-  await nxMeetResume.execute(
+  await nxPlanResume.execute(
     { role: "architect", question: "What continuity should we use now?" },
     ctx
   )
@@ -79,25 +79,25 @@ const resumeArchitect = parseToolJson(
 assert.equal(
   resumeArchitect.task_id,
   coreHandles.task_id,
-  "nxMeetResume should prefer orchestration core task continuity over sidecar"
+  "nxPlanResume should prefer orchestration core task continuity over sidecar"
 );
 assert.equal(
   resumeArchitect.session_id,
   coreHandles.session_id,
-  "nxMeetResume should prefer orchestration core session continuity over sidecar"
+  "nxPlanResume should prefer orchestration core session continuity over sidecar"
 );
 assert.equal(
   resumeArchitect.opencode_task_tool_resume_handle,
   coreHandles.session_id,
-  "nxMeetResume should expose the OpenCode task-tool resume handle explicitly"
+  "nxPlanResume should expose the OpenCode task-tool resume handle explicitly"
 );
 
 const followupArchitect = parseToolJson(
-  await nxMeetFollowup.execute(
+  await nxPlanFollowup.execute(
     {
       role: "architect",
       question: "Continue continuity validation",
-      issue_id: "issue-1"
+      issue_id: 1
     },
     ctx
   )
@@ -105,46 +105,46 @@ const followupArchitect = parseToolJson(
 assert.equal(
   followupArchitect.delegation.resume_task_id,
   coreHandles.task_id,
-  "nxMeetFollowup should emit core task continuity for delegation"
+  "nxPlanFollowup should emit core task continuity for delegation"
 );
 assert.equal(
   followupArchitect.delegation.resume_session_id,
   coreHandles.session_id,
-  "nxMeetFollowup should emit core session continuity for delegation"
+  "nxPlanFollowup should emit core session continuity for delegation"
 );
 assert.equal(
   followupArchitect.delegation.opencode_task_tool_resume_handle,
   coreHandles.session_id,
-  "nxMeetFollowup should expose an explicit OpenCode task-tool resume handle"
+  "nxPlanFollowup should expose an explicit OpenCode task-tool resume handle"
 );
 
-await nxMeetJoin.execute({ role: "strategist", name: "Strategist" }, ctx);
-const sidecarWithStrategist = await readJson(paths.MEET_SIDECAR_FILE);
+await nxPlanJoin.execute({ role: "strategist", name: "Strategist" }, ctx);
+const sidecarWithStrategist = await readJson(paths.PLAN_SIDECAR_FILE);
 const strategist = sidecarWithStrategist.panel.participants.find((item) => item.role.toLowerCase() === "strategist");
 assert.ok(strategist, "strategist participant must exist in sidecar after joining meet");
 strategist.task_id = "sidecar-task-strategist-only";
 strategist.session_id = "sidecar-session-strategist-only";
 strategist.updated_at = new Date().toISOString();
-await fs.writeFile(paths.MEET_SIDECAR_FILE, `${JSON.stringify(sidecarWithStrategist, null, 2)}\n`, "utf8");
+await fs.writeFile(paths.PLAN_SIDECAR_FILE, `${JSON.stringify(sidecarWithStrategist, null, 2)}\n`, "utf8");
 
 await logState("after fallback sidecar continuity setup", paths);
 
-const resumeStrategist = await nxMeetResume.execute(
+const resumeStrategist = await nxPlanResume.execute(
   { role: "strategist", question: "Continue strategist thread" },
   ctx
 );
 assert.equal(
   resumeStrategist,
   "No participant continuity found for strategist.",
-  "nxMeetResume should not resume from meet sidecar when orchestration has no continuity"
+  "nxPlanResume should not resume from meet sidecar when orchestration has no continuity"
 );
 
 const followupStrategist = parseToolJson(
-  await nxMeetFollowup.execute(
+  await nxPlanFollowup.execute(
     {
       role: "strategist",
       question: "Continue strategist thread",
-      issue_id: "issue-1"
+      issue_id: 1
     },
     ctx
   )
@@ -152,20 +152,20 @@ const followupStrategist = parseToolJson(
 assert.equal(
   followupStrategist.recommendation.mode,
   "rehydrate-from-summary",
-  "nxMeetFollowup should avoid resume-existing when continuity only exists in meet sidecar"
+  "nxPlanFollowup should avoid resume-existing when continuity only exists in meet sidecar"
 );
 assert.equal(
   followupStrategist.delegation.resume_task_id,
   null,
-  "nxMeetFollowup should not emit resume_task_id from sidecar-only continuity"
+  "nxPlanFollowup should not emit resume_task_id from sidecar-only continuity"
 );
 assert.equal(
   followupStrategist.delegation.resume_session_id,
   null,
-  "nxMeetFollowup should not emit resume_session_id from sidecar-only continuity"
+  "nxPlanFollowup should not emit resume_session_id from sidecar-only continuity"
 );
 
-const sidecarProjection = await readJson(paths.MEET_SIDECAR_FILE);
+const sidecarProjection = await readJson(paths.PLAN_SIDECAR_FILE);
 assert.ok(
   sidecarProjection.panel.participants.some((item) => item.role.toLowerCase() === "strategist"),
   "meet sidecar should still retain panel membership independently of resumability"
@@ -179,7 +179,7 @@ async function readJson(filePath) {
 
 async function logState(label, paths) {
   const core = await readJson(paths.ORCHESTRATION_CORE_FILE);
-  const sidecar = await readJson(paths.MEET_SIDECAR_FILE);
+  const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
   console.log(`[inspect:${label}] orchestration-core`);
   console.log(JSON.stringify(core, null, 2));
   console.log(`[inspect:${label}] meet-sidecar`);

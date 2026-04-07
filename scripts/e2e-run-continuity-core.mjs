@@ -24,7 +24,7 @@ await fs.writeFile(
           title: "Run continuity",
           status: "in_progress",
           owner: "engineer",
-          meet_issue: "issue-1",
+          plan_issue: 1,
           deps: [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -161,9 +161,9 @@ assert.equal(beforeDifferentTeam.args.resume_session_id, "core-session-old");
 
 const beforeOtherAgent = {
   args: {
-    subagent_type: "qa",
+    subagent_type: "tester",
     team_name: "impl-team",
-    description: "No continuity for qa yet"
+    description: "No continuity for tester yet"
   }
 };
 await hooks["tool.execute.before"]({ tool: "task" }, beforeOtherAgent);

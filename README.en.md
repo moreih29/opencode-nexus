@@ -12,7 +12,7 @@ Nexus orchestration plugin for OpenCode.
 
 OpenCode gives you agents, tools, and plugins. `opencode-nexus` adds operating discipline on top of that.
 
-- Decide before implementation with `[meet]`
+- Decide before implementation with `[plan]`
 - Execute through explicit task state with `[run]`
 - Keep project knowledge in `.nexus/`
 - Use built-in Nexus tools instead of loose prompt rituals
@@ -87,7 +87,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 ## First Use
 
-- Meeting: `[meet] How should we design the authentication flow?`
+- Meeting: `[plan] How should we design the authentication flow?`
 - Record a decision: `Let's go with that option [d]`
 - Execution: `[run] Implement the agreed authentication flow`
 
@@ -103,7 +103,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 | Tag | Purpose | Example |
 | --- | --- | --- |
-| `[meet]` | Open decision mode before implementation | `[meet] discuss database migration strategy` |
+| `[plan]` | Open decision mode before implementation | `[plan] discuss database migration strategy` |
 | `[run]` | Execute work through Nexus task pipeline | `[run] implement the migration plan` |
 | `[d]` | Record the current meeting decision | `Use option 2 [d]` |
 | `[rule]` | Save durable team conventions | `[rule:testing] always run typecheck before publish` |
@@ -124,13 +124,13 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 ## Canonical Tools and Tags
 
-`nx_*` tools are the real execution contract. `nx-setup`, `nx-init`, and `nx-sync` are thin entrypoints that route into those tools. `[meet]`, `[run]`, `[d]`, and `[rule]` are Coordination Tags that change workflow mode rather than execute a tool directly.
+`nx_*` tools are the real execution contract. `nx-setup`, `nx-init`, and `nx-sync` are thin entrypoints that route into those tools. `[plan]`, `[run]`, `[d]`, and `[rule]` are Coordination Tags that change workflow mode rather than execute a tool directly.
 
 ## Built-in Skills
 
 | Skill | Trigger | Purpose |
 | --- | --- | --- |
-| `nx-meet` | `[meet]` | Structured discussion and decision workflow |
+| `nx-plan` | `[plan]` | Structured discussion and decision workflow |
 | `nx-run` | `[run]` | Task-driven execution workflow |
 | `nx-init` | `nx-init` | Onboarding entrypoint that routes to `nx_init` |
 | `nx-sync` | `nx-sync` | Sync entrypoint that routes to `nx_sync` |
@@ -143,12 +143,12 @@ This entrypoint routes to the canonical `nx_init` tool.
 - Stateful meet and task workflow stored in `.nexus/state/`
 - HOW-panel continuity through OpenCode sidecar state (`meet.opencode.json`) separate from canonical `.nexus`
 - Resume hints per HOW participant via stored `task_id` / `session_id` handles when OpenCode provides them
-- `nx_meet_resume` to inspect a HOW participant's current resume handle before follow-up delegation
-- `nx_meet_followup` to produce delegation-ready HOW participant follow-up input
+- `nx_plan_resume` to inspect a HOW participant's current resume handle before follow-up delegation
+- `nx_plan_followup` to produce delegation-ready HOW participant follow-up input
 - `.nexus/core/` knowledge layers for identity, codebase, reference, and memory
 - Task pipeline guardrails for edit tools
 - Meeting reminders, run notices, and stronger cycle-close discipline
-- Nexus custom tools such as `nx_meet_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, and `nx_setup`
+- Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, and `nx_setup`
 - Structured meet discussion records and meet -> task linkage state
 
 ## Knowledge Layout

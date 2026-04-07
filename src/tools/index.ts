@@ -15,21 +15,21 @@ import {
   nxLspSymbols,
   nxLspWorkspaceSymbols
 } from "./lsp.js";
-import { nxMeetDecide, nxMeetDiscuss, nxMeetFollowup, nxMeetJoin, nxMeetResume, nxMeetStart, nxMeetStatus, nxMeetUpdate } from "./meet.js";
+import { nxPlanDecide, nxPlanDiscuss, nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart, nxPlanStatus, nxPlanUpdate } from "./meet.js";
 import { nxRulesRead, nxRulesWrite } from "./rules-store.js";
 import { nxSetup } from "./setup.js";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task.js";
 import { nxInit, nxSync } from "./workflow.js";
 
 export const nexusTools = {
-  nx_meet_start: nxMeetStart,
-  nx_meet_status: nxMeetStatus,
-  nx_meet_resume: nxMeetResume,
-  nx_meet_followup: nxMeetFollowup,
-  nx_meet_update: nxMeetUpdate,
-  nx_meet_discuss: nxMeetDiscuss,
-  nx_meet_decide: nxMeetDecide,
-  nx_meet_join: nxMeetJoin,
+  nx_plan_start: nxPlanStart,
+  nx_plan_status: nxPlanStatus,
+  nx_plan_resume: nxPlanResume,
+  nx_plan_followup: nxPlanFollowup,
+  nx_plan_update: nxPlanUpdate,
+  nx_plan_discuss: nxPlanDiscuss,
+  nx_plan_decide: nxPlanDecide,
+  nx_plan_join: nxPlanJoin,
 
   nx_task_add: nxTaskAdd,
   nx_task_list: nxTaskList,

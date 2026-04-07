@@ -56,7 +56,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "do",
     description: "Independent web and document research",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["nx_task_add"]
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"]
   },
   {
     id: "writer",
@@ -67,12 +67,12 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     disallowedTools: ["nx_task_add"]
   },
   {
-    id: "qa",
-    name: "QA",
+    id: "tester",
+    name: "Tester",
     category: "check",
-    description: "Verification, testing, and quality checks",
+    description: "Testing, verification, and security review",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["nx_task_add"]
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"]
   },
   {
     id: "reviewer",
@@ -80,6 +80,6 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "check",
     description: "Fact-checking and content validation",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["nx_task_add"]
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"]
   }
 ];

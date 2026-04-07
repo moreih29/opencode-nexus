@@ -2970,6 +2970,224 @@
           "Next shared-core extraction candidates"
         ]
       }
+    },
+    {
+      "completed_at": "2026-04-07T02:57:05.773Z",
+      "branch": "main",
+      "plan": {
+        "id": 16,
+        "topic": "claude-nexus vs opencode-nexus 기능 차이 분석 및 parity 전략",
+        "issues": [
+          {
+            "id": 1,
+            "title": "[plan] vs [meet] 태그 네이밍과 의미론 — claude-nexus가 [plan]으로 전환한 이유, opencode-nexus도 따라갈지 결정",
+            "status": "decided",
+            "decision": "[plan]으로 통일. [meet]는 claude-nexus 과거 잔재. 도구명 nx_meet_* → nx_plan_*으로 리네이밍. discuss/join/resume/followup 등 opencode-nexus 고유 기능은 plan_discuss/plan_join/plan_resume/plan_followup으로 이식하되 기능 자체는 보존. 상태 파일도 meet.json → plan.json으로 변경. 자연어 감지 패턴도 claude-nexus 기준으로 정렬. 기본 원칙: opencode-nexus는 claude-nexus에 맞춤."
+          },
+          {
+            "id": 2,
+            "title": "disallowedTools 불일치 — researcher/qa/reviewer에 Edit/Write 차단 누락 (역할 분리 원칙 위반)",
+            "status": "decided",
+            "decision": "researcher/tester/reviewer의 disallowedTools에 edit, write, patch, multiedit 추가하여 claude-nexus와 정렬. qa → tester로 에이전트 ID/이름 변경. 역할 분리 원칙: researcher/tester/reviewer는 파일 편집 불가."
+          },
+          {
+            "id": 3,
+            "title": "에이전트 프롬프트 parity 전략 — 9개 에이전트 프롬프트를 어떻게 이식할 것인지",
+            "status": "decided",
+            "decision": "A안 직접 이식. claude-nexus agents/*.md 프롬프트를 opencode-nexus src/agents/prompts.ts로 이식. 플랫폼 전용 참조(NotebookEdit → patch/multiedit 등)만 OpenCode 대응물로 치환. 프롬프트 구조(role/constraints/guidelines)는 그대로 보존. 저장 형식은 현재 TypeScript 문자열 방식 유지."
+          },
+          {
+            "id": 4,
+            "title": "코드 인텔리전스 구현 수준 — AST(regex vs tree-sitter), LSP(휴리스틱 vs 실제 클라이언트)",
+            "status": "decided",
+            "decision": "B안 @ast-grep/napi 도입. claude-nexus와 동일하게 dependencies에 @ast-grep/napi 추가하여 tree-sitter 기반 구조적 패턴 매칭으로 전환. npm 패키지 배포 모델에서도 네이티브 바이너리 자동 설치되므로 장벽 낮음. 기존 regex 기반 nx_ast_search/nx_ast_replace를 ast-grep 기반으로 교체. LSP 도구는 현재 휴리스틱 유지 (별도 이슈로 필요 시 개선). 우선순위는 태그 통일/프롬프트 parity와 함께 진행."
+          },
+          {
+            "id": 5,
+            "title": "컨텍스트 복구 메커니즘 — PostCompact에 해당하는 기능 필요 여부",
+            "status": "decided",
+            "decision": "B안. experimental.session.compacting 훅을 활용하여 컨텍스트 복구 구현. 압축 시 output.context.push()로 현재 모드, 태스크 진행 상태, 활성 에이전트 목록 등 세션 맥락을 주입. claude-nexus PostCompact와 동등한 기능 달성."
+          },
+          {
+            "id": 6,
+            "title": "AGENTS.md 자동 동기화 — claude-nexus의 CLAUDE.md 자동 동기화에 대응하는 기능 필요 여부",
+            "status": "decided",
+            "decision": "B안. session.created 이벤트에서 AGENTS.md 자동 동기화 구현. 플러그인 template과 현재 AGENTS.md의 마커 블록(NEXUS:START~NEXUS:END)을 비교하여 다르면 자동 업데이트. 마커 블록 바깥의 사용자 커스텀 내용은 보존. claude-nexus의 CLAUDE.md 자동 동기화와 동등한 동작."
+          }
+        ],
+        "research_summary": "3개 리서처가 claude-nexus 소스, opencode-nexus 소스, parity 문서를 병렬 분석. 기능적 차이 10개와 의도적 플랫폼 차이 7개를 식별. 핵심 발견: (1) 태그 네이밍 [plan] vs [meet] 불일치, (2) researcher/qa/reviewer의 disallowedTools에 Edit/Write 누락은 역할 분리 원칙 위반, (3) 9개 에이전트 프롬프트 전부 Pending parity, (4) AST/LSP가 regex 휴리스틱으로 구현되어 claude-nexus의 tree-sitter/실제 LSP와 차이, (5) PostCompact 컨텍스트 복구 없음, (6) AGENTS.md 자동 동기화 없음.",
+        "created_at": "2026-04-07T01:38:31.171Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "[meet] → [plan] 태그 리네이밍",
+          "context": "모든 meet 참조를 plan으로 변경: 태그, 도구명(nx_meet_* → nx_plan_*), 상태파일(meet.json → plan.json), 스킬(nx-meet → nx-plan), 자연어 감지 패턴, 시스템 프롬프트, e2e 테스트",
+          "approach": "1. tags.ts에서 [meet] → [plan] 변경. 2. tag-parser.ts 자연어 패턴을 claude-nexus 기준으로 정렬. 3. tools/meet.ts → tools/plan.ts 리네이밍 및 함수명 변경. 4. skills/catalog.ts와 prompts.ts에서 nx-meet → nx-plan 변경. 5. shared/meet-sidecar.ts → plan-sidecar.ts. 6. orchestration/meet-continuity-adapter.ts → plan-continuity-adapter.ts. 7. system-prompt.ts, hooks.ts 내 meet 참조 변경. 8. e2e 테스트 업데이트. 9. AGENTS.md, README 업데이트.",
+          "acceptance": "모든 소스에서 meet 참조 제거. [plan] 태그로 동작 확인. bun run check && bun run test:e2e 통과.",
+          "risk": "대규모 리네이밍으로 인한 누락 가능. meet 참조가 남아있으면 런타임 오류 발생.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T01:55:18.641Z"
+        },
+        {
+          "id": 2,
+          "title": "disallowedTools 정렬 + qa → tester 리네이밍",
+          "context": "researcher/tester/reviewer에 edit, write, patch, multiedit 차단 추가. qa 에이전트를 tester로 리네이밍.",
+          "approach": "1. catalog.ts에서 qa → tester (id, name 변경). 2. researcher/tester/reviewer의 disallowedTools에 edit, write, patch, multiedit 추가. 3. prompts.ts에서 qa 참조 → tester 변경. 4. team-policy.ts, briefing.ts 등 qa 참조 업데이트. 5. AGENTS.md 에이전트 테이블 업데이트. 6. 관련 e2e 테스트 업데이트.",
+          "acceptance": "catalog.ts에서 tester 에이전트가 edit/write/patch/multiedit/nx_task_add 차단. researcher/reviewer도 동일. bun run check && bun run test:e2e 통과.",
+          "risk": "qa 참조 누락 시 런타임 에러. AGENTS.md 템플릿도 함께 업데이트 필요.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-07T01:55:28.888Z"
+        },
+        {
+          "id": 3,
+          "title": "에이전트 프롬프트 이식",
+          "context": "claude-nexus agents/*.md의 9개 에이전트 프롬프트를 opencode-nexus src/agents/prompts.ts로 이식. 플랫폼 전용 참조만 치환.",
+          "approach": "1. claude-nexus agents/*.md 9개 파일의 프롬프트 내용을 읽기. 2. NotebookEdit → patch/multiedit, Claude Code 전용 참조를 OpenCode 대응물로 치환. 3. prompts.ts의 AGENT_PROMPTS 레코드를 교체. 4. role/constraints/guidelines 구조 보존. 5. 출력 형식 규약(HOW/CHECK) 보존.",
+          "acceptance": "9개 에이전트 프롬프트 모두 prompts.ts에 반영. 플랫폼 전용 참조 제거 확인. bun run check 통과.",
+          "risk": "프롬프트 내 Claude Code 전용 참조를 놓칠 수 있음. 프롬프트 길이가 크면 번들 크기 증가.",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T01:55:38.746Z"
+        },
+        {
+          "id": 4,
+          "title": "@ast-grep/napi 도입 — AST 도구 전환",
+          "context": "regex 기반 nx_ast_search/nx_ast_replace를 tree-sitter 기반(@ast-grep/napi)으로 교체.",
+          "approach": "1. dependencies에 @ast-grep/napi 추가. 2. claude-nexus src/code-intel/ 구현을 참조하여 tools/ast.ts를 tree-sitter 기반으로 재작성. 3. nx_ast_search: 구조적 패턴 매칭으로 변경. 4. nx_ast_replace: 구조적 패턴 치환으로 변경 (dryRun 기본값 유지). 5. e2e-code-intel.mjs 테스트 업데이트.",
+          "acceptance": "@ast-grep/napi가 dependencies에 포함. nx_ast_search/replace가 tree-sitter 패턴으로 동작. bun run check && bun run test:e2e 통과.",
+          "risk": "네이티브 바이너리 의존성으로 일부 환경에서 설치 실패 가능. 기존 regex 패턴과 호환성 깨짐.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-07T01:55:49.121Z"
+        },
+        {
+          "id": 5,
+          "title": "컨텍스트 복구 훅 구현",
+          "context": "experimental.session.compacting 훅을 활용하여 컨텍스트 압축 시 세션 맥락을 보존.",
+          "approach": "1. hooks.ts에 experimental.session.compacting 훅 추가. 2. 압축 시 현재 모드(plan/run/idle), 태스크 진행 상태, 활성 에이전트 목록, plan 상태를 output.context.push()로 주입. 3. claude-nexus PostCompact 핸들러의 스냅샷 항목을 참조하여 동등한 정보 포함.",
+          "acceptance": "experimental.session.compacting 훅이 등록되고, 압축 시 세션 상태가 context에 포함됨. bun run check 통과.",
+          "risk": "experimental API라 향후 시그니처 변경 가능. 주입 컨텍스트가 너무 크면 압축 효과 감소.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "engineer",
+          "created_at": "2026-04-07T01:55:58.370Z"
+        },
+        {
+          "id": 6,
+          "title": "AGENTS.md 자동 동기화 구현",
+          "context": "session.created 이벤트에서 플러그인 template과 AGENTS.md 마커 블록을 비교하여 자동 업데이트.",
+          "approach": "1. claude-nexus gate.ts의 CLAUDE.md 자동 동기화 로직 참조. 2. hooks.ts event 훅(session.created)에 AGENTS.md 동기화 로직 추가. 3. templates/nexus-section.md와 현재 AGENTS.md의 NEXUS:START~NEXUS:END 블록 비교. 4. 다르면 마커 블록 내용만 교체 (바깥 내용 보존). 5. 동기화 발생 시 로그 기록.",
+          "acceptance": "session.created 시 AGENTS.md가 template과 자동 비교/업데이트됨. 마커 블록 바깥 내용 보존. bun run check 통과.",
+          "risk": "AGENTS.md가 없는 프로젝트에서의 동작 정의 필요. 파일 쓰기 권한 문제 가능.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-07T01:56:08.040Z"
+        },
+        {
+          "id": 7,
+          "title": "e2e 테스트 parity 토큰 수정",
+          "context": "프롬프트 이식 후 e2e-prompt-parity.mjs의 assertion 토큰이 새 프롬프트와 불일치. 토큰을 새 프롬프트에 맞게 업데이트.",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-07T02:25:19.893Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-07T03:18:30.306Z",
+      "branch": "main",
+      "plan": {
+        "id": 16,
+        "topic": "nexus state 파일 포맷 claude-nexus 호환성",
+        "issues": [
+          {
+            "id": 1,
+            "title": "tasks.json 필드 누락 — goal, decisions, context, approach, acceptance, risk 필드가 opencode-nexus에 없음",
+            "status": "decided",
+            "decision": "A안. TasksFile에 goal, decisions 최상위 필드 추가. TaskItem에 context, approach, acceptance, risk 필드 추가. nx_task_add 도구 파라미터에 해당 필드 반영. claude-nexus와 동일한 plan→run 결정 파이프라인 구조 확보."
+          },
+          {
+            "id": 2,
+            "title": "ID 타입 불일치 — claude-nexus는 number, opencode-nexus는 string (plan issue ID, task ID, deps)",
+            "status": "decided",
+            "decision": "A안. number로 통일. plan issue ID, task ID, deps, plan_issue 참조 모두 number 타입으로 변경. claude-nexus와 동일한 단순 증가 숫자 체계. 스키마, 도구 파라미터, e2e 테스트 모두 업데이트."
+          },
+          {
+            "id": 3,
+            "title": "agent-tracker 필드명 불일치 — status vs state",
+            "status": "decided",
+            "decision": "A안. agent-tracker의 state → status로 필드명 변경. 상태 값 team-spawning은 OpenCode 네이티브 기능이므로 유지. 추가 필드(team_name, coordination_label 등)도 유지. 필드명만 claude-nexus와 통일."
+          },
+          {
+            "id": 4,
+            "title": "plan.json 추가 필드 — attendees, discussion, task_refs가 opencode 전용인데 유지할지",
+            "status": "decided",
+            "decision": "A안. plan.json의 추가 필드(attendees, discussion, task_refs, 확장 status) 유지. opencode-nexus의 고유 강점이며, JSON 상위집합은 하위호환됨. claude-nexus가 여분 필드를 무시하면 호환 문제 없음."
+          }
+        ],
+        "research_summary": "양쪽 코드베이스의 zod 스키마/TypeScript 타입을 직접 비교. tasks.json이 가장 큰 차이: claude-nexus는 goal, decisions, context, approach, acceptance, risk 필드를 가지나 opencode-nexus에는 없음. ID 타입도 number(claude) vs string(opencode)으로 불일치. agent-tracker는 status vs state 필드명 차이. plan.json은 opencode가 상위집합(attendees, discussion, task_refs 추가)이라 하위호환은 되나 역방향은 안 됨.",
+        "created_at": "2026-04-07T03:04:00.369Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "TasksFile/TaskItem 스키마에 누락 필드 추가",
+          "context": "schema.ts의 TasksFileSchema에 goal, decisions 필드 추가. TaskItemSchema에 context, approach, acceptance, risk 필드 추가. nx_task_add 도구 파라미터에 해당 필드 반영.",
+          "approach": "1. schema.ts: TasksFileSchema에 goal(string, optional), decisions(string[], optional) 추가. TaskItemSchema에 context/approach/acceptance/risk(string, optional) 추가. 2. tools/task.ts: nxTaskAdd 인자에 context/approach/acceptance/risk 추가, nxTaskAdd에 goal/decisions 지원. 3. e2e 테스트 업데이트.",
+          "acceptance": "TasksFile에 goal, decisions 필드 존재. TaskItem에 context, approach, acceptance, risk 필드 존재. nx_task_add가 해당 인자를 받아 저장. bun run check && bun run test:e2e 통과.",
+          "risk": "기존 tasks.json 파일과의 하위호환 (optional 필드이므로 문제 없음).",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-07T03:09:33.649Z"
+        },
+        {
+          "id": 2,
+          "title": "ID 타입 number로 통일",
+          "context": "plan issue ID, task ID, deps, plan_issue 참조를 string에서 number로 변경.",
+          "approach": "1. schema.ts: TaskItemSchema의 id를 z.number(), deps를 z.array(z.number()), plan_issue를 z.number().optional()로 변경. PlanIssueSchema의 id도 z.number(). 2. tools/task.ts: ID 생성 로직을 순차 증가 number로 변경 (기존 tasks 배열에서 max ID + 1). 3. tools/meet.ts(plan.ts): issue ID 생성도 동일하게 number. 4. 관련 코드에서 string ID 비교를 number 비교로 변경. 5. e2e 테스트 업데이트.",
+          "acceptance": "모든 ID가 number 타입. bun run check && bun run test:e2e 통과.",
+          "risk": "기존 history.json에 string ID가 남아있을 수 있으나, history는 아카이브용이므로 영향 없음.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-07T03:09:44.378Z"
+        },
+        {
+          "id": 3,
+          "title": "agent-tracker state → status 필드명 변경",
+          "context": "AgentTrackerItemSchema의 state 필드를 status로 리네이밍.",
+          "approach": "1. schema.ts: AgentTrackerItemSchema의 state → status 변경. 2. shared/agent-tracker.ts: state 참조 → status. 3. plugin/hooks.ts: agent tracker 관련 state 참조 → status. 4. e2e 테스트 업데이트.",
+          "acceptance": "agent-tracker.json이 status 필드 사용. bun run check && bun run test:e2e 통과.",
+          "risk": "단순 리네이밍이라 위험 낮음.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-07T03:09:47.868Z"
+        }
+      ]
     }
   ]
 }

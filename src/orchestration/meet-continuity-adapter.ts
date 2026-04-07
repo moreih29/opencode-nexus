@@ -1,26 +1,26 @@
 import { pickContinuityFromState } from "./core.js";
 import { readOrchestrationCoreState } from "./core-store.js";
 
-export interface MeetParticipantContinuity {
+export interface PlanParticipantContinuity {
   role: string;
   task_id: string | null;
   session_id: string | null;
   last_summary: string | null;
   updated_at: string | null;
-  source: "orchestration-core" | "meet-sidecar";
+  source: "orchestration-core" | "plan-sidecar";
 }
 
-export async function readMeetParticipantContinuityFromCore(
+export async function readPlanParticipantContinuityFromCore(
   coreFilePath: string,
   role: string
-): Promise<MeetParticipantContinuity | null> {
+): Promise<PlanParticipantContinuity | null> {
   const normalizedRole = role.toLowerCase();
   const state = await readOrchestrationCoreState(coreFilePath);
 
   const selected =
     pickContinuityFromState(state, {
       agent_type: normalizedRole,
-      coordination_label: "meet-panel",
+      coordination_label: "plan-panel",
       prefer_running: true
     })
     ?? pickContinuityFromState(state, {

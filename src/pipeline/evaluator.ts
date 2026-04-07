@@ -1,7 +1,7 @@
 export type PipelineTaskStatus = "pending" | "in_progress" | "blocked" | "completed" | string;
 
 export interface PipelineTaskLike {
-  id?: string;
+  id?: number;
   status?: PipelineTaskStatus;
 }
 

@@ -2,7 +2,7 @@ import type { NexusAgentProfile } from "../agents/catalog.js";
 import type { NexusSkillProfile } from "../skills/catalog.js";
 
 interface BuildSystemInput {
-  mode: "meet" | "run" | "decide" | "rule" | "idle";
+  mode: "plan" | "run" | "decide" | "rule" | "idle";
   agents: NexusAgentProfile[];
   skills: NexusSkillProfile[];
 }
@@ -20,7 +20,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const modePlaybook = buildModePlaybook(mode);
   const taskPipeline = [
     "TASK PIPELINE (mandatory for file modifications):",
-    "1. Check active meet decisions first and preserve issue linkage when tasks come from a meet.",
+    "1. Check active plan decisions first and preserve issue linkage when tasks come from a plan.",
     "2. Register each execution unit with nx_task_add before editing files.",
     "3. Keep edits scoped to active tasks only.",
     "4. As each task completes, call nx_task_update.",
@@ -66,10 +66,10 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     `- DO agents: ${execute}`,
     `- CHECK agents: ${check}`,
     "Guidelines:",
-    "- [meet]: discuss and decide before implementation.",
+    "- [plan]: discuss and decide before implementation.",
     "- [run]: execute with tasks, then verify, then close cycle.",
     "- Branch Guard: avoid substantial execution directly on main/master.",
-    "- [d]: record decision in active meet session.",
+    "- [d]: record decision in active plan session.",
     "- [rule]: write stable team conventions.",
     "- team_name is only a lead-managed coordination label, not a platform-native team object.",
     "- All grouped execution is lead-mediated; subagents do not directly coordinate each other.",
@@ -90,16 +90,16 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
 }
 
 function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
-  if (mode === "meet") {
+  if (mode === "plan") {
     return [
-      "MODE PLAYBOOK (meet):",
+      "MODE PLAYBOOK (plan):",
         "- Research before forming the agenda and before opening the current issue discussion.",
-        "- Continue an existing meet session when one exists.",
-        "- When a follow-up targets a prior HOW participant, prefer nx_meet_followup. It packages resume hints into delegation-ready guidance; fall back to nx_meet_resume when you only need raw continuity details.",
-        "- Check nx_context or nx_meet_status for followupReady roles before deciding whether to resume an existing HOW participant or start fresh.",
-        "- Discuss one issue at a time and log significant reasoning with nx_meet_discuss before recording a decision.",
+        "- Continue an existing plan session when one exists.",
+        "- When a follow-up targets a prior HOW participant, prefer nx_plan_followup. It packages resume hints into delegation-ready guidance; fall back to nx_plan_resume when you only need raw continuity details.",
+        "- Check nx_context or nx_plan_status for followupReady roles before deciding whether to resume an existing HOW participant or start fresh.",
+        "- Discuss one issue at a time and log significant reasoning with nx_plan_discuss before recording a decision.",
       "- Present options with pros, cons, trade-offs, and a recommendation before seeking a decision.",
-      "- Record final decisions with [d] and nx_meet_decide.",
+      "- Record final decisions with [d] and nx_plan_decide.",
       "- Offer [run] only after all issues are decided and gaps are checked."
     ].join("\n");
   }
@@ -108,7 +108,7 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
     return [
       "MODE PLAYBOOK (run):",
       "- If no tasks exist yet, decompose the work and call nx_task_add before editing files.",
-      "- Link execution tasks back to meet_issue when they originate from a meet decision.",
+      "- Link execution tasks back to plan_issue when they originate from a plan decision.",
       "- Once decomposition yields multiple tasks or multiple files, do not continue as Lead solo; delegate code units to Engineer.",
       "- Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
       "- Serialize overlapping file work; parallelize only independent work.",
@@ -121,7 +121,7 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
     return [
       "MODE PLAYBOOK (decide):",
       "- Ensure the current issue has supporting discussion before recording the decision.",
-      "- Record the decision against the active meet issue, not as a free-floating note.",
+      "- Record the decision against the active plan issue, not as a free-floating note.",
       "- Return to the next pending issue or offer [run] when all issues are decided."
     ].join("\n");
   }
@@ -137,8 +137,8 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
 
   return [
     "MODE PLAYBOOK (idle):",
-    "- Check whether an active meet or task cycle already exists before starting something new.",
-    "- Use [meet] for significant decisions before implementation.",
+    "- Check whether an active plan or task cycle already exists before starting something new.",
+    "- Use [plan] for significant decisions before implementation.",
     "- Use [run] when execution should follow the task pipeline.",
     "- Close completed cycles instead of leaving state hanging."
   ].join("\n");

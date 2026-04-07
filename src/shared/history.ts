@@ -3,7 +3,7 @@ import { readJsonFile, writeJsonFile } from "./json-store.js";
 export interface HistoryCycle {
   completed_at: string;
   branch: string;
-  meet?: unknown;
+  plan?: unknown;
   tasks?: unknown;
   memoryHint?: unknown;
 }
@@ -18,14 +18,14 @@ export async function appendHistory(historyFile: string, cycle: HistoryCycle): P
   await writeJsonFile(historyFile, history);
 }
 
-export async function nextMeetId(historyFile: string): Promise<number> {
+export async function nextPlanId(historyFile: string): Promise<number> {
   const history = await readJsonFile<HistoryFile>(historyFile, { cycles: [] });
   let maxId = 0;
 
   for (const cycle of history.cycles) {
-    const meet = cycle.meet as { id?: unknown } | undefined;
-    if (typeof meet?.id === "number") {
-      maxId = Math.max(maxId, meet.id);
+    const plan = cycle.plan as { id?: unknown } | undefined;
+    if (typeof plan?.id === "number") {
+      maxId = Math.max(maxId, plan.id);
     }
   }
 

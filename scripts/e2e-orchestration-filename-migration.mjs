@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { applyRegisterEnd, applyRegisterStart, createEmptyOrchestrationCoreState } from "../dist/orchestration/core.js";
 import { writeOrchestrationCoreState } from "../dist/orchestration/core-store.js";
-import { readMeetParticipantContinuityFromCore } from "../dist/orchestration/meet-continuity-adapter.js";
+import { readPlanParticipantContinuityFromCore } from "../dist/orchestration/meet-continuity-adapter.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-orch-filename-migrate-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });
@@ -21,7 +21,7 @@ state = applyRegisterStart(
   {
     invocation_id: "legacy-only",
     agent_type: "architect",
-    coordination_label: "meet-panel",
+    coordination_label: "plan-panel",
     purpose: "legacy-compat"
   },
   "2026-04-02T00:00:01.000Z"
@@ -42,7 +42,7 @@ state = applyRegisterEnd(
 await writeOrchestrationCoreState(legacyPath, state);
 await fs.rm(canonicalPath, { force: true });
 
-const architect = await readMeetParticipantContinuityFromCore(canonicalPath, "architect");
+const architect = await readPlanParticipantContinuityFromCore(canonicalPath, "architect");
 assert.equal(
   architect,
   null,

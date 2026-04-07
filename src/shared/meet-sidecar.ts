@@ -1,26 +1,26 @@
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
 import { readJsonFile, writeJsonFile } from "./json-store.js";
-import { MeetFileSchema, MeetSidecarSchema, type MeetFile, type MeetSidecar } from "./schema.js";
+import { PlanFileSchema, PlanSidecarSchema, type PlanFile, type PlanSidecar } from "./schema.js";
 
-export async function readMeetSidecar(filePath: string): Promise<MeetSidecar | null> {
-  const raw = await readJsonFile<MeetSidecar | null>(filePath, null);
+export async function readPlanSidecar(filePath: string): Promise<PlanSidecar | null> {
+  const raw = await readJsonFile<PlanSidecar | null>(filePath, null);
   if (!raw) {
     return null;
   }
-  return MeetSidecarSchema.parse(raw);
+  return PlanSidecarSchema.parse(raw);
 }
 
-export async function syncMeetSidecar(
+export async function syncPlanSidecar(
   filePath: string,
-  meet: MeetFile,
+  plan: PlanFile,
   update?: { speaker?: string; message?: string; taskID?: string; sessionID?: string; teamName?: string }
 ): Promise<void> {
-  const existing = await readMeetSidecar(filePath);
+  const existing = await readPlanSidecar(filePath);
   const now = new Date().toISOString();
-  const participants = mergeHowParticipants(existing, meet, now, update);
-  const sidecar: MeetSidecar = {
+  const participants = mergeHowParticipants(existing, plan, now, update);
+  const sidecar: PlanSidecar = {
     schema_version: 1,
-    canonical_file: "meet.json",
+    canonical_file: "plan.json",
     platform: "opencode",
     handoff: {
       policy: "canonical-first",
@@ -35,15 +35,15 @@ export async function syncMeetSidecar(
   await writeJsonFile(filePath, sidecar);
 }
 
-export async function loadCanonicalMeet(filePath: string): Promise<MeetFile | null> {
+export async function loadCanonicalPlan(filePath: string): Promise<PlanFile | null> {
   const raw = await readJsonFile<unknown | null>(filePath, null);
   if (!raw) {
     return null;
   }
-  return MeetFileSchema.parse(raw);
+  return PlanFileSchema.parse(raw);
 }
 
-export function summarizeMeetSidecar(sidecar: MeetSidecar | null) {
+export function summarizePlanSidecar(sidecar: PlanSidecar | null) {
   if (!sidecar) {
     return { handoff: "canonical-only", how_panel_size: 0 };
   }
@@ -62,13 +62,13 @@ export function summarizeMeetSidecar(sidecar: MeetSidecar | null) {
 }
 
 function mergeHowParticipants(
-  existing: MeetSidecar | null,
-  meet: MeetFile,
+  existing: PlanSidecar | null,
+  plan: PlanFile,
   now: string,
   update?: { speaker?: string; message?: string; taskID?: string; sessionID?: string; teamName?: string }
 ) {
   const participantMap = new Map((existing?.panel.participants ?? []).map((item) => [item.role.toLowerCase(), item]));
-  for (const attendee of meet.attendees) {
+  for (const attendee of plan.attendees) {
     if (!isHowRole(attendee.role)) {
       continue;
     }

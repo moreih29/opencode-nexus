@@ -15,7 +15,7 @@ const MATRIX: Record<string, Array<"identity" | "codebase" | "reference" | "memo
   engineer: ["codebase", "memory"],
   researcher: ["identity", "reference", "memory"],
   writer: ["identity", "reference", "memory"],
-  qa: ["codebase", "memory"],
+  tester: ["codebase", "memory"],
   reviewer: ["identity", "reference", "memory"]
 };
 
@@ -78,12 +78,12 @@ async function readMarkdownDir(dir: string, hint?: string): Promise<string[]> {
 }
 
 async function readLatestDecisions(historyFile: string): Promise<string[]> {
-  const history = await readJsonFile<{ cycles?: Array<{ meet?: { issues?: Array<{ decision?: string }> } }> }>(historyFile, {
+  const history = await readJsonFile<{ cycles?: Array<{ plan?: { issues?: Array<{ decision?: string }> } }> }>(historyFile, {
     cycles: []
   });
   const cycles = history.cycles ?? [];
   const latest = cycles[cycles.length - 1];
-  const issues = latest?.meet?.issues ?? [];
+  const issues = latest?.plan?.issues ?? [];
   return issues.map((i) => i.decision).filter((v): v is string => typeof v === "string" && v.length > 0);
 }
 

@@ -12,7 +12,7 @@ OpenCode를 위한 Nexus 오케스트레이션 플러그인.
 
 OpenCode가 에이전트와 도구를 제공한다면, `opencode-nexus`는 그 위에 운영 규율을 얹습니다.
 
-- 구현 전에 `[meet]`로 먼저 결정
+- 구현 전에 `[plan]`로 먼저 결정
 - `[run]`에서 명시적인 task state로 실행
 - `.nexus/`에 프로젝트 지식 축적
 - 느슨한 프롬프트 관습 대신 Nexus 도구 사용
@@ -87,7 +87,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 ## 첫 사용
 
-- 미팅: `[meet] 인증 플로우를 어떻게 설계할까?`
+- 미팅: `[plan] 인증 플로우를 어떻게 설계할까?`
 - 결정 기록: `그 방향으로 가자 [d]`
 - 실행: `[run] 합의한 인증 플로우를 구현해줘`
 
@@ -103,7 +103,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 | 태그 | 용도 | 예시 |
 | --- | --- | --- |
-| `[meet]` | 구현 전 의사결정 모드 | `[meet] DB 마이그레이션 전략 논의` |
+| `[plan]` | 구현 전 의사결정 모드 | `[plan] DB 마이그레이션 전략 논의` |
 | `[run]` | Nexus task pipeline으로 실행 | `[run] 마이그레이션 계획 구현` |
 | `[d]` | 현재 미팅의 결정 기록 | `2안으로 가자 [d]` |
 | `[rule]` | 팀의 지속 규칙 저장 | `[rule:testing] publish 전에 typecheck 필수` |
@@ -124,13 +124,13 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 ## Canonical Tools and Tags
 
-`nx_*` 도구가 실제 실행 계약입니다. `nx-setup`, `nx-init`, `nx-sync`는 이 도구들로 들어가는 얇은 entrypoint입니다. 반면 `[meet]`, `[run]`, `[d]`, `[rule]`은 실행 명령이 아니라 협업 흐름을 바꾸는 Coordination Tags입니다.
+`nx_*` 도구가 실제 실행 계약입니다. `nx-setup`, `nx-init`, `nx-sync`는 이 도구들로 들어가는 얇은 entrypoint입니다. 반면 `[plan]`, `[run]`, `[d]`, `[rule]`은 실행 명령이 아니라 협업 흐름을 바꾸는 Coordination Tags입니다.
 
 ## 내장 스킬
 
 | 스킬 | 트리거 | 역할 |
 | --- | --- | --- |
-| `nx-meet` | `[meet]` | 구조화된 논의와 결정 워크플로 |
+| `nx-plan` | `[plan]` | 구조화된 논의와 결정 워크플로 |
 | `nx-run` | `[run]` | 태스크 기반 실행 워크플로 |
 | `nx-init` | `nx-init` | `nx_init`로 라우팅되는 온보딩 entrypoint |
 | `nx-sync` | `nx-sync` | `nx_sync`로 라우팅되는 동기화 entrypoint |
@@ -143,12 +143,12 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - `.nexus/state/`에 저장되는 상태 기반 meet/task 워크플로
 - canonical `.nexus`와 분리된 OpenCode sidecar(`meet.opencode.json`) 기반 HOW 패널 연속성
 - HOW 패널 participant별 `task_id/session_id` 재개 힌트 저장
-- `nx_meet_resume`로 HOW participant 재개 핸들 조회 가능
-- `nx_meet_followup`로 HOW participant follow-up delegation 입력 생성 가능
+- `nx_plan_resume`로 HOW participant 재개 핸들 조회 가능
+- `nx_plan_followup`로 HOW participant follow-up delegation 입력 생성 가능
 - identity / codebase / reference / memory 계층의 `.nexus/core/`
 - edit 도구에 대한 task pipeline 가드레일
 - meeting reminder, run notice, 더 엄격한 cycle-close discipline
-- `nx_meet_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
+- `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
 - 구조화된 meet discussion 레코드와 meet -> task linkage 상태 추적
 
 ## 지식 구조

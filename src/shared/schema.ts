@@ -8,27 +8,33 @@ export const TaskStatusSchema = z.enum([
 ]);
 
 export const TaskItemSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   title: z.string(),
   status: TaskStatusSchema,
   owner: z.string().optional(),
-  meet_issue: z.string().optional(),
-  deps: z.array(z.string()).optional(),
+  plan_issue: z.number().optional(),
+  deps: z.array(z.number()).optional(),
   created_at: z.string(),
-  updated_at: z.string()
+  updated_at: z.string(),
+  context: z.string().optional(),
+  approach: z.string().optional(),
+  acceptance: z.string().optional(),
+  risk: z.string().optional()
 });
 
 export const TasksFileSchema = z.object({
+  goal: z.string().optional(),
+  decisions: z.array(z.string()).optional(),
   tasks: z.array(TaskItemSchema)
 });
 
-export const MeetAttendeeSchema = z.object({
+export const PlanAttendeeSchema = z.object({
   role: z.string(),
   name: z.string(),
   joined_at: z.string()
 });
 
-export const MeetIssueStatusSchema = z.enum([
+export const PlanIssueStatusSchema = z.enum([
   "pending",
   "researching",
   "discussing",
@@ -37,7 +43,7 @@ export const MeetIssueStatusSchema = z.enum([
   "tasked"
 ]);
 
-export const MeetDiscussionKindSchema = z.enum([
+export const PlanDiscussionKindSchema = z.enum([
   "research",
   "discussion",
   "summary",
@@ -45,26 +51,26 @@ export const MeetDiscussionKindSchema = z.enum([
   "risk"
 ]);
 
-export const MeetDiscussionEntrySchema = z.object({
+export const PlanDiscussionEntrySchema = z.object({
   speaker: z.string(),
   message: z.string(),
-  kind: MeetDiscussionKindSchema.default("discussion"),
+  kind: PlanDiscussionKindSchema.default("discussion"),
   recorded_at: z.string()
 });
 
-const MeetDiscussionRecordSchema = z
-  .union([MeetDiscussionEntrySchema, z.string()])
+const PlanDiscussionRecordSchema = z
+  .union([PlanDiscussionEntrySchema, z.string()])
   .transform((entry) => normalizeDiscussionEntry(entry));
 
-export const MeetIssueSchema = z
+export const PlanIssueSchema = z
   .object({
-    id: z.string(),
+    id: z.number(),
     title: z.string(),
-    status: MeetIssueStatusSchema,
-    discussion: z.array(MeetDiscussionRecordSchema).default([]),
+    status: PlanIssueStatusSchema,
+    discussion: z.array(PlanDiscussionRecordSchema).default([]),
     decision: z.string().optional(),
     summary: z.string().optional(),
-    task_refs: z.array(z.string()).default([])
+    task_refs: z.array(z.number()).default([])
   })
   .transform((issue) => ({
     ...issue,
@@ -72,16 +78,16 @@ export const MeetIssueSchema = z
     discussion: issue.discussion ?? []
   }));
 
-export const MeetFileSchema = z.object({
+export const PlanFileSchema = z.object({
   id: z.number(),
   topic: z.string(),
-  attendees: z.array(MeetAttendeeSchema),
-  issues: z.array(MeetIssueSchema),
+  attendees: z.array(PlanAttendeeSchema),
+  issues: z.array(PlanIssueSchema),
   research_summary: z.string().optional(),
   created_at: z.string()
 });
 
-export const MeetPanelParticipantSchema = z.object({
+export const PlanPanelParticipantSchema = z.object({
   role: z.string(),
   session_id: z.string().optional(),
   task_id: z.string().optional(),
@@ -89,9 +95,9 @@ export const MeetPanelParticipantSchema = z.object({
   updated_at: z.string()
 });
 
-export const MeetSidecarSchema = z.object({
+export const PlanSidecarSchema = z.object({
   schema_version: z.literal(1),
-  canonical_file: z.literal("meet.json"),
+  canonical_file: z.literal("plan.json"),
   platform: z.literal("opencode"),
   handoff: z.object({
     policy: z.literal("canonical-first"),
@@ -100,13 +106,13 @@ export const MeetSidecarSchema = z.object({
   }),
   panel: z.object({
     strategy: z.literal("how-fixed-panel"),
-    participants: z.array(MeetPanelParticipantSchema)
+    participants: z.array(PlanPanelParticipantSchema)
   })
 });
 
 export const AgentTrackerItemSchema = z.object({
   agent_type: z.string(),
-  state: z.enum(["team-spawning", "running", "completed"]),
+  status: z.enum(["team-spawning", "running", "completed"]),
   team_name: z.string().optional(),
   coordination_label: z.string().optional(),
   lead_agent: z.string().optional(),
@@ -162,18 +168,18 @@ export const OrchestrationCoreStateSchema = z.object({
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskItem = z.infer<typeof TaskItemSchema>;
 export type TasksFile = z.infer<typeof TasksFileSchema>;
-export type MeetIssueStatus = z.infer<typeof MeetIssueStatusSchema>;
-export type MeetDiscussionEntry = z.infer<typeof MeetDiscussionEntrySchema>;
-export type MeetDiscussionKind = z.infer<typeof MeetDiscussionKindSchema>;
-export type MeetFile = z.infer<typeof MeetFileSchema>;
-export type MeetSidecar = z.infer<typeof MeetSidecarSchema>;
+export type PlanIssueStatus = z.infer<typeof PlanIssueStatusSchema>;
+export type PlanDiscussionEntry = z.infer<typeof PlanDiscussionEntrySchema>;
+export type PlanDiscussionKind = z.infer<typeof PlanDiscussionKindSchema>;
+export type PlanFile = z.infer<typeof PlanFileSchema>;
+export type PlanSidecar = z.infer<typeof PlanSidecarSchema>;
 export type AgentTrackerItem = z.infer<typeof AgentTrackerItemSchema>;
 export type InvocationLifecycleStatus = z.infer<typeof InvocationLifecycleStatusSchema>;
 export type InvocationContinuityHandles = z.infer<typeof InvocationContinuityHandlesSchema>;
 export type OrchestrationInvocation = z.infer<typeof OrchestrationInvocationSchema>;
 export type OrchestrationCoreState = z.infer<typeof OrchestrationCoreStateSchema>;
 
-function normalizeDiscussionEntry(entry: string | MeetDiscussionEntry): MeetDiscussionEntry {
+function normalizeDiscussionEntry(entry: string | PlanDiscussionEntry): PlanDiscussionEntry {
   if (typeof entry !== "string") {
     return entry;
   }

@@ -190,7 +190,7 @@ function mergeSetupConfig(input: {
   const agent = toRecord(next.agent);
   if (!agent.nexus) {
     agent.nexus = {
-      description: "Nexus-aware orchestration lead for meet, run, delegation, and verification workflows",
+      description: "Nexus-aware orchestration lead for plan, run, delegation, and verification workflows",
       mode: "primary",
       color: "accent"
     };

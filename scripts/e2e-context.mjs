@@ -7,7 +7,7 @@ import { createHooks } from "../dist/plugin/hooks.js";
 import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxMeetFollowup, nxMeetJoin, nxMeetResume } from "../dist/tools/meet.js";
+import { nxPlanFollowup, nxPlanJoin, nxPlanResume } from "../dist/tools/meet.js";
 import { nxContext } from "../dist/tools/context.js";
 import { nxTaskAdd } from "../dist/tools/task.js";
 
@@ -19,13 +19,13 @@ const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 const hooks = createHooks({ directory: root, worktree: root, state: createPluginState() });
 await fs.writeFile(
-  paths.MEET_FILE,
+  paths.PLAN_FILE,
   JSON.stringify(
     {
       id: 1,
       topic: "Procedural parity",
       attendees: [{ role: "lead", name: "Lead", joined_at: new Date().toISOString() }],
-      issues: [{ id: "issue-1", title: "Plan run workflow", status: "pending", discussion: [] }],
+      issues: [{ id: 1, title: "Plan run workflow", status: "pending", discussion: [] }],
       created_at: new Date().toISOString()
     },
     null,
@@ -35,10 +35,10 @@ await fs.writeFile(
 );
 
 const ctx = { directory: root, worktree: root };
-await nxMeetJoin.execute({ role: "architect", name: "Architect" }, ctx);
+await nxPlanJoin.execute({ role: "architect", name: "Architect" }, ctx);
 const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Implement workflow" }, ctx));
-assert.match(addResult.message, /Link this task to its meet issue/);
-assert.equal(addResult.nexus_task_id.startsWith("task-"), true);
+assert.match(addResult.message, /Link this task to its plan issue/);
+assert.equal(typeof addResult.nexus_task_id, "number");
 
 await hooks["tool.execute.before"](
   { tool: "task" },
@@ -51,16 +51,16 @@ await hooks["tool.execute.after"](
 
 await hooks["tool.execute.before"](
   { tool: "task" },
-  { args: { subagent_type: "architect", team_name: "meet-panel", description: "review compatibility" } }
+  { args: { subagent_type: "architect", team_name: "plan-panel", description: "review compatibility" } }
 );
 await hooks["tool.execute.after"](
-  { tool: "task", args: { subagent_type: "architect", team_name: "meet-panel" } },
+  { tool: "task", args: { subagent_type: "architect", team_name: "plan-panel" } },
   { title: "ok", output: "Prefer canonical-first handoff.", metadata: { task_id: "task-architect-1", session_id: "session-architect-1" } }
 );
 
-const meetSidecar = JSON.parse(await fs.readFile(paths.MEET_SIDECAR_FILE, "utf8"));
+const planSidecar = JSON.parse(await fs.readFile(paths.PLAN_SIDECAR_FILE, "utf8"));
 const now = new Date().toISOString();
-const participants = (Array.isArray(meetSidecar?.panel?.participants) ? meetSidecar.panel.participants : [])
+const participants = (Array.isArray(planSidecar?.panel?.participants) ? planSidecar.panel.participants : [])
   .map((item) => {
     if (item.role === "architect") {
       return {
@@ -84,12 +84,12 @@ const participants = (Array.isArray(meetSidecar?.panel?.participants) ? meetSide
   ]);
 
 await fs.writeFile(
-  paths.MEET_SIDECAR_FILE,
+  paths.PLAN_SIDECAR_FILE,
   JSON.stringify(
     {
-      ...meetSidecar,
+      ...planSidecar,
       panel: {
-        ...meetSidecar.panel,
+        ...planSidecar.panel,
         participants
       }
     },
@@ -100,17 +100,17 @@ await fs.writeFile(
 );
 
 const contextResult = JSON.parse(await nxContext.execute({}, ctx));
-const resumeResult = JSON.parse(await nxMeetResume.execute({ role: "architect", question: "Can you justify the handoff rule?" }, ctx));
-const followupResult = JSON.parse(await nxMeetFollowup.execute({ role: "architect", question: "Can you justify the handoff rule?" }, ctx));
-const strategistResumeResult = await nxMeetResume.execute({ role: "strategist", question: "What should we do next?" }, ctx);
-const strategistFollowupResult = JSON.parse(await nxMeetFollowup.execute({ role: "strategist", question: "What should we do next?" }, ctx));
+const resumeResult = JSON.parse(await nxPlanResume.execute({ role: "architect", question: "Can you justify the handoff rule?" }, ctx));
+const followupResult = JSON.parse(await nxPlanFollowup.execute({ role: "architect", question: "Can you justify the handoff rule?" }, ctx));
+const strategistResumeResult = await nxPlanResume.execute({ role: "strategist", question: "What should we do next?" }, ctx);
+const strategistFollowupResult = JSON.parse(await nxPlanFollowup.execute({ role: "strategist", question: "What should we do next?" }, ctx));
 const membershipRoles = contextResult.handoff.panelMembership.roles;
 const architectContinuity = contextResult.handoff.resumability.participants.find((item) => item.role === "architect");
 const strategistContinuity = contextResult.handoff.resumability.participants.find((item) => item.role === "strategist");
 const architectFollowup = contextResult.handoff.followupSuggestions.find((item) => item.role === "architect");
 const strategistFollowup = contextResult.handoff.followupSuggestions.find((item) => item.role === "strategist");
 
-for (const field of ["branch", "branchGuard", "activeMode", "meetTopic", "currentIssue", "handoff", "coordinationGroups", "tasksSummary"]) {
+for (const field of ["branch", "branchGuard", "activeMode", "planTopic", "currentIssue", "handoff", "coordinationGroups", "tasksSummary"]) {
   assert.equal(Object.hasOwn(contextResult, field), true);
 }
 for (const field of ["policy", "canonicalReady", "panelMembership", "resumability", "followupSuggestions"]) {
@@ -121,8 +121,8 @@ for (const legacyField of ["howPanelRoles", "resumableParticipants", "followupRe
 }
 
 assert.equal(contextResult.branchGuard, true);
-assert.equal(contextResult.meetTopic, "Procedural parity");
-assert.equal(contextResult.currentIssue.id, "issue-1");
+assert.equal(contextResult.planTopic, "Procedural parity");
+assert.equal(contextResult.currentIssue.id, 1);
 assert.equal(contextResult.handoff.policy, "canonical-first");
 assert.equal(membershipRoles.includes("architect"), true);
 assert.equal(membershipRoles.includes("strategist"), true);
@@ -142,7 +142,7 @@ assert.match(resumeResult.recommendation.suggested_prompt, /justify the handoff 
 assert.equal(
   strategistResumeResult,
   "No participant continuity found for strategist.",
-  "meet sidecar membership should not make strategist resumable without orchestration continuity"
+  "plan sidecar membership should not make strategist resumable without orchestration continuity"
 );
 assert.equal(strategistFollowupResult.recommendation.mode, "rehydrate-from-summary");
 assert.equal(strategistFollowupResult.delegation.resume_task_id, null);

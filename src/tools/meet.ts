@@ -1,22 +1,22 @@
 import { tool } from "@opencode-ai/plugin";
-import { appendHistory, nextMeetId } from "../shared/history.js";
-import { readMeetParticipantContinuityFromCore, type MeetParticipantContinuity } from "../orchestration/meet-continuity-adapter.js";
+import { appendHistory, nextPlanId } from "../shared/history.js";
+import { readPlanParticipantContinuityFromCore, type PlanParticipantContinuity } from "../orchestration/meet-continuity-adapter.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
-import { readMeetSidecar, summarizeMeetSidecar, syncMeetSidecar } from "../shared/meet-sidecar.js";
+import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../shared/meet-sidecar.js";
 import { fileExists } from "../shared/state.js";
 import {
-  MeetFileSchema,
-  type MeetFile,
-  type MeetDiscussionKind,
-  type MeetIssueStatus
+  PlanFileSchema,
+  type PlanFile,
+  type PlanDiscussionKind,
+  type PlanIssueStatus
 } from "../shared/schema.js";
 
 const z = tool.schema;
-const MEET_DISCUSSION_KINDS = ["research", "discussion", "summary", "decision", "risk"] as const;
+const PLAN_DISCUSSION_KINDS = ["research", "discussion", "summary", "decision", "risk"] as const;
 
-export const nxMeetStart = tool({
-  description: "Start a meet session",
+export const nxPlanStart = tool({
+  description: "Start a plan session",
   args: {
     topic: z.string(),
     research_summary: z.string(),
@@ -33,24 +33,24 @@ export const nxMeetStart = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
 
-    if (await fileExists(paths.MEET_FILE)) {
-      const existing = await readJsonFile<MeetFile | null>(paths.MEET_FILE, null);
+    if (await fileExists(paths.PLAN_FILE)) {
+      const existing = await readJsonFile<PlanFile | null>(paths.PLAN_FILE, null);
       if (existing) {
         await appendHistory(paths.HISTORY_FILE, {
           completed_at: new Date().toISOString(),
           branch: "carry-over",
-          meet: existing
+          plan: existing
         });
       }
     }
 
     const now = new Date().toISOString();
-    const meet: MeetFile = {
-      id: await nextMeetId(paths.HISTORY_FILE),
+    const plan: PlanFile = {
+      id: await nextPlanId(paths.HISTORY_FILE),
       topic: args.topic,
       attendees: args.attendees.map((a) => ({ ...a, joined_at: now })),
       issues: args.issues.map((title, idx) => ({
-        id: `issue-${idx + 1}`,
+        id: idx + 1,
         title,
         status: "pending",
         discussion: [],
@@ -60,38 +60,38 @@ export const nxMeetStart = tool({
       created_at: now
     };
 
-    MeetFileSchema.parse(meet);
-    await writeJsonFile(paths.MEET_FILE, meet);
-    await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet);
-    return `Meet started: ${args.topic} (#${meet.id})`;
+    PlanFileSchema.parse(plan);
+    await writeJsonFile(paths.PLAN_FILE, plan);
+    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
+    return `Plan started: ${args.topic} (#${plan.id})`;
   }
 });
 
-export const nxMeetStatus = tool({
-  description: "Get current meet status",
+export const nxPlanStatus = tool({
+  description: "Get current plan status",
   args: {},
   async execute(_args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.MEET_FILE))) {
-      return "No active meet session.";
+    if (!(await fileExists(paths.PLAN_FILE))) {
+      return "No active plan session.";
     }
 
-    const meet = await readMeet(paths.MEET_FILE);
-    const issues = summarizeIssues(meet);
-    const sidecar = await readMeetSidecar(paths.MEET_SIDECAR_FILE);
+    const plan = await readPlan(paths.PLAN_FILE);
+    const issues = summarizeIssues(plan);
+    const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
     const followupParticipants = sidecar
       ? await Promise.all(
           sidecar.panel.participants.map(async (item) =>
             mergeParticipantContinuity(
               item.role,
-              await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, item.role),
+              await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, item.role),
               {
                 role: item.role,
                 task_id: item.task_id ?? null,
                 session_id: item.session_id ?? null,
                 last_summary: item.last_summary ?? null,
                 updated_at: item.updated_at,
-                source: "meet-sidecar"
+                source: "plan-sidecar"
               }
             )
           )
@@ -100,14 +100,14 @@ export const nxMeetStatus = tool({
 
     return JSON.stringify(
       {
-        id: meet.id,
-        topic: meet.topic,
-        attendees: meet.attendees,
+        id: plan.id,
+        topic: plan.topic,
+        attendees: plan.attendees,
         issues,
-        current_issue: pickCurrentIssue(meet),
+        current_issue: pickCurrentIssue(plan),
         decided_ratio: `${issues.decided + issues.tasked}/${issues.total}`,
         opencode: {
-          ...summarizeMeetSidecar(sidecar),
+          ...summarizePlanSidecar(sidecar),
           followup_ready_roles: followupParticipants
             .filter((item) => item.resumable || item.last_summary)
             .map((item) => item.role)
@@ -119,7 +119,7 @@ export const nxMeetStatus = tool({
   }
 });
 
-export const nxMeetResume = tool({
+export const nxPlanResume = tool({
   description: "Get HOW participant resume routing info",
   args: {
     role: z.string(),
@@ -127,11 +127,11 @@ export const nxMeetResume = tool({
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    const coreParticipant = await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
-    const sidecar = await readMeetSidecar(paths.MEET_SIDECAR_FILE);
+    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
+    const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
     const sidecarParticipant = pickParticipantFromSidecar(sidecar, args.role);
     if (!coreParticipant && !sidecar) {
-      return "No OpenCode meet sidecar available.";
+      return "No OpenCode plan sidecar available.";
     }
 
     if (!coreParticipant) {
@@ -159,23 +159,23 @@ export const nxMeetResume = tool({
   }
 });
 
-export const nxMeetFollowup = tool({
+export const nxPlanFollowup = tool({
   description: "Build delegation-ready HOW follow-up guidance",
   args: {
     role: z.string(),
     question: z.string(),
-    issue_id: z.string().optional()
+    issue_id: z.number().optional()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    const sidecar = await readMeetSidecar(paths.MEET_SIDECAR_FILE);
-    const coreParticipant = await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
-    const meet = await readCanonicalFollowupMeet(paths.MEET_FILE);
+    const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
+    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
+    const plan = await readCanonicalFollowupPlan(paths.PLAN_FILE);
     const participant = mergeParticipantContinuity(args.role, coreParticipant, pickParticipantFromSidecar(sidecar, args.role));
     const recommendation = buildResumeRecommendation(participant ?? { role: args.role }, args.question);
     const issue = args.issue_id
-      ? meet?.issues.find((item) => item.id === args.issue_id) ?? null
-      : pickCurrentIssue(meet ?? emptyMeet());
+      ? plan?.issues.find((item) => item.id === args.issue_id) ?? null
+      : pickCurrentIssue(plan ?? emptyPlan());
 
     return JSON.stringify(
       {
@@ -192,7 +192,7 @@ export const nxMeetFollowup = tool({
         continuity_source: participant?.source ?? "none",
         delegation: {
           subagent_type: args.role.toLowerCase(),
-          team_name: "meet-panel",
+          team_name: "plan-panel",
           description: args.question,
           resume_task_id: recommendation.suggested_task_id,
           resume_session_id: recommendation.suggested_session_id,
@@ -206,26 +206,27 @@ export const nxMeetFollowup = tool({
   }
 });
 
-export const nxMeetUpdate = tool({
-  description: "Update meet issues",
+export const nxPlanUpdate = tool({
+  description: "Update plan issues",
   args: {
     action: z.enum(["add", "remove", "edit", "reopen"]),
-    issue_id: z.string().optional(),
+    issue_id: z.number().optional(),
     title: z.string().optional()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.MEET_FILE))) {
-      throw new Error("No active meet session.");
+    if (!(await fileExists(paths.PLAN_FILE))) {
+      throw new Error("No active plan session.");
     }
-    const meet = MeetFileSchema.parse(await readJsonFile<MeetFile>(paths.MEET_FILE, {} as MeetFile));
+    const plan = PlanFileSchema.parse(await readJsonFile<PlanFile>(paths.PLAN_FILE, {} as PlanFile));
 
     if (args.action === "add") {
       if (!args.title) {
         throw new Error("title is required for add");
       }
-      meet.issues.push({
-        id: `issue-${meet.issues.length + 1}`,
+      const nextId = (plan.issues.length > 0 ? Math.max(...plan.issues.map(i => i.id)) : 0) + 1;
+      plan.issues.push({
+        id: nextId,
         title: args.title,
         status: "pending",
         discussion: [],
@@ -237,14 +238,14 @@ export const nxMeetUpdate = tool({
       if (!args.issue_id) {
         throw new Error("issue_id is required for remove");
       }
-      meet.issues = meet.issues.filter((issue) => issue.id !== args.issue_id);
+      plan.issues = plan.issues.filter((issue) => issue.id !== args.issue_id);
     }
 
     if (args.action === "edit") {
       if (!args.issue_id || !args.title) {
         throw new Error("issue_id and title are required for edit");
       }
-      const issue = meet.issues.find((item) => item.id === args.issue_id);
+      const issue = plan.issues.find((item) => item.id === args.issue_id);
       if (!issue) {
         throw new Error(`issue not found: ${args.issue_id}`);
       }
@@ -255,7 +256,7 @@ export const nxMeetUpdate = tool({
       if (!args.issue_id) {
         throw new Error("issue_id is required for reopen");
       }
-      const issue = meet.issues.find((item) => item.id === args.issue_id);
+      const issue = plan.issues.find((item) => item.id === args.issue_id);
       if (!issue) {
         throw new Error(`issue not found: ${args.issue_id}`);
       }
@@ -265,27 +266,27 @@ export const nxMeetUpdate = tool({
       issue.task_refs = [];
     }
 
-    await writeJsonFile(paths.MEET_FILE, meet);
-    await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet);
-    return `Meet updated (${args.action})`;
+    await writeJsonFile(paths.PLAN_FILE, plan);
+    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
+    return `Plan updated (${args.action})`;
   }
 });
 
-export const nxMeetDiscuss = tool({
-  description: "Append discussion to meet issue",
+export const nxPlanDiscuss = tool({
+  description: "Append discussion to plan issue",
   args: {
-    issue_id: z.string(),
+    issue_id: z.number(),
     speaker: z.string(),
     message: z.string(),
-    kind: z.enum(MEET_DISCUSSION_KINDS).optional()
+    kind: z.enum(PLAN_DISCUSSION_KINDS).optional()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.MEET_FILE))) {
-      throw new Error("No active meet session.");
+    if (!(await fileExists(paths.PLAN_FILE))) {
+      throw new Error("No active plan session.");
     }
-    const meet = await readMeet(paths.MEET_FILE);
-    const issue = meet.issues.find((item) => item.id === args.issue_id);
+    const plan = await readPlan(paths.PLAN_FILE);
+    const issue = plan.issues.find((item) => item.id === args.issue_id);
 
     if (!issue) {
       throw new Error(`issue not found: ${args.issue_id}`);
@@ -293,12 +294,12 @@ export const nxMeetDiscuss = tool({
 
     const speaker = args.speaker;
     const message = args.message;
-    const kind = (args.kind ?? "discussion") as MeetDiscussionKind;
+    const kind = (args.kind ?? "discussion") as PlanDiscussionKind;
 
     const allowedSpeaker =
       speaker === "lead" ||
       speaker === "user" ||
-      meet.attendees.some((attendee) => attendee.role.toLowerCase() === speaker.toLowerCase());
+      plan.attendees.some((attendee) => attendee.role.toLowerCase() === speaker.toLowerCase());
 
     if (!allowedSpeaker) {
       throw new Error(`speaker is not in attendees: ${speaker}`);
@@ -311,27 +312,27 @@ export const nxMeetDiscuss = tool({
       kind,
       recorded_at: new Date().toISOString()
     });
-    await writeJsonFile(paths.MEET_FILE, meet);
-    await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet, { speaker, message });
+    await writeJsonFile(paths.PLAN_FILE, plan);
+    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker, message });
 
     return `Discussion recorded for ${args.issue_id} (${kind})`;
   }
 });
 
-export const nxMeetDecide = tool({
-  description: "Decide meet issue",
+export const nxPlanDecide = tool({
+  description: "Decide plan issue",
   args: {
-    issue_id: z.string(),
+    issue_id: z.number(),
     decision: z.string(),
     summary: z.string().optional()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.MEET_FILE))) {
-      throw new Error("No active meet session.");
+    if (!(await fileExists(paths.PLAN_FILE))) {
+      throw new Error("No active plan session.");
     }
-    const meet = await readMeet(paths.MEET_FILE);
-    const issue = meet.issues.find((item) => item.id === args.issue_id);
+    const plan = await readPlan(paths.PLAN_FILE);
+    const issue = plan.issues.find((item) => item.id === args.issue_id);
 
     if (!issue) {
       throw new Error(`issue not found: ${args.issue_id}`);
@@ -347,57 +348,57 @@ export const nxMeetDecide = tool({
       recorded_at: new Date().toISOString()
     });
 
-    await writeJsonFile(paths.MEET_FILE, meet);
-    await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet, { speaker: "lead", message: args.summary ?? args.decision });
+    await writeJsonFile(paths.PLAN_FILE, plan);
+    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker: "lead", message: args.summary ?? args.decision });
 
-    const allDecided = meet.issues.every((item) => item.status === "decided" || item.status === "tasked");
+    const allDecided = plan.issues.every((item) => item.status === "decided" || item.status === "tasked");
     return allDecided
       ? `Decision recorded for ${args.issue_id}. All issues decided. You can move to [run] or [rule].`
       : `Decision recorded for ${args.issue_id}`;
   }
 });
 
-export const nxMeetJoin = tool({
-  description: "Join attendee to active meet",
+export const nxPlanJoin = tool({
+  description: "Join attendee to active plan",
   args: {
     role: z.string(),
     name: z.string()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.MEET_FILE))) {
-      throw new Error("No active meet session.");
+    if (!(await fileExists(paths.PLAN_FILE))) {
+      throw new Error("No active plan session.");
     }
-    const meet = await readMeet(paths.MEET_FILE);
+    const plan = await readPlan(paths.PLAN_FILE);
 
-    const exists = meet.attendees.some(
+    const exists = plan.attendees.some(
       (a) => a.role.toLowerCase() === args.role.toLowerCase() && a.name.toLowerCase() === args.name.toLowerCase()
     );
     if (!exists) {
-      meet.attendees.push({
+      plan.attendees.push({
         role: args.role,
         name: args.name,
         joined_at: new Date().toISOString()
       });
-      await writeJsonFile(paths.MEET_FILE, meet);
+      await writeJsonFile(paths.PLAN_FILE, plan);
     }
 
-    await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet);
+    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
 
     return exists ? "Attendee already joined." : `Joined attendee ${args.role} (${args.name})`;
   }
 });
 
-async function readMeet(filePath: string): Promise<MeetFile> {
-  return MeetFileSchema.parse(await readJsonFile<MeetFile>(filePath, {} as MeetFile));
+async function readPlan(filePath: string): Promise<PlanFile> {
+  return PlanFileSchema.parse(await readJsonFile<PlanFile>(filePath, {} as PlanFile));
 }
 
-async function readCanonicalFollowupMeet(filePath: string): Promise<MeetFile | null> {
-  const raw = await readJsonFile<MeetFile | null>(filePath, null);
+async function readCanonicalFollowupPlan(filePath: string): Promise<PlanFile | null> {
+  const raw = await readJsonFile<PlanFile | null>(filePath, null);
   if (!raw) {
     return null;
   }
-  return MeetFileSchema.parse(raw);
+  return PlanFileSchema.parse(raw);
 }
 
 function buildResumeRecommendation(
@@ -420,9 +421,9 @@ function buildResumeRecommendation(
 }
 
 function pickParticipantFromSidecar(
-  sidecar: Awaited<ReturnType<typeof readMeetSidecar>>,
+  sidecar: Awaited<ReturnType<typeof readPlanSidecar>>,
   role: string
-): MeetParticipantContinuity | null {
+): PlanParticipantContinuity | null {
   if (!sidecar) {
     return null;
   }
@@ -436,32 +437,32 @@ function pickParticipantFromSidecar(
     session_id: participant.session_id ?? null,
     last_summary: participant.last_summary ?? null,
     updated_at: participant.updated_at,
-    source: "meet-sidecar"
+    source: "plan-sidecar"
   };
 }
 
 function mergeParticipantContinuity(
   role: string,
-  coreParticipant: MeetParticipantContinuity | null,
-  sidecarParticipant: MeetParticipantContinuity | null
+  coreParticipant: PlanParticipantContinuity | null,
+  sidecarParticipant: PlanParticipantContinuity | null
 ) {
   const task_id = coreParticipant?.task_id ?? null;
   const session_id = coreParticipant?.session_id ?? null;
   const sidecarSummary = sidecarParticipant?.last_summary?.trim() ? sidecarParticipant.last_summary : null;
-  const source = coreParticipant ? coreParticipant.source : sidecarSummary ? "meet-sidecar" : "none";
+  const source = coreParticipant ? coreParticipant.source : sidecarSummary ? "plan-sidecar" : "none";
 
   return {
     role: coreParticipant?.role ?? sidecarParticipant?.role ?? role,
     task_id,
     session_id,
     last_summary: coreParticipant?.last_summary ?? sidecarSummary,
-    updated_at: coreParticipant?.updated_at ?? (source === "meet-sidecar" ? sidecarParticipant?.updated_at ?? null : null),
+    updated_at: coreParticipant?.updated_at ?? (source === "plan-sidecar" ? sidecarParticipant?.updated_at ?? null : null),
     source,
     resumable: Boolean(task_id || session_id)
   };
 }
 
-function emptyMeet(): MeetFile {
+function emptyPlan(): PlanFile {
   return {
     id: 0,
     topic: "",
@@ -471,27 +472,27 @@ function emptyMeet(): MeetFile {
   };
 }
 
-function summarizeIssues(meet: MeetFile) {
+function summarizeIssues(plan: PlanFile) {
   const summary = {
-    total: meet.issues.length,
+    total: plan.issues.length,
     pending: 0,
     researching: 0,
     discussing: 0,
     decided: 0,
     deferred: 0,
     tasked: 0
-  } satisfies Record<MeetIssueStatus | "total", number>;
+  } satisfies Record<PlanIssueStatus | "total", number>;
 
-  for (const issue of meet.issues) {
+  for (const issue of plan.issues) {
     summary[issue.status] += 1;
   }
 
   return summary;
 }
 
-function pickCurrentIssue(meet: MeetFile) {
-  const issue = meet.issues.find((item) => item.status === "researching" || item.status === "discussing")
-    ?? meet.issues.find((item) => item.status === "pending" || item.status === "deferred")
+function pickCurrentIssue(plan: PlanFile) {
+  const issue = plan.issues.find((item) => item.status === "researching" || item.status === "discussing")
+    ?? plan.issues.find((item) => item.status === "pending" || item.status === "deferred")
     ?? null;
 
   if (!issue) {
@@ -507,7 +508,7 @@ function pickCurrentIssue(meet: MeetFile) {
   };
 }
 
-function nextIssueStatus(current: MeetIssueStatus, kind: MeetDiscussionKind): MeetIssueStatus {
+function nextIssueStatus(current: PlanIssueStatus, kind: PlanDiscussionKind): PlanIssueStatus {
   if (current === "decided" || current === "tasked") {
     return current;
   }

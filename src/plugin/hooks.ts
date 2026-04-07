@@ -8,12 +8,12 @@ import {
   selectRunContinuityFromCore
 } from "../orchestration/run-continuity-adapter.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
-import { canJoinMeetWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
+import { canJoinPlanWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
 import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, toAuditRecord } from "../shared/audit-log.js";
-import { loadCanonicalMeet, syncMeetSidecar } from "../shared/meet-sidecar.js";
+import { loadCanonicalPlan, syncPlanSidecar } from "../shared/meet-sidecar.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
@@ -43,7 +43,7 @@ type PipelineTaskStatus = "pending" | "in_progress" | "completed" | "blocked";
 interface PipelineEvaluatorSnapshot {
   hasTasksFile: boolean;
   hasTaskCycle: boolean;
-  tasks: Array<{ id?: string; status: PipelineTaskStatus }>;
+  tasks: Array<{ id?: number; status: PipelineTaskStatus }>;
   qaTriggerReasons: string[];
 }
 
@@ -63,6 +63,54 @@ interface PipelineEvaluatorResult {
 
 let pipelineEvaluatorLoader: Promise<((snapshot: PipelineEvaluatorSnapshot) => PipelineEvaluatorResult) | null> | null = null;
 
+const NEXUS_START = "<!-- NEXUS:START -->";
+const NEXUS_END = "<!-- NEXUS:END -->";
+
+function extractNexusBlock(content: string): string | null {
+  const startIdx = content.indexOf(NEXUS_START);
+  const endIdx = content.indexOf(NEXUS_END);
+  if (startIdx === -1 || endIdx === -1) return null;
+  return content.slice(startIdx + NEXUS_START.length, endIdx).trim();
+}
+
+function replaceNexusBlock(content: string, replacement: string): string {
+  const startIdx = content.indexOf(NEXUS_START);
+  const endIdx = content.indexOf(NEXUS_END);
+  return (
+    content.slice(0, startIdx + NEXUS_START.length) +
+    "\n" +
+    replacement +
+    "\n" +
+    content.slice(endIdx)
+  );
+}
+
+async function syncAgentsMdTemplate(projectRoot: string): Promise<void> {
+  const templatePath = new URL("../../templates/nexus-section.md", import.meta.url);
+  let template: string;
+  try {
+    template = (await fs.readFile(templatePath, "utf8")).trim();
+  } catch {
+    return;
+  }
+
+  const agentsMdPath = path.join(projectRoot, "AGENTS.md");
+  let agentsMd: string;
+  try {
+    agentsMd = await fs.readFile(agentsMdPath, "utf8");
+  } catch {
+    return;
+  }
+
+  const current = extractNexusBlock(agentsMd);
+  if (current === null) return;
+  if (current === template) return;
+
+  const updated = replaceNexusBlock(agentsMd, template);
+  await fs.writeFile(agentsMdPath, updated, "utf8");
+  console.log("[nexus] AGENTS.md synced with latest template");
+}
+
 export function createHooks(ctx: PluginContext) {
   const projectRoot = ctx.worktree ?? ctx.directory;
   const paths = createNexusPaths(projectRoot);
@@ -79,6 +127,11 @@ export function createHooks(ctx: PluginContext) {
       if (event.type === "session.created") {
         await ensureNexusStructure(paths);
         await resetAgentTracker(paths.AGENT_TRACKER_FILE);
+        try {
+          await syncAgentsMdTemplate(paths.PROJECT_ROOT);
+        } catch {
+          // sync failure must not block session initialization
+        }
       }
     },
 
@@ -119,8 +172,8 @@ export function createHooks(ctx: PluginContext) {
         });
       }
 
-      if (input.tool === "nx_meet_start") {
-        await validateMeetStart(output.args, paths.AGENT_TRACKER_FILE);
+      if (input.tool === "nx_plan_start") {
+        await validatePlanStart(output.args, paths.AGENT_TRACKER_FILE);
       }
 
       if (input.tool === "task") {
@@ -214,7 +267,7 @@ export function createHooks(ctx: PluginContext) {
       }
       await markLatestTeamCompleted(paths.AGENT_TRACKER_FILE, agentType, output.output.slice(0, 500));
       await updateRunParticipantContinuity(paths, input.args, output, taskHandles, subagentInvocation?.invocationID ?? null);
-      await updateMeetParticipantContinuity(paths, input.args, output);
+      await updatePlanParticipantContinuity(paths, input.args, output);
     },
 
     "chat.message": async (_input: unknown, output: ChatOutput) => {
@@ -254,6 +307,74 @@ export function createHooks(ctx: PluginContext) {
       } as Record<string, unknown>);
     },
 
+    "experimental.session.compacting": async (_input: unknown, output: { context: string[]; prompt?: string }) => {
+      const parts: string[] = [];
+
+      // Mode: plan > run > idle
+      const hasPlan = await fileExists(paths.PLAN_FILE);
+      const hasTasks = await fileExists(paths.TASKS_FILE);
+      const mode = hasPlan ? "plan" : hasTasks ? "run" : "idle";
+      parts.push(`mode=${mode}`);
+
+      // Task summary
+      const taskSummary = await readTasksSummary(paths.TASKS_FILE);
+      if (taskSummary) {
+        const { total, pending, in_progress } = taskSummary;
+        parts.push(`tasks: ${total} total (${pending} pending, ${in_progress} in_progress)`);
+      }
+
+      // Plan state
+      if (hasPlan) {
+        try {
+          const raw = JSON.parse(await fs.readFile(paths.PLAN_FILE, "utf8")) as {
+            topic?: unknown;
+            issues?: Array<{ status?: unknown }>;
+          };
+          const issues = Array.isArray(raw.issues) ? raw.issues : [];
+          const decidedCount = issues.filter((i) => i.status === "decided" || i.status === "tasked").length;
+          parts.push(`plan: "${String(raw.topic ?? "unknown")}" (${decidedCount}/${issues.length} decided)`);
+        } catch {
+          // skip plan info on parse error
+        }
+      }
+
+      // Core file count
+      try {
+        let coreFileCount = 0;
+        const coreLayers = ["identity", "codebase", "reference", "memory"] as const;
+        for (const layer of coreLayers) {
+          const layerDir = path.join(paths.CORE_ROOT, layer);
+          try {
+            const files = await fs.readdir(layerDir);
+            coreFileCount += files.filter((f) => f.endsWith(".md")).length;
+          } catch {
+            // layer dir may not exist
+          }
+        }
+        if (coreFileCount > 0) {
+          parts.push(`core: ${coreFileCount} files`);
+        }
+      } catch {
+        // skip core count on error
+      }
+
+      // Active agents
+      try {
+        const raw = await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8");
+        const tracker = JSON.parse(raw) as Array<{ agent_type?: string; status?: string }>;
+        const active = tracker
+          .filter((a) => a.status === "running" || a.status === "team-spawning")
+          .map((a) => a.agent_type ?? "unknown");
+        if (active.length > 0) {
+          parts.push(`active agents: ${active.join(", ")}`);
+        }
+      } catch {
+        // skip agent list on error
+      }
+
+      output.context.push(`[nexus-state] ${parts.join(" | ")}`);
+    },
+
     "experimental.chat.system.transform": async (
       input: { sessionID?: string },
       output: { system: string[] }
@@ -261,7 +382,7 @@ export function createHooks(ctx: PluginContext) {
       const sessionID = input.sessionID;
       if (sessionID && !ctx.state.onboardedSessions.has(sessionID)) {
         output.system.push(
-          "[nexus] Quick start: use [meet] to decide, [run] to execute tasks, nx_task_close to archive when complete."
+          "[nexus] Quick start: use [plan] to decide, [run] to execute tasks, nx_task_close to archive when complete."
         );
         ctx.state.onboardedSessions.add(sessionID);
       }
@@ -295,14 +416,14 @@ function getTargetPath(args: Record<string, unknown>, projectRoot: string): stri
   return path.join(projectRoot, picked);
 }
 
-async function validateMeetStart(args: Record<string, unknown>, trackerFile: string): Promise<void> {
+async function validatePlanStart(args: Record<string, unknown>, trackerFile: string): Promise<void> {
   const attendees = Array.isArray(args.attendees) ? args.attendees : [];
   const hasNonLead = attendees.some((a) => {
     if (!a || typeof a !== "object") {
       return false;
     }
     const role = (a as { role?: unknown }).role;
-    return typeof role === "string" && !canJoinMeetWithoutTeam(role);
+    return typeof role === "string" && !canJoinPlanWithoutTeam(role);
   });
 
   if (!hasNonLead) {
@@ -327,9 +448,9 @@ async function enforceTaskTeamPolicy(
     return;
   }
 
-  const hasMeet = await fileExists(paths.MEET_FILE);
+  const hasPlan = await fileExists(paths.PLAN_FILE);
   const hasTasks = await fileExists(paths.TASKS_FILE);
-  const inRunMode = hasTasks && !hasMeet;
+  const inRunMode = hasTasks && !hasPlan;
   if (!inRunMode || !requiresTeamInRunMode(agentType)) {
     return;
   }
@@ -349,7 +470,7 @@ async function trackSubagentStart(args: Record<string, unknown>, trackerFile: st
   const teamName = pickCoordinationLabel(args);
   await appendAgentTracker(trackerFile, {
     agent_type: agentType,
-    state: teamName ? "team-spawning" : "running",
+    status: teamName ? "team-spawning" : "running",
     team_name: teamName ?? undefined,
     coordination_label: teamName ?? undefined,
     lead_agent: "lead",
@@ -358,7 +479,7 @@ async function trackSubagentStart(args: Record<string, unknown>, trackerFile: st
   });
 }
 
-async function updateMeetParticipantContinuity(
+async function updatePlanParticipantContinuity(
   paths: ReturnType<typeof createNexusPaths>,
   args: Record<string, unknown>,
   output: { title: string; output: string; metadata: unknown }
@@ -368,13 +489,13 @@ async function updateMeetParticipantContinuity(
     return;
   }
 
-  const meet = await loadCanonicalMeet(paths.MEET_FILE);
-  if (!meet) {
+  const plan = await loadCanonicalPlan(paths.PLAN_FILE);
+  if (!plan) {
     return;
   }
 
   const handles = extractParticipantHandles(output.metadata);
-  const continuityInvocationID = createMeetContinuityInvocationID(agentType);
+  const continuityInvocationID = createPlanContinuityInvocationID(agentType);
   const coordinationLabel = pickCoordinationLabel(args) ?? undefined;
   await registerStart(paths.ORCHESTRATION_CORE_FILE, {
     invocation_id: continuityInvocationID,
@@ -394,7 +515,7 @@ async function updateMeetParticipantContinuity(
     }
   });
 
-  await syncMeetSidecar(paths.MEET_SIDECAR_FILE, meet, {
+  await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, {
     speaker: agentType,
     message: output.output.slice(0, 500),
     taskID: handles.taskID,
@@ -440,10 +561,10 @@ async function updateRunParticipantContinuity(
   });
 }
 
-function createMeetContinuityInvocationID(agentType: string): string {
+function createPlanContinuityInvocationID(agentType: string): string {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).slice(2, 8);
-  return `meet-continuity-${agentType.toLowerCase()}-${timestamp}-${nonce}`;
+  return `plan-continuity-${agentType.toLowerCase()}-${timestamp}-${nonce}`;
 }
 
 function createRunContinuityInvocationID(agentType: string, coordinationLabel?: string): string {
@@ -480,8 +601,8 @@ async function injectRunContinuityForTask(
 }
 
 async function isRunMode(paths: ReturnType<typeof createNexusPaths>): Promise<boolean> {
-  const [hasMeet, hasTasks] = await Promise.all([fileExists(paths.MEET_FILE), fileExists(paths.TASKS_FILE)]);
-  return hasTasks && !hasMeet;
+  const [hasPlan, hasTasks] = await Promise.all([fileExists(paths.PLAN_FILE), fileExists(paths.TASKS_FILE)]);
+  return hasTasks && !hasPlan;
 }
 
 function extractParticipantHandles(metadata: unknown): { taskID?: string; sessionID?: string } {
@@ -728,22 +849,22 @@ async function buildStatefulNotice(
 ): Promise<string | null> {
   const branch = await readCurrentBranch(projectRoot);
   const branchGuard = branch === "main" || branch === "master";
-  const hasMeet = await fileExists(paths.MEET_FILE);
+  const hasPlan = await fileExists(paths.PLAN_FILE);
   const taskSummary = await readTasksSummary(paths.TASKS_FILE);
-  const meetReminder = hasMeet ? await buildMeetReminder(paths.MEET_FILE) : null;
+  const planReminder = hasPlan ? await buildPlanReminder(paths.PLAN_FILE) : null;
   const ruleTags = detectRuleTags(prompt);
   const attendeeMentions = detectAttendeeMentions(prompt);
 
   if (attendeeMentions.length > 0) {
-    if (hasMeet) {
-      return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Add them with nx_meet_join before continuing discussion.`;
+    if (hasPlan) {
+      return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Add them with nx_plan_join before continuing discussion.`;
     }
-    return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Start or resume a meet first, then use nx_meet_join.`;
+    return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Start or resume a plan first, then use nx_plan_join.`;
   }
 
   if (!mode) {
-    if (meetReminder) {
-      return meetReminder;
+    if (planReminder) {
+      return planReminder;
     }
     if (taskSummary) {
       const evaluation = await evaluatePipelineFromSummary(taskSummary);
@@ -764,27 +885,27 @@ async function buildStatefulNotice(
 
   const fallback = buildTagNotice(mode);
 
-  if (mode === "meet") {
-    return hasMeet
+  if (mode === "plan") {
+    return hasPlan
       ? [
-          "[nexus] Meet session is active.",
-          meetReminder ?? "",
-          "Continue one issue at a time. Record major deliberation with nx_meet_discuss, compare options with trade-offs, and use [d] -> nx_meet_decide only after discussion is logged. Do not open the next issue until the current issue is decided or explicitly deferred."
+          "[nexus] Plan session is active.",
+          planReminder ?? "",
+          "Continue one issue at a time. Record major deliberation with nx_plan_discuss, compare options with trade-offs, and use [d] -> nx_plan_decide only after discussion is logged. Do not open the next issue until the current issue is decided or explicitly deferred."
         ]
           .filter(Boolean)
           .join(" ")
       : [
-          "[nexus] Meet mode detected.",
-          "Research first, then start with nx_meet_start(topic, research_summary, issues). Do not open discussion until the current issue has grounded research.",
-          "If non-lead attendees are needed, start grouped coordination before starting the meet.",
+          "[nexus] Plan mode detected.",
+          "Research first, then start with nx_plan_start(topic, research_summary, issues). Do not open discussion until the current issue has grounded research.",
+          "If non-lead attendees are needed, start grouped coordination before starting the plan.",
           "Keep the agenda one issue at a time and decide only after discussing trade-offs."
         ].join(" ");
   }
 
   if (mode === "decide") {
-    return hasMeet
-      ? "[nexus] Decision tag detected. Record supporting reasoning with nx_meet_discuss first if it is missing, then record the active issue with nx_meet_decide."
-      : "[nexus] [d] detected but no active meet session. Run nx_meet_start first.";
+    return hasPlan
+      ? "[nexus] Decision tag detected. Record supporting reasoning with nx_plan_discuss first if it is missing, then record the active issue with nx_plan_decide."
+      : "[nexus] [d] detected but no active plan session. Run nx_plan_start first.";
   }
 
   if (mode === "run") {
@@ -798,7 +919,7 @@ async function buildStatefulNotice(
       return [
         "[nexus] Run mode detected. No task cycle yet.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Create a task branch before substantial execution.` : "",
-        "TASK PIPELINE: check meet decisions, decompose work, register each task with nx_task_add, then edit.",
+        "TASK PIPELINE: check plan decisions, decompose work, register each task with nx_task_add, then edit.",
         "If decomposition yields multiple tasks or multiple target files, do not continue as Lead solo; delegate code execution units to Engineer.",
         "Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
         "After implementation, update task states, verify, optionally nx_sync, and close with nx_task_close."
@@ -875,9 +996,9 @@ async function evaluatePipelineSnapshot(snapshot: PipelineEvaluatorSnapshot): Pr
   return evaluatePipelineSnapshotPure(snapshot);
 }
 
-async function buildMeetReminder(meetFile: string): Promise<string | null> {
+async function buildPlanReminder(planFile: string): Promise<string | null> {
   try {
-    const raw = JSON.parse(await fs.readFile(meetFile, "utf8")) as {
+    const raw = JSON.parse(await fs.readFile(planFile, "utf8")) as {
       topic?: unknown;
       issues?: Array<{ id?: unknown; title?: unknown; status?: unknown; decision?: unknown; task_refs?: unknown[] }>;
     };
@@ -889,7 +1010,7 @@ async function buildMeetReminder(meetFile: string): Promise<string | null> {
     const currentText = current
       ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\" (${String(current.status ?? "unknown")}).`
       : "All issues are decided or already linked to execution.";
-    return `[nexus] Meet session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Decided ${decidedCount}/${issues.length}. Use one-issue-at-a-time discussion, record important reasoning in nx_meet_discuss, and do not open the next issue until the current issue is decided or explicitly deferred.`;
+    return `[nexus] Plan session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Decided ${decidedCount}/${issues.length}. Use one-issue-at-a-time discussion, record important reasoning in nx_plan_discuss, and do not open the next issue until the current issue is decided or explicitly deferred.`;
   } catch {
     return null;
   }

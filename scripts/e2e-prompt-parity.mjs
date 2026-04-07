@@ -9,22 +9,21 @@ const skillPrompts = await fs.readFile(path.join(root, "src", "skills", "prompts
 const systemPrompt = await fs.readFile(path.join(root, "src", "plugin", "system-prompt.ts"), "utf8");
 const template = await fs.readFile(path.join(root, "templates", "nexus-section.md"), "utf8");
 
-for (const agent of ["architect", "designer", "postdoc", "strategist", "engineer", "researcher", "writer", "qa", "reviewer"]) {
+for (const agent of ["architect", "designer", "postdoc", "strategist", "engineer", "researcher", "writer", "tester", "reviewer"]) {
   assert.match(agentPrompts, new RegExp(`${agent}: \\[`, "i"));
 }
 
 for (const token of [
-  "Evidence Requirement:",
-  "Response Format:",
-  "Artifact Rule:",
-  "Severity Levels:",
+  "Evidence Requirement",
+  "Response Format",
+  "Severity Levels",
   "Completion Report",
-  "Escalation:"
+  "Escalation"
 ]) {
   assert.match(agentPrompts, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
 
-for (const skill of ["nx-meet", "nx-run", "nx-init", "nx-sync", "nx-setup"]) {
+for (const skill of ["nx-plan", "nx-run", "nx-init", "nx-sync", "nx-setup"]) {
   assert.match(skillPrompts, new RegExp(`"${skill}"`));
 }
 
@@ -44,8 +43,8 @@ for (const token of [
 for (const token of [
   "MUST NOT handle multi-task or multi-file execution as Lead solo once decomposition is required.",
   "MUST involve at least one Engineer for code execution units.",
-  "MUST log discussion before decision; nx_meet_decide never substitutes for the discussion record.",
-  "prefer nx_meet_followup to produce delegation-ready resume guidance",
+  "MUST log discussion before decision; nx_plan_decide never substitutes for the discussion record.",
+  "prefer nx_plan_followup to produce delegation-ready resume guidance",
   "Generated identity drafts remain drafts until the user confirms or replaces them.",
   "target paths",
   "git working tree changes",
@@ -59,7 +58,7 @@ for (const token of [
   "OUTPUT CONTRACTS",
   "PLATFORM MAPPING",
   "MODE PLAYBOOK (run)",
-  "MODE PLAYBOOK (meet)"
+  "MODE PLAYBOOK (plan)"
 ]) {
   assert.match(systemPrompt, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }

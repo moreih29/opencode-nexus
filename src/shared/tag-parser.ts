@@ -1,17 +1,16 @@
-const ERROR_CONTEXT = /(error|bug|exception|stack trace|traceback|fix\s+.*(meet|run|rule|\[d\])|에러|버그|오류|이슈)/i;
-const QUESTION_CONTEXT = /(what\s+is|what\s+does|explain|define|뭐야|뭔가요|설명해)\s*(meet|run|rule|\[d\])?/i;
-const QUOTE_CONTEXT = /[`"'](?:[^`"']*)(meet|run|rule|\[d\])(?:[^`"']*)[`"']/i;
-const NATURAL_MEET_PATTERNS = [
-  /\bmeet\b/i,
-  /미팅/,
-  /회의/,
-  /논의하자/,
-  /모여/,
-  /상담/,
-  /어떻게\s*하면\s*좋을까/,
+const ERROR_CONTEXT = /(error|bug|exception|stack trace|traceback|fix\s+.*(plan|run|rule|\[d\])|에러|버그|오류|이슈)/i;
+const QUESTION_CONTEXT = /(what\s+is|what\s+does|explain|define|뭐야|뭔가요|설명해)\s*(plan|run|rule|\[d\])?/i;
+const QUOTE_CONTEXT = /[`"'](?:[^`"']*)(plan|run|rule|\[d\])(?:[^`"']*)[`"']/i;
+const NATURAL_PLAN_PATTERNS = [
+  /\bplan\b/i,
+  /계획/,
+  /설계/,
+  /분석해/,
+  /분석하자/,
+  /어떻게\s*접근/,
   /뭐가\s*좋을까/,
   /방법을?\s*찾아/,
-  /good\s+approach/i
+  /검토해/
 ];
 const NATURAL_RUN_PATTERNS = [/\[run\]/i, /실행해/, /구현해/, /개발해/, /진행해/];
 const ATTENDEE_VERB = /(참석|불러|소환|join|invite|bring in)/i;
@@ -24,11 +23,11 @@ const AGENT_ALIASES: Record<string, string[]> = {
   engineer: ["engineer", "엔지니어"],
   researcher: ["researcher", "리서처"],
   writer: ["writer", "라이터"],
-  qa: ["qa", "QA"],
+  tester: ["tester", "테스터"],
   reviewer: ["reviewer", "리뷰어"]
 };
 
-export type NexusTagMode = "meet" | "run" | "decide" | "rule" | null;
+export type NexusTagMode = "plan" | "run" | "decide" | "rule" | null;
 
 export function detectNexusTag(prompt: string): NexusTagMode {
   if (isFalsePositiveContext(prompt)) {
@@ -38,8 +37,8 @@ export function detectNexusTag(prompt: string): NexusTagMode {
   if (/\[d\]/i.test(prompt)) {
     return "decide";
   }
-  if (/\[meet\]/i.test(prompt)) {
-    return "meet";
+  if (/\[plan\]/i.test(prompt)) {
+    return "plan";
   }
   if (/\[run\]/i.test(prompt)) {
     return "run";
@@ -47,8 +46,8 @@ export function detectNexusTag(prompt: string): NexusTagMode {
   if (/\[rule(?::[^\]]+)?\]/i.test(prompt)) {
     return "rule";
   }
-  if (NATURAL_MEET_PATTERNS.some((pattern) => pattern.test(prompt))) {
-    return "meet";
+  if (NATURAL_PLAN_PATTERNS.some((pattern) => pattern.test(prompt))) {
+    return "plan";
   }
   if (NATURAL_RUN_PATTERNS.some((pattern) => pattern.test(prompt)) && /task|tasks|phase|pipeline|구현|실행/.test(prompt)) {
     return "run";
@@ -58,7 +57,7 @@ export function detectNexusTag(prompt: string): NexusTagMode {
 }
 
 export function hasExplicitNexusTag(prompt: string): boolean {
-  return /\[(meet|run|d|rule(?::[^\]]+)?)\]/i.test(prompt);
+  return /\[(plan|run|d|rule(?::[^\]]+)?)\]/i.test(prompt);
 }
 
 export function detectRuleTags(prompt: string): string[] | null {
@@ -93,14 +92,14 @@ export function buildTagNotice(mode: NexusTagMode): string | null {
     return null;
   }
 
-  if (mode === "meet") {
-    return "[nexus] Meet mode detected. Research first, then use nx_meet_start / nx_meet_discuss / nx_meet_decide.";
+  if (mode === "plan") {
+    return "[nexus] Plan mode detected. Research first, then use nx_plan_start / nx_plan_discuss / nx_plan_decide.";
   }
   if (mode === "run") {
     return "[nexus] Run mode detected. Follow nx_task_add -> nx_task_update -> nx_task_close around all file edits.";
   }
   if (mode === "decide") {
-    return "[nexus] Decision tag detected. Record decision with nx_meet_decide.";
+    return "[nexus] Decision tag detected. Record decision with nx_plan_decide.";
   }
   if (mode === "rule") {
     return "[nexus] Rule mode detected. Persist durable conventions in .nexus/rules via nx_rules_write.";

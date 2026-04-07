@@ -119,7 +119,7 @@ export const nxInit = tool({
             ? ["Answer the confirmation questions and rerun nx_init with the confirmed mission, design, and roadmap values."]
             : ["Identity values were explicitly provided for this run."]),
           "Prefer AGENTS.md and opencode.json.instructions as the primary instruction path in OpenCode.",
-          "Use [meet] for major decisions before implementation.",
+          "Use [plan] for major decisions before implementation.",
           "Use nx_sync after completed cycles to promote decisions into core knowledge."
         ]
       },
@@ -164,7 +164,7 @@ export const nxSync = tool({
     ];
     const needsVerification = [
       ...(gitSignals.changedFiles.length === 0 ? ["No git working tree changes detected during sync."] : []),
-      ...(summary.decisionCount === 0 ? ["No recorded meet decisions were available in the archived cycle."] : [])
+      ...(summary.decisionCount === 0 ? ["No recorded plan decisions were available in the archived cycle."] : [])
     ];
 
     if (args.scope === "all" || args.scope === "identity") {
@@ -346,7 +346,7 @@ function buildRulesDoc(scan: Awaited<ReturnType<typeof scanProject>>): string {
     `- Known scripts: ${scan.scripts.join(", ") || "none detected"}`,
     "",
     "## Execution Flow",
-    "- Use [meet] for significant decisions before implementation.",
+    "- Use [plan] for significant decisions before implementation.",
     "- Register tasks before file edits and close each cycle with nx_task_close.",
     "- Run nx_sync after meaningful completed cycles to update core knowledge."
   ].join("\n");
@@ -354,14 +354,14 @@ function buildRulesDoc(scan: Awaited<ReturnType<typeof scanProject>>): string {
 
 function summarizeCycle(cycle: any, gitSignals: Awaited<ReturnType<typeof readGitSignals>>) {
   const tasks = Array.isArray(cycle?.tasks?.tasks) ? cycle.tasks.tasks : [];
-  const issues = Array.isArray(cycle?.meet?.issues) ? cycle.meet.issues : [];
+  const issues = Array.isArray(cycle?.plan?.issues) ? cycle.plan.issues : [];
   const decisions = issues
     .filter((issue: any) => typeof issue?.decision === "string" && issue.decision.length > 0)
     .map((issue: any) => ({ id: String(issue.id ?? "unknown"), title: String(issue.title ?? "untitled"), decision: issue.decision }));
   return {
     completedAt: String(cycle?.completed_at ?? new Date().toISOString()),
     branch: String(cycle?.branch ?? "unknown"),
-    topic: typeof cycle?.meet?.topic === "string" ? cycle.meet.topic : null,
+    topic: typeof cycle?.plan?.topic === "string" ? cycle.plan.topic : null,
     taskTitles: tasks.map((task: any) => String(task.title ?? task.id ?? "unknown task")),
     decisions,
     taskCount: tasks.length,
@@ -413,7 +413,7 @@ function buildRecentChangesDoc(summary: ReturnType<typeof summarizeCycle>): stri
     "# Recent Changes",
     "",
     `- Latest archived branch: ${summary.branch}`,
-    `- Latest meet topic: ${summary.topic ?? "none"}`,
+    `- Latest plan topic: ${summary.topic ?? "none"}`,
     `- Lifecycle signals: reopen=${summary.memoryHint?.reopenCount ?? 0}, blocked=${summary.memoryHint?.blockedTransitions ?? 0}`,
     "",
     "## Completed Work",

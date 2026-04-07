@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { readMeetParticipantContinuityFromCore } from "../orchestration/meet-continuity-adapter.js";
+import { readPlanParticipantContinuityFromCore } from "../orchestration/meet-continuity-adapter.js";
 import { summarizeCoordinationGroups } from "../shared/agent-tracker.js";
-import { readMeetSidecar } from "../shared/meet-sidecar.js";
+import { readPlanSidecar } from "../shared/meet-sidecar.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile } from "../shared/json-store.js";
 import { fileExists, readTasksSummary } from "../shared/state.js";
@@ -15,22 +15,22 @@ export const nxContext = tool({
     const root = context.worktree ?? context.directory;
     const paths = createNexusPaths(root);
 
-    const [hasMeet, hasTasks, tasksSummary, branch, meet, meetSidecar, coordinationGroups] = await Promise.all([
-      fileExists(paths.MEET_FILE),
+    const [hasPlan, hasTasks, tasksSummary, branch, plan, planSidecar, coordinationGroups] = await Promise.all([
+      fileExists(paths.PLAN_FILE),
       fileExists(paths.TASKS_FILE),
       readTasksSummary(paths.TASKS_FILE),
       readCurrentBranch(root),
-      readJsonFile<{ topic?: string; issues?: Array<{ id?: string; title?: string; status?: string }> } | null>(paths.MEET_FILE, null),
-      readMeetSidecar(paths.MEET_SIDECAR_FILE),
+      readJsonFile<{ topic?: string; issues?: Array<{ id?: number; title?: string; status?: string }> } | null>(paths.PLAN_FILE, null),
+      readPlanSidecar(paths.PLAN_SIDECAR_FILE),
       summarizeCoordinationGroups(paths.AGENT_TRACKER_FILE)
     ]);
 
-    const activeMode = hasMeet ? "meet" : hasTasks ? "run" : "idle";
-    const currentIssue = meet?.issues?.find((issue) => issue.status === "discussing") ?? meet?.issues?.find((issue) => issue.status === "pending") ?? null;
-    const mergedParticipants = meetSidecar
+    const activeMode = hasPlan ? "plan" : hasTasks ? "run" : "idle";
+    const currentIssue = plan?.issues?.find((issue: { status?: string }) => issue.status === "discussing") ?? plan?.issues?.find((issue: { status?: string }) => issue.status === "pending") ?? null;
+    const mergedParticipants = planSidecar
       ? await Promise.all(
-          meetSidecar.panel.participants.map(async (participant) => {
-            const coreParticipant = await readMeetParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, participant.role);
+          planSidecar.panel.participants.map(async (participant: { role: string; last_summary?: string | null }) => {
+            const coreParticipant = await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, participant.role);
 
             return {
               role: participant.role,
@@ -47,23 +47,23 @@ export const nxContext = tool({
         branch,
         branchGuard: branch === "main" || branch === "master",
         activeMode,
-        meetTopic: typeof meet?.topic === "string" ? meet.topic : null,
+        planTopic: typeof plan?.topic === "string" ? plan.topic : null,
         currentIssue,
-        handoff: meetSidecar
+        handoff: planSidecar
           ? {
-              policy: meetSidecar.handoff.policy,
-              canonicalReady: meetSidecar.handoff.canonical_ready,
+              policy: planSidecar.handoff.policy,
+              canonicalReady: planSidecar.handoff.canonical_ready,
               panelMembership: {
-                roles: meetSidecar.panel.participants.map((item) => item.role)
+                roles: planSidecar.panel.participants.map((item: { role: string }) => item.role)
               },
               resumability: {
                 participants: mergedParticipants
-                  .filter((item) => item.task_id || item.session_id)
-                  .map((item) => ({ role: item.role, task_id: item.task_id ?? null, session_id: item.session_id ?? null }))
+                  .filter((item: { task_id: string | null; session_id: string | null }) => item.task_id || item.session_id)
+                  .map((item: { role: string; task_id: string | null; session_id: string | null }) => ({ role: item.role, task_id: item.task_id ?? null, session_id: item.session_id ?? null }))
               },
               followupSuggestions: mergedParticipants
-                .filter((item) => item.task_id || item.session_id || item.last_summary)
-                .map((item) => ({
+                .filter((item: { task_id: string | null; session_id: string | null; last_summary: string | null }) => item.task_id || item.session_id || item.last_summary)
+                .map((item: { role: string; task_id: string | null; session_id: string | null }) => ({
                   role: item.role,
                   reason: item.task_id || item.session_id ? "continuity" : "summary-only"
                 }))

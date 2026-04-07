@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxMeetDecide, nxMeetDiscuss, nxMeetJoin, nxMeetStart } from "../dist/tools/meet.js";
+import { nxPlanDecide, nxPlanDiscuss, nxPlanJoin, nxPlanStart } from "../dist/tools/meet.js";
 import { nxTaskAdd, nxTaskClose, nxTaskUpdate } from "../dist/tools/task.js";
 
 const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-"));
@@ -26,7 +26,7 @@ const ctx = {
   async ask() {}
 };
 
-await nxMeetStart.execute(
+await nxPlanStart.execute(
   {
     topic: "Smoke workflow",
     research_summary: "basic",
@@ -36,27 +36,27 @@ await nxMeetStart.execute(
   ctx
 );
 
-await nxMeetJoin.execute({ role: "architect", name: "Architect" }, ctx);
+await nxPlanJoin.execute({ role: "architect", name: "Architect" }, ctx);
 
-await nxMeetDiscuss.execute({ issue_id: "issue-1", speaker: "lead", message: "Collected current constraints.", kind: "research" }, ctx);
-await nxMeetDiscuss.execute({ issue_id: "issue-1", speaker: "architect", message: "Prefer canonical-safe sidecars.", kind: "summary" }, ctx);
-await nxMeetDiscuss.execute({ issue_id: "issue-1", speaker: "lead", message: "Recommend explicit task linkage.", kind: "summary" }, ctx);
-await nxMeetDecide.execute({ issue_id: "issue-1", decision: "Use explicit meet-to-task linkage.", summary: "Link task ids back to the originating issue." }, ctx);
+await nxPlanDiscuss.execute({ issue_id: 1, speaker: "lead", message: "Collected current constraints.", kind: "research" }, ctx);
+await nxPlanDiscuss.execute({ issue_id: 1, speaker: "architect", message: "Prefer canonical-safe sidecars.", kind: "summary" }, ctx);
+await nxPlanDiscuss.execute({ issue_id: 1, speaker: "lead", message: "Recommend explicit task linkage.", kind: "summary" }, ctx);
+await nxPlanDecide.execute({ issue_id: 1, decision: "Use explicit plan-to-task linkage.", summary: "Link task ids back to the originating issue." }, ctx);
 
-const addText = JSON.parse(await nxTaskAdd.execute({ title: "Implement", owner: "engineer", meet_issue: "issue-1" }, ctx));
+const addText = JSON.parse(await nxTaskAdd.execute({ title: "Implement", owner: "engineer", plan_issue: 1 }, ctx));
 assert.match(addText.message, /Added task/);
-assert.equal(addText.nexus_task_id.startsWith("task-"), true);
+assert.equal(typeof addText.nexus_task_id, "number");
 
 const tasksRaw = JSON.parse(await fs.readFile(paths.TASKS_FILE, "utf8"));
 assert.equal(tasksRaw.tasks.length, 1);
 
-const meetRaw = JSON.parse(await fs.readFile(paths.MEET_FILE, "utf8"));
-assert.equal(meetRaw.issues[0].status, "tasked");
-assert.equal(Array.isArray(meetRaw.issues[0].discussion), true);
-assert.equal(typeof meetRaw.issues[0].discussion[0].speaker, "string");
-assert.equal(meetRaw.issues[0].task_refs.includes(tasksRaw.tasks[0].id), true);
+const planRaw = JSON.parse(await fs.readFile(paths.PLAN_FILE, "utf8"));
+assert.equal(planRaw.issues[0].status, "tasked");
+assert.equal(Array.isArray(planRaw.issues[0].discussion), true);
+assert.equal(typeof planRaw.issues[0].discussion[0].speaker, "string");
+assert.equal(planRaw.issues[0].task_refs.includes(tasksRaw.tasks[0].id), true);
 
-const sidecarRaw = JSON.parse(await fs.readFile(paths.MEET_SIDECAR_FILE, "utf8"));
+const sidecarRaw = JSON.parse(await fs.readFile(paths.PLAN_SIDECAR_FILE, "utf8"));
 assert.equal(sidecarRaw.handoff.policy, "canonical-first");
 assert.equal(sidecarRaw.panel.strategy, "how-fixed-panel");
 assert.equal(sidecarRaw.panel.participants.some((item) => item.role === "architect"), true);

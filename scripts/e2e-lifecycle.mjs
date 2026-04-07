@@ -16,7 +16,7 @@ await ensureNexusStructure(paths);
 
 const ctx = { directory: root, worktree: root };
 const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Lifecycle task" }, ctx));
-assert.equal(addResult.nexus_task_id.startsWith("task-"), true);
+assert.equal(typeof addResult.nexus_task_id, "number");
 assert.equal(addResult.status, "pending");
 const id = addResult.nexus_task_id;
 
@@ -34,10 +34,9 @@ updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "completed" }
 assert.equal(updateResult.status, "completed");
 
 await assert.rejects(
-  () => nxTaskUpdate.execute({ id: "ses_regression_wrong_id", status: "in_progress" }, ctx),
+  () => nxTaskUpdate.execute({ id: 999, status: "in_progress" }, ctx),
   (error) => {
-    assert.match(error.message, /opencode session id/i);
-    assert.match(error.message, /nx_task_update expects a nexus task id/i);
+    assert.match(error.message, /not found/i);
     return true;
   }
 );
