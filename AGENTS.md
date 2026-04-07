@@ -27,7 +27,7 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 
 | Skill | Trigger | Purpose |
 |---|---|---|
-| nx-plan | [plan] | Multi-perspective analysis and decision recording |
+| nx-plan | [plan] | Team discussion and decision recording |
 | nx-run | [run] | Execution pipeline |
 | nx-init | nx-init | Onboarding |
 | nx-sync | nx-sync | Core sync |
@@ -37,16 +37,16 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 
 | Tag | Purpose |
 |---|---|
-| [plan] | Multi-perspective analysis before implementation |
-| [d] | Record a meet decision with nx_plan_decide |
+| [plan] | 리서치, 다관점 분석, 결정, 계획서 생성 |
+| [d] | Record a plan decision with nx_plan_decide |
 | [run] | Execute the task pipeline |
 | [rule] | Persist a stable team convention |
 
 ### Operational Rules
 
 - Use `[plan]` before major implementation decisions.
-- In meetings, research first and discuss one issue at a time.
-- Use `[d]` only inside an active meet and only after supporting discussion is recorded.
+- In planning sessions, research first and discuss one issue at a time.
+- Use `[d]` only inside an active plan and only after supporting discussion is recorded.
 - Use `[run]` when execution should follow the task pipeline.
 - Register each execution unit with `nx_task_add` before file edits.
 - Keep edits scoped to active tasks and update status with `nx_task_update`.
