@@ -173,7 +173,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 - `docs/operations.md` — runtime workflow and guardrails
 - `docs/coverage-matrix.md` — implementation coverage snapshot
-- `docs/prompt-parity-plan.md` — parity tracking against `claude-nexus`
+- `UPSTREAM.md` — relationship with claude-nexus and `@moreih29/nexus-core`
 - `docs/reference-boundaries.md` — legacy vs current OpenCode behavior
 
 ## License

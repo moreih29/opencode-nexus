@@ -15,7 +15,7 @@ import {
   nxLspSymbols,
   nxLspWorkspaceSymbols
 } from "./lsp.js";
-import { nxPlanDecide, nxPlanDiscuss, nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart, nxPlanStatus, nxPlanUpdate } from "./meet.js";
+import { nxPlanDecide, nxPlanDiscuss, nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart, nxPlanStatus, nxPlanUpdate } from "./plan.js";
 import { nxRulesRead, nxRulesWrite } from "./rules-store.js";
 import { nxSetup } from "./setup.js";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task.js";

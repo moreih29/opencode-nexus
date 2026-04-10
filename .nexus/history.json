@@ -3188,6 +3188,219 @@
           "created_at": "2026-04-07T03:09:47.868Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-10T07:59:00.649Z",
+      "branch": "feat/nexus-core-positioning",
+      "plan": {
+        "id": 16,
+        "topic": "opencode-nexus 철학 정립과 claude-nexus 동기화 전략",
+        "issues": [
+          {
+            "id": 1,
+            "title": "프로젝트 정체성 — opencode-nexus는 claude-nexus에 대해 무엇인가(미러/포크/재구현/공유코어 소비자)",
+            "status": "decided",
+            "decision": "\n**결정: E. Shared Prompt Library (단계적 추출, opencode-nexus 선행)**\n\n## Positioning 선언\nopencode-nexus는 claude-nexus의 parent-child 관계에 있지 않다. 양 플러그인은 각자의 host(Claude Code / OpenCode)에 속한 **대등한 자매 프로젝트**이며, 저자의 주력 harness가 시간에 따라 flip할 수 있다. 따라서 정체성은 \"claude-nexus의 OpenCode 포트\"가 아니라, **\"공유 프롬프트 라이브러리를 consume하는 OpenCode 네이티브 Nexus 런타임\"**이다.\n\n## Shared Prompt Library 구조\n공유 대상: body.md(프롬프트 본문, 중립), meta.yml(id/category/description/alias_ko/tags, 중립), capabilities.yml(추상 capability 목록).\n런타임 고유: model, maxTurns, 구체 tool names(`disallowedTools`), resume_tier. 각 런타임이 자기 capability→toolset 매핑을 소유.\n핵심 통찰: **capability 추상화 레이어**(`no_file_edit`, `no_task_create` 등)가 원래 Shared-Core의 leaky abstraction 문제를 해결한다. 각 harness가 `no_file_edit` → `[Edit, Write, NotebookEdit]`(Claude) / `[edit, write, patch, multiedit]`(OpenCode)로 매핑.\n\n## 단계적 마이그레이션\n**Phase 1 (지금, ~3-5일, 새 repo 필요)**\n- 새 `nexus-prompts` repo 생성\n- claude-nexus `agents/*.md`에서 본문 추출, frontmatter → meta.yml 분해, disallowedTools → capabilities 매핑\n- opencode-nexus: `src/agents/prompts.ts` 삭제 → build-time loader로 교체\n- claude-nexus는 **건드리지 않음**, 기존 파일 그대로 사용\n- CI: `diff nexus-prompts/.../body.md <(strip-frontmatter claude-nexus/.../X.md)` 등가성 검증\n- sync 방향: claude-nexus .md → nexus-prompts (일방향, 기존과 동일)\n\n**Phase 2 (자연스러운 flip 순간에)**\n- Trigger: opencode-nexus가 2주 연속 substantive commit 수에서 claude-nexus 추월 AND 저자의 주력 프로젝트가 OpenCode로 이동\n- claude-nexus도 loader 기반으로 전환 → 양쪽이 동일 소스 consume\n- 이 시점부터 \"방향\" 개념 소멸\n\n## 기각된 대안과 이유\n- **Strict Mirror**: OpenCode에 PreCompact/SubagentStart 등 프리미티브가 없음 — 프리미티브 레벨에서 파탄. 이름만 mirror이고 실제론 번역 레이어 필요 → Shared-Core 서브셋인데 부실하게 구현\n- **Soft Fork**: 안정적 parent-child 방향을 전제함. 양방향 flip 가능성 아래서는 \"방향 플래그를 매번 확인하는 cherry-pick\"으로 퇴화 → merge base 없음, rename 충돌 tie-breaker 없음, bridge 메타포 붕괴\n- **Reimplementation**: 25 버전의 프롬프트 iteration을 폐기. 현재 `prompts.ts`가 증명하듯 프롬프트는 거의 그대로 살아남음 — 전제가 경험적으로 틀림. 게다가 flip마다 반대편 재구현 → 공유 가치 이중 폐기\n- **Full Shared-Core (runtime 포함)**: runtime 추상화가 너무 speculative. 훅 모델, 도구 factory, session lifecycle이 harness마다 근본 달라서 shared runtime abstraction이 쓸모 없음. prompt-only로 scope 축소하면 이 문제 사라짐\n\n## 받아들인 trade-off\n1. 유지 대상 2→3개 (제3 패키지 등장)\n2. Phase 1 동안 하이브리드 상태(opencode는 nexus-prompts consume, claude는 자기 파일 consume, sync는 일방향)\n3. capability vocabulary 초기 셋 시행착오 예상\n4. Nexus 어휘(nx_*, .nexus/, 태그 문법) lock-in 심화 → 리브랜드 불가\n\n## 프로세스 결정 (운영)\n- 이 plan 세션을 끝까지(#1→#2→#3) opencode-nexus 안에서 진행\n- Positioning은 `.nexus/core/identity/` 문서에 박음 (주어가 opencode-nexus이므로 여기가 맞음)\n- Phase 1의 new-repo 작업용 **bridge document**를 이 세션 아티팩트로 별도 생성 (LLM 소비용, 압축하지 말 것 — 인간이 아닌 새 repo의 LLM이 이 plan을 seed로 이식받아 실행할 수 있을 정도로 상세)\n",
+            "how_agents": [
+              "architect",
+              "strategist"
+            ],
+            "how_summary": {
+              "architect": "Capability abstraction layer (no_file_edit, no_task_create)로 leaky abstraction 해결. Two-layer split schema(body.md neutral / meta.yml neutral / capabilities.yml abstract / per-runtime mapping). Phase 1은 opencode-nexus만 변경(~3-5일), claude-nexus 미변경 유지 가능 — 원래 lock-step 리팩토링 반대 이유가 사라짐. Bidirectional Soft Fork 리스크: merge base 부재, rename 충돌 tie-breaker 없음, 테스트로 capability drift 잡을 수 없음. 현재 meet.ts/nxPlan* 드리프트는 어떤 옵션을 택해도 cleanup 필수.",
+              "strategist": "Bidirectional framing은 Soft Fork의 핵심 가정(stable direction) 무효화. 사용자 재정의: '이번 달 harness X를 쓰는 Nexus 사용자'. 6개월 bridge 메타포 붕괴 — 기다릴 stable upstream 없음. Shared library는 load-bearing이라 죽은 코드 위험 낮음. Flip 준비를 warm한 쪽에서 하는 게 cold해진 쪽에서 하는 것보다 싸다. Flip 신호: 2주 연속 opencode-nexus substantive commit 추월 + 저자 주력 이동. 추출 일회 비용이 flip 사이클마다 상각됨."
+            },
+            "how_agent_ids": {
+              "architect": "a395105134dd3b258",
+              "strategist": "a7cf12f8254811112"
+            }
+          },
+          {
+            "id": 2,
+            "title": "동기화 메커니즘과 단일 진실 공급원(source of truth) 모델 — 프롬프트 자산이 어디에 살고 어떻게 추적되는가",
+            "status": "decided",
+            "decision": "\n**결정: Flavor 1 (Strict Shared Prompt Library 운영 모델) — 아키텍트 제안 그대로 채택**\n\n## 패키지 이름 & 배포\n- **이름: `@moreih29/nexus-core`** (scoped, public npm)\n- unscoped `nexus-core`는 방치된 middleware 프로젝트가 점유 중 → scope 채택\n- `nexus-agents`는 `williamzujkowski/nexus-agents@2.29.0`이 같은 AI agent orchestration 도메인에서 활발 사용 → 절대 피함\n- `@moreih29` scope는 저자의 GitHub org와 일치\n- 향후 패밀리 확장성: `@moreih29/nexus-runtime-*`, `@moreih29/nexus-templates` 등 자연스러움\n\n## Repository & 배포 형태\n- **독립 sibling repo**: `github.com/moreih29/nexus-core`\n- **public npm** 배포 (기존 `opencode-nexus`, `claude-nexus`와 동일 라인)\n- Monorepo/submodule 거부: 기존 publish 패키지 마이그 비용 과다, Phase 1/2 단계 구조와 충돌\n\n## Repository layout (아키텍트 제안)\n```\nnexus-core/\n├── agents/{architect|designer|postdoc|strategist|engineer|researcher|writer|tester|reviewer}/\n│   ├── body.md    # 프롬프트 본문, 중립 (host-specific tool names 금지)\n│   └── meta.yml   # 중립 필드만\n├── skills/{nx-plan|nx-run|nx-init|nx-sync|nx-setup}/\n│   ├── body.md\n│   └── meta.yml\n├── vocabulary/\n│   ├── capabilities.yml   # 중앙 capability + 양 harness 매핑\n│   ├── categories.yml     # how/do/check\n│   └── resume-tiers.yml   # ephemeral/bounded/persistent\n├── schema/\n│   ├── agent.schema.json\n│   ├── skill.schema.json\n│   └── capability.schema.json\n├── scripts/\n│   └── import-from-claude-nexus.mjs\n├── VERSION, CHANGELOG.md, README.md, package.json\n```\n\n## Schema 필드 분류\n\n**Meta.yml strictly neutral**: `id`, `name`, `category`(enum), `description`, `task`, `tags`(topical), `alias_ko`, `capabilities`(abstract list), `resume_tier`(enum), `model_tier`(frontier/balanced/fast abstract), `max_turns`(semantic hint)\n\n**Forbidden in neutral** (runtime-local only): 구체 `model` 이름, raw `disallowedTools`, runtime-enforced `maxTurns` 상한\n\n**body.md strictly neutral**: host-specific tool identifier 금지. 기존 `mcp__plugin_claude-nexus_nx__nx_task_update` → `nx_task_update` 정규화.\n\nPhase 1에서 **허용된 drift**: 없음. 드리프트 진입 경로 전부 차단.\n\n## 초기 capability vocabulary (4개)\n\n```yaml\nno_file_edit:\n  claude-code: [Edit, Write, NotebookEdit]\n  opencode:    [edit, write, patch, multiedit]\nno_task_create:\n  claude-code: [mcp__plugin_claude-nexus_nx__nx_task_add]\n  opencode:    [nx_task_add]\nno_task_update:\n  claude-code: [mcp__plugin_claude-nexus_nx__nx_task_update]\n  opencode:    [nx_task_update]\nno_shell_exec:\n  claude-code: [Bash]\n  opencode:    [bash]\n```\n\n**Extension policy**: 새 capability 추가는 `CHANGELOG.md`에 근거 기록 + Lead의 [plan] 세션 결정 필요. 3개 질문 통과: (1) 기존 capability의 subset/union으로 표현 불가? (2) 당장 필요한 agent 있음(YAGNI)? (3) 모든 runtime에 concrete mapping 존재?\n\n## Postdoc bash 드리프트 해결\n- claude-nexus frontmatter: Bash 미차단 (누락)\n- opencode-nexus catalog: bash 차단\n- **해결: `no_shell_exec`를 postdoc capabilities에 유지** (tester 관점의 보안 기본값 — research 역할은 임의 셸 실행 불필요)\n- claude-nexus는 Phase 1 실행 중 수정 PR 발생 (nexus-core 방향이 canonical)\n\n## Phase 1 Sync script 사양\n- **위치**: `nexus-core/scripts/import-from-claude-nexus.mjs` (스키마 소유 쪽에 위치)\n- **입력**: `--source $CLAUDE_NEXUS_ROOT` (hardcoded path 금지)\n- **읽기**: `agents/*.md`, `skills/*/SKILL.md`, `VERSION`\n- **쓰기**: `agents/{id}/{body.md,meta.yml}`, `skills/{id}/{body.md,meta.yml}`, `.import-state.json`\n- **실행**: **수동만** (Phase 1). cron/CI 자동화 금지 — Soft Fork의 silent drift 실패 모드 재현 회피\n- **충돌 처리**: target 파일 해시 ≠ 예상 AND `.import-state.json`이 diverge 기록 → **abort + 3-way diff 리포트** + `body.md.import.new` 생성. 덮어쓰기 금지\n- **Idempotency**: SHA-256 기반 no-op 보장\n- **Dry-run**: `--dry-run`으로 diff만 출력\n- **역방향 sync (opencode → nexus-core)**: Phase 1에서 **의도적 부재**. Phase 2 경계에서만 다룸\n\n## opencode-nexus Loader 구현 (build-time codegen)\n- 새 파일: `scripts/generate-prompts.mjs`\n- 입력: `node_modules/@moreih29/nexus-core/agents/*/body.md` + `meta.yml` + `vocabulary/capabilities.yml`\n- 출력: `src/agents/prompts.generated.ts`, `src/skills/prompts.generated.ts`\n  - `AGENT_PROMPTS: Record<NexusAgentId, string>`\n  - `AGENT_META: Record<NexusAgentId, NexusAgentProfile>` (disallowedTools는 opencode 매핑으로 pre-resolve)\n  - Provenance header: `// generated from @moreih29/nexus-core@<version> — DO NOT EDIT`\n- `src/agents/prompts.ts`, `src/skills/prompts.ts` **삭제** → generated 파일 re-export\n- `@moreih29/nexus-core`는 **devDependency** (runtime I/O 0, `dist/index.js` 번들 shape 유지)\n- `scripts.prebuild`: codegen → tsc\n- **Hard-fail 에러 처리**: unknown capability / malformed meta / missing mapping → 빌드 중단\n\n## CI/test gates\n\n**opencode-nexus 신규**:\n- `e2e-prompts-generated.mjs`: codegen idempotency + 에이전트 완전성 + substring 검사 (기존 `e2e-prompt-parity.mjs` 대체)\n- `e2e-capability-coverage.mjs`: meta의 capability가 vocabulary에 존재 + 양 runtime 매핑 존재 검증\n- `e2e-loader-smoke.mjs`: plugin factory가 AGENT_PROMPTS 9개 id 반환 검증\n- 기존 `e2e-prompt-parity.mjs`는 rename → supersede (동일 PR에서 삭제)\n\n**nexus-core CI** (`.github/workflows/validate.yml`):\n- `schema-validate`: `meta.yml` → `schema/*.json` AJV 검증\n- `capability-integrity`: 참조된 모든 capability가 vocabulary에 존재 + 양 runtime 매핑 존재\n- `body-lint`: host-specific 정규식 차단 (`mcp__plugin_`, `$CLAUDE_PLUGIN_ROOT`, `\\bNotebookEdit\\b` 등)\n- `import-roundtrip`: claude-nexus latest tag → dry-run import → diff 비어있거나 승인된 drift만 허용\n- `release-tag`: `VERSION` 변경 시 태그 + 수동 승인 publish (자동 publish 금지)\n\n## Phase 2 Trigger 조건 (구체화)\n1. **Commit velocity 역전**: `commits_14d(opencode-nexus) > commits_14d(claude-nexus) × 1.5`, 2주 연속\n2. **저자 주력 선언**: UPSTREAM.md 또는 `.nexus/state/`에 명시적 기록\n3. **Sync 방향 역전 징후**: opencode-nexus에서 nexus-core로 propose할 변경이 claude-nexus→nexus-core sync보다 많아짐\n\n**Trigger rule**: 신호 #1 + (#2 또는 #3)  \n**Safety rail**: 90일 re-evaluation — flip 신호 없이도 opencode-nexus가 변경을 누적하고 claude-nexus가 소유권을 붙잡고 있으면 조기 Phase 2 실행\n\n## 초기 버전 계획\n- **첫 publish: `@moreih29/nexus-core@0.1.0`** (repo 구조 + extraction 시작)\n- **9 agents + 5 skills 시딩 완료 + `import-roundtrip` CI green → `0.2.0` bump**\n- Breaking change 금지 (forward-compat only, claude-nexus가 Phase 2에서 언제든 consume 가능해야 함)\n\n## OpenCode tool 화이트리스트 소스\n- Phase 1: **warning-level only** (기계 읽기 가능 목록 부재)\n- Phase 1 이후: researcher가 `@opencode-ai/plugin` tool introspection API 조사 → 있으면 capability-coverage 테스트를 hard-fail로 승격\n\n## Bridge document 사양 (새 repo 시딩용 아티팩트)\n- **위치**: `/Users/kih/workspaces/areas/opencode-nexus/.nexus/state/artifacts/nexus-core-bootstrap.md`\n- **대상 독자**: 새 `nexus-core` repo에서 Phase 1을 부트스트랩할 미래 LLM. 이전 대화 맥락 전무 가정\n- **원칙**: 압축 금지, 완결성 우선 (user 지시)\n- **길이**: ~12-15k 단어 (한/영 혼재)\n- **구조**: 12 섹션 — Background → Principles → Schema spec → Capability vocab → Phase 1 steps → Sync script spec → CI spec → opencode-nexus integration → Non-goals → Phase 2 triggers → Glossary → Source material\n\n## Trade-offs 수용\n1. 초기 1회 비용 ~3-5일\n2. Hard-fail 가드레일 → 초기 자주 걸림 (의도된 feedback loop)\n3. `prompts.generated.ts` git 커밋 필수 (PR diff 커짐)\n4. Scope `@moreih29` 소소한 설치 마찰\n5. Phase 1 동안 sync 일방향 하이브리드 상태\n",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "9 agents + 5 skills의 구체 repo layout 제시. meta.yml 필드를 strictly neutral / forbidden / allowed-vary로 분류. `model_tier`(abstract frontier/balanced/fast) — 이걸로 model 이름 중립화. body.md는 host-specific tool 식별자 학습 금지. 초기 capability 4개(no_file_edit, no_task_create, no_task_update, no_shell_exec)로 전 9 agents 커버. Postdoc bash 드리프트 발견 — claude-nexus가 누락, opencode-nexus가 차단. 해결: no_shell_exec 유지. Sync script는 nexus-core에 위치, 수동만, 3-way diff conflict, idempotent, dry-run. Loader는 build-time codegen(런타임 I/O 0), @moreih29/nexus-core는 devDependency, dist 번들 shape 유지. CI gate 3+5개 하드-fail. generate-template.mjs 변경 불필요(prebuild 순서만 보장)."
+            },
+            "how_agent_ids": {
+              "architect": "a395105134dd3b258"
+            }
+          },
+          {
+            "id": 3,
+            "title": "현재 드리프트 정리 범위 — 내부 불일치(meet/plan, qa/tester, 누락 태그) 처리 우선순위",
+            "status": "decided",
+            "decision": "\n**결정: Option β (Balanced cleanup) — 11개 작업 항목**\n\n## 즉시 실행할 opencode-nexus 내부 정리\n\n**Identity/positioning 문서 업데이트 (논점 #1 반영)**\n1. `.nexus/core/identity/mission.md` 재작성 — \"claude-nexus 이식\" → \"OpenCode runtime consuming `@moreih29/nexus-core`, sibling of claude-nexus\" 포지셔닝\n2. `.nexus/core/identity/roadmap.md` 재작성 — 기존 3개 항목 → Phase 1/Phase 2 단계 구조\n3. `.nexus/core/identity/design.md` 조정 — \"Knowledge persistence\" 섹션에 `@moreih29/nexus-core` consumer 관계 추가\n\n**Codebase 문서 드리프트 수정**\n4. `.nexus/core/codebase/architecture.md` 라인 76, 85 — `nx-meet`/`nx_meet_*`/`meet.ts` → `nx-plan`/`nx_plan_*`/`plan.ts` 업데이트\n\n**Stale 문서 퇴역**\n5. `docs/prompt-parity-plan.md` **삭제** — 논점 #1 결정으로 무효화. 대체 역할은 `docs/bridge/nexus-core-bootstrap.md`\n\n**신규 문서 생성**\n6. `UPSTREAM.md` 신규 (repo 루트, ~1 페이지) — 다음을 포함:\n   - Shared Prompt Library 관계 요약\n   - 방향 flip 정책\n   - 90일 re-evaluation 룰\n   - Phase 2 trigger 조건 참조\n   - **`.nexus/core/{identity,codebase,memory,reference}` 계층을 의도된 divergence로 명시 + rationale**\n\n7. `docs/deferred-from-claude-nexus.md` 신규 — Phase 1 scope 밖 항목 정적 문서화:\n   - D8: `[m]`/`[m:gc]`/`[sync]` 태그 부재 (런타임 변경 필요)\n   - D9: `resume_tier` 스킴 부재 (런타임 스킴)\n   - D10: `nx_history_search` 도구 부재 (런타임 도구)\n   - 각 항목에 \"왜 deferred인지\" + \"미래 재방문 조건\"\n\n**코드 리네임 (Phase 1과 결합 실행)**\n8. `src/tools/meet.ts` → `src/tools/plan.ts` 리네임 + `src/tools/index.ts` import 경로 업데이트. 파일 내용은 그대로; 네이밍 드리프트 제거가 목적\n\n## nexus-core repo로 전달되는 bridge artifact\n\n9. `docs/bridge/nexus-core-bootstrap.md` 신규 작성 — **이 plan 세션의 유일한 이식 artifact**\n   - 대상 독자: 새 `nexus-core` repo에서 Phase 1을 부트스트랩할 미래 LLM\n   - 길이 ~12-15k 단어, 자기완결형(inline context, external ref 최소화)\n   - 12 섹션 구조: Background → Principles → Schema → Capabilities → Phase 1 steps → Sync script → CI → opencode-nexus integration → Non-goals → Open variables → Phase 2 triggers → Glossary → Source material(plan 결정 발췌 + 에이전트 분석 발췌 + 파일 경로)\n   - **원칙**: 압축 금지, 완결성 우선 (저자 지시)\n10. (선택) `plan.json` snapshot 복사 — machine-readable 감사용\n\n## 보류/연기 항목 (명시적 non-goals)\n\n- D8/D9/D10 (missing tags, resume_tier, nx_history_search) — 런타임 변경 요구, Phase 1 scope 밖. `docs/deferred-from-claude-nexus.md`에 기록만\n- D11 `.nexus/core/{layers}` 평탄화 — **Option β에서 실행 안 함**. claude-nexus v0.24.1 flat 구조와 divergent 유지. `UPSTREAM.md`에 의도된 divergence로 기록. 미래 별도 plan 세션에서 재검토 가능\n- Phase 1 loader migration 실제 실행 (scripts/generate-prompts.mjs, prompts.ts 삭제, package.json prebuild 등) — **nexus-core 패키지가 publish된 후에 실행 가능**. 이 plan 세션의 tasks.json에는 포함하지 않고 bridge doc §8에서 다룸\n\n## 문서 행선지 요약\n\n| 문서 | 행선지 |\n|---|---|\n| `nexus-core-bootstrap.md` | 📤 nexus-core로 복사 |\n| `plan.json` snapshot | 📤 (선택) 복사 |\n| `UPSTREAM.md`, mission/roadmap/design/architecture 업데이트, deferred doc | 🏠 opencode-nexus 전용 |\n| `prompt-parity-plan.md` | 🗑️ 삭제 |\n\n## 기각된 옵션\n\n- **α (Minimal)**: prompt-parity-plan.md 같은 stale 파일이 남아서 논점 #1 결정과 모순되는 문서가 계속 존재. 미래 혼동 예방력 낮음\n- **γ (Comprehensive)**: `.nexus/core/{layers}` 계층 평탄화를 강제 실행하면 opencode-nexus의 지식 계층 분리 설계 의도를 잃음. 별개 설계 결정으로 분리해야 함. overengineering\n",
+            "how_agents": [],
+            "how_summary": {}
+          }
+        ],
+        "research_summary": "\n## 현재 상태 요약\n\n### opencode-nexus (v0.1.0)\n- **배포**: npm TypeScript 플러그인, tsc → dist/ 번들\n- **프롬프트 저장**: `src/agents/prompts.ts` (740줄) + `src/skills/prompts.ts` (208줄)에 TS 문자열 배열 리터럴로 **수작업 복사본** 보관\n- **스킬 카탈로그**: nx-plan/nx-run/nx-init/nx-sync/nx-setup (5개) — BUT 툴 파일은 여전히 `meet.ts`(nx_meet_*), 문서(.nexus/core/codebase/agents-and-orchestration.md)는 `nx-meet` 참조 → **내부 드리프트**\n- **에이전트**: HOW 4(architect/designer/postdoc/strategist) + DO 3(engineer/researcher/writer) + CHECK 2(**qa**/reviewer)\n- **지식 구조**: `.nexus/core/{identity,codebase,memory,reference}` 계층형 + `.nexus/rules/` + `.nexus/state/`\n- **훅**: `src/plugin/hooks.ts`에 6개 훅 함수 (OpenCode 네이티브 API)\n- **파리티 추적**: `docs/prompt-parity-plan.md`에 수작업 인벤토리 (Partial/Missing/Pending 상태 플래그), 자동 drift 감지 없음\n- **파리티 상태**: coverage-matrix.md 기준으로 Claude 네이티브 슬래시 스킬/TeamCreate/SendMessage는 Missing, 대부분 나머지는 Partial\n\n### claude-nexus (v0.25.0, 2026-04-10 릴리즈)\n- **배포**: Claude Code 플러그인 (raw .md + MCP 브릿지). .claude-plugin/, agents/*.md(9개), skills/*/SKILL.md(5개), hooks/hooks.json + 단일 scripts/gate.cjs 중앙 처리\n- **프롬프트 저장**: `agents/*.md` 각 파일은 frontmatter(name, model, disallowedTools, **resume_tier**, alias_ko, category) + 마크다운 본문 (architect 173줄, tester 193줄 등)\n- **에이전트**: HOW 4 + DO 3 + CHECK 2(**reviewer**/**tester**) — qa 대신 tester\n- **스킬**: nx-init/nx-plan/nx-run/nx-setup/nx-sync\n- **지식 구조**: 0.24.1에서 `.nexus/{memory,context,rules,state}` 평탄화 (core/ 제거)\n- **태그**: [plan], [run], [d], [rule], **[m]**, **[m:gc]**, **[sync]**\n- **개발 속도**: 25일간 25+ 버전 릴리즈 — 매우 빠름\n\n### 최근 claude-nexus 기능 중 opencode-nexus에 없는 것\n- **resume_tier** 스킴 (v0.25.0) — 서브에이전트 지속성 계층 (persistent/bounded/ephemeral)\n- **nx_history_search** 도구 (v0.25.0)\n- **[sync] 태그** + nx-sync를 태그 트리거로 (v0.24.1)\n- **essentials/flat 구조** 재설계 (v0.24.1, 0.24.0)\n- **[m] / [m:gc] 메모리 시스템** — 교훈 압축 저장 + 가비지 컬렉션\n- **HOW opt-out**, **auto 품질**, **에스컬레이션 체인** (v0.23.0 플랜/런 재설계)\n- **BLOCKING invoke** + 트리거 태그 결정적 스킬 로딩 (v0.21.0)\n\n### 핵심 드리프트/문제 목록\n1. **프롬프트 수작업 복제**: agents/architect.md(173줄) → prompts.ts의 TS 배열 리터럴로 1:1 복사. 업스트림 변경 시 자동 감지/전파 불가\n2. **내부 이름 드리프트**: 카탈로그는 `nx-plan`으로 갱신됐지만 `src/tools/meet.ts`, `nx_meet_*` 도구, `.nexus/core/codebase/*.md` 문서는 아직 meet 용어. README.md조차 `nx-plan`/`[plan]`과 `nx-meet` 언급이 혼재 가능\n3. **CHECK 에이전트 이름**: opencode는 `qa`, claude는 `tester` — 의도된 분기인지 단순 래깅인지 불명\n4. **태그 격차**: [sync], [m], [m:gc]가 opencode-nexus에 아예 없음 → 사이클 후 지식 동기화, 메모리 축적 워크플로 부재\n5. **구조 철학 차이**: opencode는 hierarchical core/{identity,codebase,memory,reference}, claude는 0.24.1 이후 flat memory/+context/ — 어느 쪽이 맞는 형태인지 결정 필요\n6. **파리티 문서의 반감기**: docs/prompt-parity-plan.md는 스냅샷 문서. 작성 시점 이후 claude-nexus가 여러 번 업데이트되면서 이미 stale. \"Partial\"이라는 상태 라벨은 실제 drift를 측정하지 않음\n7. **정체성 선언 부재**: mission.md는 \"claude-nexus의 핵심 워크플로를 OpenCode 네이티브로 이식\"이라고만 말함 — 이게 \"항상 동기화되는 미러\"인지, \"한 번 포크 후 독립 진화\"인지, \"공유 코어를 소비하는 런타임\"인지 정의되지 않음\n\n### 배포/빌드 모델의 근본 차이\n- claude-nexus: **asset-based** — 프롬프트와 훅이 raw .md/.json으로 배포, 런타임이 파일 읽기\n- opencode-nexus: **compiled-bundle** — 프롬프트가 TS 소스에 박힌 문자열 → JS로 컴파일 → dist/index.js로 배포\n- 이 차이 때문에 \"단순히 파일을 복사하면 끝\"이 아니라, 매번 MD를 TS 문자열 배열로 재번역해야 하는 구조적 장벽이 존재\n",
+        "created_at": "2026-04-10T06:19:51.281Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "mission.md 재작성 — Shared Prompt Library consumer 포지셔닝 반영",
+          "context": "논점 #1에서 opencode-nexus의 정체성을 \"claude-nexus의 OpenCode 이식\"에서 \"OpenCode-native Nexus runtime consuming @moreih29/nexus-core, sibling of claude-nexus\"로 변경했다. 현재 mission.md는 여전히 \"claude-nexus의 핵심 워크플로를 OpenCode 네이티브로 이식\"이라는 옛 포지셔닝을 담고 있어 결정과 모순된다.</context>\n<parameter name=\"goal\">opencode-nexus 철학 정립: Shared Prompt Library(@moreih29/nexus-core) consumer로 정체성 재정의 + Phase 1 이행 준비 + nexus-core repo로 이식할 bridge 문서 작성",
+          "approach": "현재 `.nexus/core/identity/mission.md` (2줄)를 재작성한다. 새 mission은: (1) \"이식\"/\"parity\" 언어 제거, (2) opencode-nexus를 \"OpenCode-native Nexus runtime that consumes @moreih29/nexus-core as its shared behavioral spec\"로 정의, (3) claude-nexus와의 관계를 \"sibling, not downstream\"으로 명시, (4) 방향 flip 가능성(어느 쪽이 현재 primary든 동일 spec consume) 언급, (5) 기존 Korean tone/voice 유지. 2-4줄로 간결.",
+          "acceptance": "(a) `.nexus/core/identity/mission.md` 파일이 재작성됨. (b) \"이식\", \"parity\", \"port\" 언어 없음. (c) `@moreih29/nexus-core` 명시적 언급. (d) \"sibling\" 또는 동등 개념 표현. (e) 기존 파일과 동일하게 `<!-- tags: identity, mission -->` 헤더 보존. (f) 길이 5줄 이하 유지 (identity 문서 스타일).",
+          "risk": "tone 드리프트 — 기존 1줄 스타일을 깨뜨리고 장황해질 수 있음. @moreih29/nexus-core 패키지가 아직 존재하지 않으므로 \"예정\" 뉘앙스를 어떻게 표현할지 애매. 해결: 현재/미래 시제 명확화.",
+          "status": "pending",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "writer",
+          "created_at": "2026-04-10T07:22:52.726Z"
+        },
+        {
+          "id": 2,
+          "title": "roadmap.md 재작성 — Phase 1/Phase 2 구조로 교체",
+          "context": "현재 roadmap.md는 3개 항목(prompt parity, code intelligence 확대, 안정성 강화)을 담고 있다. \"parity\" 항목은 논점 #1에서 기각된 positioning이므로 무효. 새 roadmap은 Shared Prompt Library 단계적 마이그레이션 구조(Phase 1/Phase 2)를 반영해야 한다.</context>\n<parameter name=\"plan_issue\">1",
+          "approach": "`.nexus/core/identity/roadmap.md`를 재작성. 새 구조: (1) **Phase 1 (now)** — @moreih29/nexus-core repo 생성, 스키마 + capability vocabulary 설계, claude-nexus에서 본문 추출, opencode-nexus loader 통합. (2) **Phase 2 (at flip)** — claude-nexus도 loader 기반으로 전환, 양방향 동일 source consume. (3) **Phase 2 trigger** — 세부는 UPSTREAM.md 참조 링크. 기존 Code Intelligence/안정성 항목은 \"Ongoing\" 섹션으로 이동하거나 삭제 결정 — 논점 #1에서 명시적으로 다뤄지지 않았으므로 삭제보다는 \"Ongoing work\" 하단 유지 권장.",
+          "acceptance": "(a) roadmap.md에 \"Phase 1\" 섹션과 \"Phase 2\" 섹션이 존재. (b) Phase 1은 구체적 구성 요소 3-5개 나열. (c) Phase 2 트리거 조건은 UPSTREAM.md 참조. (d) 기존 \"prompt parity 달성\" 항목 삭제됨. (e) Code Intelligence / 안정성 항목은 Ongoing 섹션으로 보존 또는 명시적 삭제.",
+          "risk": "Phase 2가 먼 미래 이벤트라 roadmap이 \"뭔가 대기 중\"처럼 보일 수 있음. 완화: Phase 1의 구체성을 높여서 현재 모멘텀 전달.",
+          "status": "pending",
+          "deps": [],
+          "owner": "writer",
+          "created_at": "2026-04-10T07:23:04.733Z"
+        },
+        {
+          "id": 3,
+          "title": "design.md 조정 — Knowledge persistence 원칙에 @moreih29/nexus-core 관계 추가",
+          "context": "design.md는 5개 설계 원칙을 담고 있다. Knowledge persistence 항목이 있지만 이는 .nexus/core/의 지역 지식만 언급한다. 논점 #1 결정으로 @moreih29/nexus-core를 통한 외부 공유 지식 계층이 추가되었으므로 이 원칙에 한 줄 반영이 필요하다. Minimal change — 다른 원칙은 건드리지 않는다.</context>\n<parameter name=\"plan_issue\">1",
+          "approach": "`.nexus/core/identity/design.md`의 \"Knowledge persistence\" 라인(현재 10줄)에 @moreih29/nexus-core consumer 관계 한 줄 추가. 예: \"외부 공유 spec(`@moreih29/nexus-core`)을 consume하여 에이전트/스킬 정의를 claude-nexus와 동기화한다.\" 나머지 4개 원칙(Coordination-first, Role separation, Lead-mediated, Guardrails)은 **변경 금지**.",
+          "acceptance": "(a) design.md에 @moreih29/nexus-core 명시적 언급 1회 존재. (b) Knowledge persistence 원칙 내에 위치. (c) 다른 4개 원칙 완전히 동일. (d) 파일 구조(tags 헤더, **bold** 스타일) 보존.",
+          "risk": "낮음 — 단순 한 줄 추가. 스코프 크리프 위험(다른 원칙 수정 유혹)이 있으므로 touch minimal 원칙 엄수.",
+          "status": "pending",
+          "deps": [],
+          "owner": "writer",
+          "created_at": "2026-04-10T07:23:14.734Z"
+        },
+        {
+          "id": 4,
+          "title": "architecture.md 드리프트 수정 — nx-meet/nx_meet_*/meet.ts 참조 제거",
+          "context": "리서치 단계에서 `.nexus/core/codebase/architecture.md`의 라인 76과 85에 스테일 참조 발견:\n- 라인 76: \"`catalog.ts`: `NexusSkillProfile` 배열. 각 스킬은 트리거 태그와 용도를 가진다(**nx-meet**, nx-run, nx-init, nx-sync, nx-setup).\"\n- 라인 85: \"| Meet 관리 | **`meet.ts`** | **nx_meet_start**, status, resume, followup, discuss, decide, update, join |\"\ncatalog.ts에서는 이미 `nx-plan`으로 통일되어 있으나 문서가 업데이트되지 않음. 내부 드리프트의 대표 사례.</context>\n<parameter name=\"plan_issue\">3",
+          "approach": "(1) architecture.md 전체를 읽고 `nx-meet`, `nx_meet_`, `meet.ts`, `meet ` 패턴 모두 찾기. (2) 각각 `nx-plan`, `nx_plan_`, `plan.ts`(task #8에서 rename 예정), \"Plan\" 관리로 치환. (3) 라인 85 테이블 행의 \"Meet 관리\"도 \"Plan 관리\"로 변경. (4) 라인 76의 스킬 목록 순서 보존. (5) 다른 내용은 건드리지 않음.",
+          "acceptance": "(a) `grep -n \"nx-meet\\|nx_meet_\\|meet\\.ts\\|Meet 관리\" .nexus/core/codebase/architecture.md` 결과가 빈 출력. (b) 라인 76, 85가 각각 nx-plan/plan.ts/Plan 관리로 변경됨. (c) 다른 라인은 git diff가 최소화. (d) Markdown 테이블 구조 깨지지 않음.",
+          "risk": "다른 stale 참조를 놓칠 수 있음 — 반드시 grep으로 완전성 확인. plan.ts 파일은 task #8에서 만들어지므로 이 task의 architecture.md 업데이트는 plan.ts를 \"이미 존재하는 것처럼\" 언급해도 무방(동일 PR에서 함께 적용).",
+          "status": "pending",
+          "deps": [
+            8
+          ],
+          "owner": "writer",
+          "created_at": "2026-04-10T07:23:29.790Z"
+        },
+        {
+          "id": 5,
+          "title": "prompt-parity-plan.md 삭제 — 논점 #1 결정으로 무효화",
+          "context": "docs/prompt-parity-plan.md는 \"claude-nexus로부터 prompt 자산을 이식하는 인벤토리\" 문서로, Soft Fork/Strict Mirror 세계관에 속한다. 논점 #1에서 이 세계관이 기각되었으므로 이 문서는 무효화됐다. 또한 라인 35, 42에 stale 참조(agents/qa.md — claude-nexus는 tester.md, skills/nx-meet/SKILL.md — claude-nexus는 nx-plan/SKILL.md)가 있어 내용 자체도 잘못됨. 대체 문서는 bridge doc(`docs/bridge/nexus-core-bootstrap.md` — task #10)이 담당.</context>\n<parameter name=\"plan_issue\">3",
+          "approach": "(1) 먼저 repo 전체에서 prompt-parity-plan.md에 대한 inbound references를 grep (`grep -rn \"prompt-parity-plan\" .` — README.md, AGENTS.md, CLAUDE.md, 기타 docs/). (2) 발견된 모든 inbound references를 제거하거나 bridge doc 참조로 대체. (3) `git rm docs/prompt-parity-plan.md` 실행. (4) 커밋 메시지에 \"논점 #1 결정으로 무효화. 대체: docs/bridge/nexus-core-bootstrap.md\" 기록.",
+          "acceptance": "(a) docs/prompt-parity-plan.md 파일 부재. (b) repo 전체 grep 결과가 \"nexus-core-bootstrap\"만 남고 \"prompt-parity-plan\"은 0 결과. (c) bun run check 통과 (구조적 영향 없음 확인).",
+          "risk": "README.md 등에 inbound reference가 숨어있을 수 있음. 반드시 grep으로 완전성 확인. 커밋 전 한 번 더 전수 검사.",
+          "status": "pending",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-10T07:23:41.540Z"
+        },
+        {
+          "id": 6,
+          "title": "UPSTREAM.md 신규 작성 — opencode-nexus의 대외 관계 선언",
+          "context": "논점 #1(Shared Prompt Library positioning)과 논점 #3(divergence 기록)의 산출물. 현재 opencode-nexus에는 claude-nexus 및 @moreih29/nexus-core와의 관계를 선언하는 단일 문서가 없다. README.md는 사용자 대상이라 내부 관계를 상세 설명하기에 부적합. UPSTREAM.md는 기여자/유지보수자 대상의 관계 문서로 분리.</context>\n<parameter name=\"plan_issue\">1",
+          "approach": "repo 루트에 `UPSTREAM.md` 신규 작성. ~80-150줄 (1페이지). 섹션 구조: (1) **Relationship** — \"opencode-nexus는 @moreih29/nexus-core를 consume하는 OpenCode runtime. claude-nexus와는 sibling(peer) 관계로 parent-child 아님.\" (2) **Bidirectional Flow Policy** — \"저자의 주력 harness에 따라 prompt 변경 방향이 flip 가능. 어느 쪽이 active든 @moreih29/nexus-core가 canonical source.\" (3) **90-Day Re-evaluation Rule** — 매 90일마다 Phase 1 상태 재검토 (누적된 opencode-nexus 변경 vs claude-nexus 소유권 체크). (4) **Phase 2 Trigger Reference** — 상세는 docs/bridge/nexus-core-bootstrap.md §11 참조 + 3가지 신호 요약. (5) **Intentional Divergences** — 현재 `.nexus/core/{identity,codebase,memory,reference}` 계층을 claude-nexus v0.24.1 flat 구조와 **의도적으로 분기**로 기록. Rationale: \"opencode-nexus는 지식을 역할별 접근 매트릭스 지원을 위한 4층 분리로 유지한다. 평탄화 여부는 별도 plan 세션에서 재검토 대상.\"",
+          "acceptance": "(a) repo 루트 `UPSTREAM.md` 존재. (b) 5개 섹션 모두 포함. (c) @moreih29/nexus-core 스코프 명시. (d) bridge doc 경로 참조 정확. (e) 90일 룰 명시. (f) divergence 섹션에 `.nexus/core/{layers}` 명시 + rationale. (g) 길이 80-150줄. (h) Korean+English 혼재 스타일(다른 .md 문서와 일관).",
+          "risk": "scope creep — \"manifesto\" 수준으로 장황해질 수 있음. 1페이지 상한 엄수. bridge doc과의 중복 최소화 — UPSTREAM.md는 요약, 상세는 bridge doc에 위임.",
+          "status": "pending",
+          "deps": [],
+          "owner": "writer",
+          "created_at": "2026-04-10T07:24:00.651Z"
+        },
+        {
+          "id": 7,
+          "title": "deferred-from-claude-nexus.md 신규 작성 — Phase 1 scope 밖 항목 정적 문서화",
+          "context": "논점 #3에서 D8(missing tags [m]/[m:gc]/[sync]), D9(resume_tier 스킴), D10(nx_history_search 도구)를 Phase 1 scope 밖으로 명시적 연기 결정. 이 세 항목은 런타임 변경이 필요해 prompt-only Shared Library로 해결 불가. 나중에 LLM이나 유지보수자가 \"왜 이게 없지?\"라고 물을 때 참조할 정적 문서 필요.</context>\n<parameter name=\"plan_issue\">3",
+          "approach": "신규 파일 `docs/deferred-from-claude-nexus.md`. 각 항목마다 4-field 구조: (1) **What claude-nexus has** (버전 + 구체 기능), (2) **What opencode-nexus lacks**, (3) **Why Phase 1 excludes this** (런타임 변경 필요 vs prompt-only scope), (4) **Reconsideration condition** (미래 재방문 트리거). \n\n항목 목록:\n- **D8: [m]/[m:gc]/[sync] 태그** — claude-nexus v0.24.1+의 memory/context 동기화 워크플로. opencode-nexus는 tag-parser에 정의 0. 런타임 훅 + 새 MCP 도구 필요 → Phase 1 scope 밖. 재방문 조건: opencode-nexus 사용자가 memory compression 기능 명시적 요청 또는 Phase 2 이후.\n- **D9: resume_tier 스킴** — claude-nexus v0.25.0의 서브에이전트 지속성 계층 (ephemeral/bounded/persistent). opencode-nexus는 이 개념 자체가 없음. @moreih29/nexus-core meta.yml에는 resume_tier 필드가 있으나 runtime 활용은 미구현. 재방문 조건: opencode-nexus가 resume 세맨틱 필요해질 때 (복잡한 멀티턴 에이전트 작업).\n- **D10: nx_history_search 도구** — claude-nexus v0.25.0 신규. 과거 plan/task 사이클 검색. opencode-nexus에 부재. 도구 구현은 runtime-specific. 재방문 조건: opencode-nexus에서 history 검색 유스케이스 발생.",
+          "acceptance": "(a) 파일 존재. (b) D8/D9/D10 3개 항목 모두 4-field 구조 적용. (c) 각 항목의 \"Why Phase 1 excludes this\"가 \"런타임 변경 필요\"를 명시. (d) 각 항목의 \"Reconsideration condition\"이 구체적(트리거 조건 명시). (e) 길이 100-200줄 이내.",
+          "risk": "낮음 — 정적 문서. 재방문 조건이 모호하면 미래에 무시될 가능성. 완화: 각 조건을 \"구체 트리거\"로 작성.",
+          "status": "pending",
+          "deps": [],
+          "owner": "writer",
+          "created_at": "2026-04-10T07:24:17.883Z"
+        },
+        {
+          "id": 8,
+          "title": "src/tools/meet.ts → src/tools/plan.ts 리네임 + import 경로 업데이트",
+          "context": "리서치 + 아키텍트 분석에서 critical 수준의 drift로 분류된 항목. `src/tools/meet.ts` 파일은 이름이 \"meet\"이지만 실제 export는 `nxPlanStart`, `nxPlanDecide` 등 `nxPlan*`. `src/tools/index.ts:18`에서 `import { nxPlanDecide, ... } from \"./meet.js\"` 형태로 참조. catalog.ts는 이미 `nx-plan`으로 업데이트됨. 네이밍 일관성 회복이 목적이며, 파일 내용은 그대로 유지(단순 rename).</context>\n<parameter name=\"plan_issue\">3",
+          "approach": "(1) `git mv src/tools/meet.ts src/tools/plan.ts`. (2) `src/tools/index.ts`의 `from \"./meet.js\"` → `from \"./plan.js\"` 업데이트. (3) repo 전체 grep: `grep -rn \"tools/meet\\|'\\./meet\\|\\\"./meet\" src/ scripts/ test/` 결과 0 확인. (4) `bun run check` 통과 확인. (5) `bun run build` 성공 확인. 파일 내부 함수명(`nxPlanStart` 등)은 이미 올바르므로 touch 금지 — 오직 파일명과 import 경로만 변경.",
+          "acceptance": "(a) `src/tools/plan.ts` 존재, `src/tools/meet.ts` 부재. (b) plan.ts의 모든 export가 rename 전과 동일 (git show로 content diff가 rename만). (c) `grep -rn \"meet\\.ts\\|\\./meet\" src/ scripts/ test/` 결과 0 라인. (d) `bun run check` exit 0. (e) `bun run build` 성공.",
+          "risk": "hidden import reference가 scripts/, test/, 혹은 generate-template.mjs(dist에서 import)에 있을 수 있음. 완화: grep 전수 확인 + dist 재빌드. dist/가 구 경로를 캐시하면 e2e 테스트 깨질 수 있으므로 clean build 필요.",
+          "status": "pending",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-10T07:24:32.024Z"
+        },
+        {
+          "id": 9,
+          "title": "meet.ts rename 검증 (task #8 acceptance 확인)",
+          "context": "task #8(engineer의 meet.ts → plan.ts rename)의 acceptance criteria를 독립 검증. engineer가 놓칠 수 있는 hidden references + e2e 영향 체크.</context>\n<parameter name=\"plan_issue\">3",
+          "approach": "(1) `bun run check` 실행, exit 0 확인. (2) `bun run build` 실행, dist/ 재생성 확인. (3) `bun run test:e2e` 실행 (시간 제약이 있으면 `e2e-smoke.mjs`, `e2e-lifecycle.mjs` 2개만). (4) repo grep `grep -rn \"meet\\.ts\\|\\./meet\\|/meet'\\|\\\"meet\\\"\" .` — node_modules, .git, dist 제외. 결과 0이 아니면 각 발견 위치가 (a) 코멘트/문서 context인지, (b) 실제 code path인지 분류. (5) task #4(architecture.md 수정)과 합치 확인 — 문서/코드가 동일한 이름 사용 중인지. (6) PASS/FAIL 리포트 작성 + findings-by-severity.",
+          "acceptance": "(a) 모든 6단계 수행됨. (b) check/build/test 단계 각각 PASS/FAIL 명시. (c) grep 결과 0 orphan references 또는 각 발견 정당화. (d) architecture.md와 code의 naming 일치 확인. (e) 발견 사항 severity 분류(critical/warning/suggestion/note).",
+          "risk": "e2e 테스트 실행 시간 (전체 21개 스크립트). 시간 예산 초과 시 smoke + lifecycle만 실행하고 나머지는 CI에 위임.",
+          "status": "pending",
+          "deps": [
+            8
+          ],
+          "owner": "tester",
+          "created_at": "2026-04-10T07:24:47.736Z"
+        },
+        {
+          "id": 10,
+          "title": "nexus-core-bootstrap.md 작성 — nexus-core repo 이식용 단일 bridge 문서 (~12-15k 단어)",
+          "context": "이 plan 세션의 핵심 산출물. 미래에 `github.com/moreih29/nexus-core` repo를 부트스트랩할 LLM이 이 문서 하나만 보고 Phase 1 전체를 실행할 수 있어야 한다. 저자의 명시 원칙: **압축 금지, 자기완결성 우선**(인간 가독성보다 LLM 컨텍스트 완결성). 외부 참조 최소화, inline context 우선.</context>\n<parameter name=\"plan_issue\">2",
+          "approach": "`docs/bridge/nexus-core-bootstrap.md` 신규 작성. 12 섹션 구조 (+ §0 메타 + §13 source material):\n\n- **§0 What you are reading**: 문서 목적, 대상 독자 LLM 명시, 원본 plan 세션 ID/날짜\n- **§1 Background**: Nexus 시스템 요약 / claude-nexus v0.25.0 현재 / opencode-nexus v0.1.0 현재 / drift 구체 증거(meet.ts, qa→tester 여정, missing tags) / bidirectional framing / 4가지 positioning 옵션 비교 + E 선택 이유 전체 포함\n- **§2 Architectural principles**: two-layer split / capability abstraction / forward-only schema / staged migration\n- **§3 Schema specification**: 전체 directory tree / agents/{id}/body.md 스펙 / meta.yml 필드 정의 (strictly neutral / forbidden / allowed-vary 분류) / skills/{id}/ 스펙 / vocabulary/{capabilities,categories,resume-tiers}.yml / schema/*.json. **9 agents meta.yml 실제 예제 9개 포함** + **5 skills meta.yml 실제 예제 5개 포함**.\n- **§4 Capability vocabulary (complete initial set)**: 4개 capability 완전 정의 (no_file_edit, no_task_create, no_task_update, no_shell_exec) + 양 harness 구체 매핑 / Agent × capability 매트릭스 9×4 / extension policy (3 질문)\n- **§5 Phase 1 execution steps**: git init → directory 생성 → claude-nexus 절대 경로 → per-agent extraction 9개 step-by-step → per-skill extraction 5개 step-by-step → disallowedTools → capabilities 변환 per-agent 정답표 → package.json 설정 (@moreih29 scope, version 0.1.0, exports, files, license) → first publish 체크리스트\n- **§6 Sync script spec**: `scripts/import-from-claude-nexus.mjs` 전체 동작 spec — 입출력, 실행 트리거(수동), conflict 처리(3-way diff + abort), idempotency(SHA-256), dry-run\n- **§7 CI / test gates**: `.github/workflows/validate.yml` 5개 job 완전 템플릿 — schema-validate, capability-integrity, body-lint(정규식 blacklist 전체), import-roundtrip, release-tag(수동 승인)\n- **§8 opencode-nexus integration** (Phase 1 후반, 이 repo에서 실행 예정): scripts/generate-prompts.mjs 설계 / prompts.generated.ts 출력 형식 / devDependency 설정 / prebuild 변경 / prompts.ts 삭제 / e2e 신규 3개 (e2e-prompts-generated, e2e-capability-coverage, e2e-loader-smoke) + e2e-prompt-parity.mjs rename\n- **§9 Known non-goals (Phase 1 제외)**: claude-nexus loader 전환(Phase 2) / hook·tool·runtime 공유 / 모델 이름 및 maxTurns 중립화 / .nexus/core/{layers} 평탄화\n- **§10 Open variables (실행 시 결정)**: postdoc bash 드리프트 + 권장 해결(no_shell_exec 유지, claude-nexus 수정 PR) / OpenCode tool whitelist 소스(Phase 1 warning-level, 이후 researcher 조사)\n- **§11 Phase 2 trigger conditions**: 3개 측정 가능 신호 / 선언 메커니즘 / 90일 safety rail\n- **§12 Glossary**: capability, harness, flip, Phase 1/2, body.md, meta.yml, Shared Prompt Library, Bidirectional framing, Soft Fork, forward-only schema, Lead-mediated, HOW/DO/CHECK category ... 최소 15개 용어\n- **§13 Source material**: plan.json의 3개 이슈 결정 verbatim 인용 / architect 분석 2 round 핵심 발췌 / strategist 분석 2 round 핵심 발췌 / claude-nexus 파일 절대 경로 + 관심 라인 / opencode-nexus 파일 절대 경로 + 관심 라인\n\n길이 목표: 12,000-15,000 단어. 한글+영어 혼재(다른 opencode-nexus 문서와 동일한 bilingual tone). 외부 링크는 absolute file path만 (GitHub URL 금지 — 오프라인 LLM도 파싱 가능해야 함).",
+          "acceptance": "(a) 파일 `docs/bridge/nexus-core-bootstrap.md` 존재. (b) §0-§13 모든 섹션 존재 (최소 14개 H2 헤더). (c) 단어 수 12,000-15,000 범위(초과 허용 15,000-18,000, 미달 불허). (d) §3에 9 agents + 5 skills 각각의 meta.yml 실제 예제 포함(총 14개 YAML 블록). (e) §4에 4개 capability 전체 + Agent×Capability 9×4 매트릭스. (f) §5에 per-agent/per-skill step-by-step. (g) §6, §7에 완전한 스크립트/워크플로 템플릿 (placeholder 금지). (h) §10에 postdoc bash 드리프트 상세. (i) §12에 glossary 15 term 이상. (j) §13에 plan.json 3개 결정 verbatim 인용. (k) 모든 file path는 absolute (GitHub URL 없음). (l) bun run check와 무관(문서 전용).",
+          "risk": "(1) 길이 폭발 — 18k 단어 초과 시 LLM 컨텍스트 로드 비용 급증. 완화: 초안 후 §1, §2 요약 압축. (2) 외부 참조 누출 — GitHub URL이나 \"see X\" 형식이 섞이면 자기완결성 파괴. 완화: 리뷰어가 grep으로 URL 패턴 검출. (3) plan.json 인용 부정확 — verbatim 인용이 paraphrase되면 결정 누락 위험. 완화: `nx_plan_status` 결과를 직접 복사.",
+          "status": "pending",
+          "deps": [],
+          "owner": "writer",
+          "created_at": "2026-04-10T07:25:32.894Z"
+        },
+        {
+          "id": 11,
+          "title": "Writer 산출물 리뷰 (tasks #1, #2, #3, #4, #6, #7 종합 검증)",
+          "context": "Auto-pairing rule: writer owner task는 reviewer 검증을 쌍으로 가진다. tasks #1 mission.md, #2 roadmap.md, #3 design.md, #4 architecture.md, #6 UPSTREAM.md, #7 deferred-from-claude-nexus.md 모두 writer 산출물. 개별 pair 대신 단일 통합 리뷰로 efficiency 확보 — 이들은 동일한 positioning 결정을 다양한 각도에서 반영하므로 cross-document 일관성 체크가 핵심.</context>\n<parameter name=\"plan_issue\">3",
+          "approach": "각 6개 문서를 읽고 다음 항목 검증: (1) **Plan decisions 정합성** — 각 문서가 논점 #1/#2/#3 결정과 모순되지 않는가? 특히 mission/roadmap/UPSTREAM에서 @moreih29/nexus-core 스코프, \"sibling\" 표현, \"Shared Prompt Library\" 용어가 올바르게 사용됐는가. (2) **Cross-document 일관성** — mission과 roadmap과 UPSTREAM이 서로 충돌하는 메시지를 내지 않는가. Phase 1/Phase 2 표현이 3개 문서에서 동일한가. (3) **File references 정확성** — architecture.md의 파일 경로/심볼 이름이 실제 코드와 매칭되는가(특히 task #8의 plan.ts와 일관). UPSTREAM의 bridge doc 경로 `docs/bridge/nexus-core-bootstrap.md` 참조가 task #10 산출물 경로와 일치. (4) **Stale 언어 제거** — \"parity\", \"이식\", \"port\" 같은 무효 용어가 남아있지 않은가. (5) **Deferred 문서의 재방문 조건 구체성** — \"미래에 검토\"가 아니라 측정 가능한 트리거인가. (6) **Tone 일관성** — Korean+English 혼재 스타일이 다른 opencode-nexus 문서와 일관. (7) **Divergence 선언 (UPSTREAM.md)** — .nexus/core/{layers} 계층 유지 결정의 rationale이 명시. PASS/FAIL per-문서 + findings-by-severity 리포트 작성.",
+          "acceptance": "(a) 6개 문서 모두 읽고 검증. (b) 각 문서에 PASS/FAIL 판정 부여. (c) findings는 critical/warning/suggestion/note 분류. (d) cross-document 모순 발견 시 반드시 지적. (e) task #8(engineer)의 plan.ts와 task #4(writer의 architecture.md)의 이름 일치 확인. (f) 전체 리뷰 리포트가 artifact로 저장되거나 task output에 명시.",
+          "risk": "6개 문서 cross-reference가 복잡 — 리뷰어가 일부 모순을 놓칠 수 있음. 완화: 각 문서를 읽을 때마다 공통 기준(@moreih29/nexus-core 스코프, sibling 관계, Phase 1 내용)을 체크리스트로 확인.",
+          "status": "pending",
+          "deps": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            7
+          ],
+          "owner": "reviewer",
+          "created_at": "2026-04-10T07:25:49.199Z"
+        },
+        {
+          "id": 12,
+          "title": "Bridge document 리뷰 — nexus-core-bootstrap.md 완결성 검증",
+          "context": "Auto-pairing rule: task #10 writer의 bridge document는 reviewer 검증 필수. 이 문서는 세션의 핵심 산출물이며 미래 다른 repo의 LLM이 단독으로 Phase 1을 부트스트랩하는 기반이 된다. 검증 실패 시 새 repo 작업 전체가 위험.</context>\n<parameter name=\"plan_issue\">2",
+          "approach": "`docs/bridge/nexus-core-bootstrap.md`를 전체 읽고 7가지 기준 검증: (1) **섹션 완전성** — §0-§13 모든 섹션 존재, 빈 섹션 없음, 각 섹션 최소 깊이 충족. (2) **Plan 결정 인용 정확성** — §13의 3개 결정 인용이 `nx_plan_status` 출력과 verbatim 일치 (paraphrase 아님). Grep로 정확한 일치 확인. (3) **File path 유효성** — 인용된 모든 absolute file path가 실제 존재. Glob으로 각 경로 검증. 구체적으로 `/Users/kih/workspaces/areas/opencode-nexus/...` 및 `/Users/kih/.claude/plugins/cache/nexus/claude-nexus/0.25.0/...` 패턴의 모든 경로. (4) **Capability vocabulary 완전성** — §4에 4개 capability 전체(no_file_edit, no_task_create, no_task_update, no_shell_exec) 정의 + 각각 claude-code/opencode 매핑 존재 + 9×4 Agent×Capability 매트릭스 존재. (5) **9 agents + 5 skills 예제 존재** — §3에 각 agent/skill의 meta.yml 실제 예제 포함(14개 YAML 블록 체크). (6) **외부 URL 부재** — `https://`, `http://`, `github.com/` 패턴 grep 결과 0(모든 참조가 absolute local file path여야 함). (7) **자기완결성** — \"see X\", \"refer to Y\", \"자세한 건 X 참조\" 같은 부수 참조 최소화. 필요한 정보는 inline 포함. (8) **길이 검증** — 단어 수 12,000-18,000 범위(target 12-15k, 허용 상한 18k). (9) **Glossary 완전성** — §12에 15개 이상 용어 정의. (10) **Postdoc bash 드리프트** — §10에 명시 + 권장 해결 포함. PASS/FAIL 각 기준별 리포트 + 발견 사항 severity 분류.",
+          "acceptance": "(a) 10개 기준 모두 검증됨. (b) 각 기준별 PASS/FAIL 명시. (c) 실패한 기준은 구체적 라인/섹션 인용으로 지적. (d) 단어 수 실제 측정값 기록. (e) File path 검증은 최소 10개 경로를 Glob으로 샘플 확인. (f) 자기완결성 판단은 \"부수 참조 수\"를 정량적으로 제시. (g) 최종 approval/revision 판정.",
+          "risk": "(1) 12-15k 단어 문서 전수 리뷰는 reviewer 컨텍스트 부담이 큼. 완화: 섹션별 순차 로드. (2) verbatim 인용 체크는 문자 단위 비교 필요 — diff 도구 없으면 sha256 또는 수동 대조. 완화: plan.json 원본을 별도로 로드하고 diff 명시적 수행.",
+          "status": "pending",
+          "deps": [
+            10
+          ],
+          "owner": "reviewer",
+          "created_at": "2026-04-10T07:26:08.061Z"
+        }
+      ]
     }
   ]
 }

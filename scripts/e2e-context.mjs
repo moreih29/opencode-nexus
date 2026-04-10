@@ -7,7 +7,7 @@ import { createHooks } from "../dist/plugin/hooks.js";
 import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanFollowup, nxPlanJoin, nxPlanResume } from "../dist/tools/meet.js";
+import { nxPlanFollowup, nxPlanJoin, nxPlanResume } from "../dist/tools/plan.js";
 import { nxContext } from "../dist/tools/context.js";
 import { nxTaskAdd } from "../dist/tools/task.js";
 

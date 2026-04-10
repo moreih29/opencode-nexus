@@ -950,7 +950,7 @@ ACCEPTANCE:
 |------|------|
 | `src/hooks/gate.ts` | 통합 훅 핸들러 — 모든 이벤트 처리 |
 | `src/mcp/server.ts` | MCP 서버 진입점 |
-| `src/mcp/tools/meet.ts` | 미팅 세션 관리 (6개 도구) |
+| `src/mcp/tools/plan.ts` | Plan 세션 관리 (8개 도구) |
 | `src/mcp/tools/task.ts` | 태스크 관리 (4개 도구) |
 | `src/mcp/tools/briefing.ts` | MATRIX 기반 역할별 브리핑 |
 | `src/mcp/tools/core-store.ts` | 4계층 지식 CRUD |

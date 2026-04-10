@@ -1,0 +1,131 @@
+<!-- tags: codebase, architecture, modules, data-flow -->
+# opencode-nexus 아키텍처 개요
+
+## 1. 전체 구조
+
+`opencode-nexus`는 OpenCode의 Plugin 인터페이스를 구현한 npm 패키지다. claude-nexus와 sibling(자매) 관계로, 공유 Shared Prompt Library인 `@moreih29/nexus-core`를 consume하여 Nexus 오케스트레이션 워크플로우를 OpenCode 런타임에서 구현하며, 세 가지 기여 영역(도구, 설정, 훅)으로 OpenCode와 연동한다.
+
+```
+OpenCode 런타임
+    │
+    └── OpenCodeNexusPlugin (index.ts)
+            ├── createPluginState()     → 인메모리 세션 상태
+            ├── createHooks()           → 이벤트·도구·명령 훅
+            ├── createTools()           → nx_* 도구 노출
+            └── createConfigHook()     → 에이전트·권한 설정 주입
+```
+
+**데이터 흐름:**
+
+- OpenCode가 세션 이벤트, 도구 실행, 채팅 메시지를 발생시킨다.
+- 훅(hooks)이 이를 가로채어 오케스트레이션 상태를 갱신하고 감사 로그를 기록한다.
+- 상태는 `.nexus/` 디렉터리(파일 기반)와 `NexusPluginState`(인메모리)로 이중 관리된다.
+- 에이전트가 `nx_*` 도구를 호출하면 해당 도구가 파일 기반 상태를 읽고 쓴다.
+
+## 2. 핵심 모듈 설명
+
+### agents
+
+에이전트 카탈로그와 primary 에이전트 정의.
+
+- `catalog.ts`: `NexusAgentProfile` 배열. 각 에이전트는 `id`, `category`(`how`/`do`/`check`), `model`, `disallowedTools`를 가진다.
+  - HOW(architect, designer, postdoc, strategist): 분석·설계 역할. 파일 편집 도구 전체 차단.
+  - DO(engineer, researcher, writer): 실행 역할. `nx_task_add` 차단.
+  - CHECK(qa, reviewer): 검증 역할. `nx_task_add` 차단.
+- `primary.ts`: Lead 에이전트의 ID, 설명, 프롬프트 정의.
+- `prompts.ts`: 역할별 프롬프트 보관.
+
+### orchestration
+
+서브에이전트 호출의 생애주기와 연속성(continuity) 관리.
+
+- `core.ts` / `core-store.ts`: 호출 등록(`registerStart`/`registerEnd`), `.nexus/state/orchestration.opencode.json` 기반 상태 영속화.
+- `run-continuity-adapter.ts`: `task` 도구 호출 전 연속성 힌트 주입.
+- `meet-continuity-adapter.ts`: Meet 세션의 참여자별 연속성 관리.
+- `team-policy.ts`: run 모드에서 team_name 필수 여부, Meet 참여 허용 여부 등 정책 판단.
+- `delegation.ts`: 서브에이전트 위임 페이로드 생성.
+
+### pipeline
+
+파일 편집 작업 전 태스크 사이클 상태를 평가하는 가드 레이어.
+
+- `evaluator.ts`: `PipelineSnapshot` → `PipelineEvaluation` 반환. 핵심 판단: `editsAllowed`, `canCloseCycle`, `shouldTriggerQa`, `nextGuidanceKey`.
+- `qa-trigger.ts`: QA 자동 트리거 조건 평가.
+
+### plugin
+
+훅 구현체와 시스템 프롬프트 빌더.
+
+- `hooks.ts`: 6개 훅 — `event`(세션 초기화), `tool.execute.before`(가드레일), `tool.execute.after`(완료 처리), `chat.message`(프롬프트 저장), `command.execute.before`(종료 경고), `experimental.chat.system.transform`(모드 감지·시스템 프롬프트 주입).
+- `system-prompt.ts`: `buildNexusSystemPrompt()`가 현재 모드, 에이전트 목록, 스킬 목록을 조합하여 `<nexus>` 블록 형태 시스템 프롬프트 생성.
+
+### shared
+
+모듈 간 공통 유틸리티.
+
+- `paths.ts`: `.nexus/` 하위 모든 파일 경로를 `createNexusPaths(projectRoot)`로 집중 관리.
+- `state.ts`: `.nexus/` 디렉터리 초기화, 태스크 요약, 에이전트 트래커 리셋.
+- `audit-log.ts`: 세션별·서브에이전트별·글로벌 감사 로그 기록.
+- `agent-tracker.ts`: 현재 실행 중인 팀 상태 추적.
+- `meet-sidecar.ts`: Meet 세션의 OpenCode 사이드카 동기화.
+- `tag-parser.ts`: 프롬프트에서 `[meet]`, `[run]`, `[d]`, `[rule]` 태그 감지.
+- `schema.ts`, `json-store.ts`, `markdown.ts`, `history.ts`: 공통 타입, JSON 스토어, 마크다운, 히스토리 관리.
+
+### skills
+
+- `catalog.ts`: `NexusSkillProfile` 배열. 각 스킬은 트리거 태그와 용도를 가진다(nx-plan, nx-run, nx-init, nx-sync, nx-setup).
+- `prompts.ts`: 스킬별 상세 프롬프트 텍스트 보관.
+
+### tools
+
+모든 `nx_*` 도구 구현체.
+
+| 도구 그룹 | 파일 | 역할 |
+|-----------|------|------|
+| Plan 관리 | `plan.ts` | nx_plan_start, status, resume, followup, discuss, decide, update, join |
+| 태스크 관리 | `task.ts` | nx_task_add, list, update, close |
+| 워크플로우 | `workflow.ts` | nx_init, nx_sync |
+| 코어 스토어 | `core-store.ts` | nx_core_read, nx_core_write |
+| 규칙 | `rules-store.ts` | nx_rules_read, nx_rules_write |
+| 컨텍스트 | `context.ts`, `briefing.ts` | nx_context, nx_briefing |
+| 위임 | `delegation.ts` | nx_delegate_template |
+| 아티팩트 | `artifact.ts` | nx_artifact_write |
+| LSP | `lsp.ts` | nx_lsp_* (심볼, hover, 정의, 진단, 참조, 리네임, 코드액션) |
+| AST | `ast.ts` | nx_ast_search, nx_ast_replace |
+| 설정 | `setup.ts` | nx_setup |
+
+## 3. 플러그인 초기화 흐름
+
+```
+OpenCode 시작
+    │
+    ▼
+OpenCodeNexusPlugin(ctx) 호출  [index.ts]
+    │
+    ├─1─ createPluginState()
+    │       → NexusPluginState 인메모리 객체 생성
+    │
+    ├─2─ createHooks({ directory, worktree, state })
+    │       → createNexusPaths(projectRoot)로 .nexus/ 경로 맵 생성
+    │       → 6개 훅 객체 반환
+    │
+    ├─3─ ctx.client.app.log(...)
+    │       → 초기화 완료 기록
+    │
+    └─4─ 플러그인 반환 객체 조립
+            ├── tool: createTools() → 모든 nx_* 도구
+            ├── config: createConfigHook()
+            │     · primary 에이전트 등록
+            │     · 카탈로그 에이전트를 subagent로 등록
+            │     · disallowedTools → 도구 정책 변환
+            │     · default_agent를 primary로 지정
+            └── ...hooks (6개)
+```
+
+**세션 생성 이후:**
+
+1. `event` 훅이 `.nexus/` 하위 구조 초기화
+2. `chat.message` 훅이 세션별 마지막 프롬프트 저장
+3. `system.transform` 훅이 Nexus 태그를 감지해 모드 결정 → 시스템 프롬프트 주입
+4. `tool.execute.before` 훅이 편집 도구에 파이프라인 가드레일 적용
+5. 서브에이전트 호출 시 before/after 훅이 오케스트레이션 코어에 등록·연속성 갱신
