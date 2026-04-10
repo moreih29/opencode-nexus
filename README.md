@@ -173,7 +173,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 - `docs/operations.md` — 런타임 워크플로와 가드레일
 - `docs/coverage-matrix.md` — 구현 범위 현황
-- `docs/prompt-parity-plan.md` — `claude-nexus` 대비 parity 추적
+- `UPSTREAM.md` — claude-nexus 및 `@moreih29/nexus-core` 관계 선언
 - `docs/reference-boundaries.md` — legacy 동작과 현재 OpenCode 동작의 경계
 
 ## License

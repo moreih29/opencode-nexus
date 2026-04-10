@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanStart } from "../dist/tools/meet.js";
+import { nxPlanStart } from "../dist/tools/plan.js";
 import { nxTaskAdd, nxTaskClose, nxTaskUpdate } from "../dist/tools/task.js";
 import { nxInit, nxSync } from "../dist/tools/workflow.js";
 

@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanDecide, nxPlanDiscuss, nxPlanJoin, nxPlanStart } from "../dist/tools/meet.js";
+import { nxPlanDecide, nxPlanDiscuss, nxPlanJoin, nxPlanStart } from "../dist/tools/plan.js";
 import { nxTaskAdd, nxTaskClose, nxTaskUpdate } from "../dist/tools/task.js";
 
 const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-"));

@@ -7,7 +7,7 @@ import { createHooks } from "../dist/plugin/hooks.js";
 import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart } from "../dist/tools/meet.js";
+import { nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart } from "../dist/tools/plan.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-meet-core-first-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });
