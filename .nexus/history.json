@@ -3401,6 +3401,358 @@
           "created_at": "2026-04-10T07:26:08.061Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-11T14:09:37.243Z",
+      "branch": "phase1-nexus-core-adoption",
+      "plan": {
+        "id": 16,
+        "topic": "opencode-nexus를 @moreih29/nexus-core v0.1.2 기반으로 전환 (Phase 2 adoption)",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Migration 실행 전략 (cutover vs incremental, phase 순서)",
+            "status": "decided",
+            "decision": "Option A (Big-Bang Cutover) 채택. 단일 feature branch 내 4-commit bisectable sequence로 실행. 각 commit 경계마다 `bun run test:e2e` 전량 green 강제. 브랜치 수명 상한 7일, 넘기면 main rebase 후 재검증. Phase 1 완료 정의(5개 AND): (1) 9 agents 전부 prompts.generated.ts에서 비어있지 않은 본문 노출, (2) 5 skills 동일, (3) 9 agents 전원 capability→opencode tool mapping 성공 (ERR_UNKNOWN_CAPABILITY/ERR_MISSING_MAPPING 없음), (4) e2e-prompt-parity.mjs를 §8.7의 3개(generated/coverage/loader-smoke)로 치환한 상태에서 22 e2e 전량 green, (5) dist/index.js가 nexus-core 런타임 참조 없이 로드. Phase 1 범위 제외: tag 핸들러 동적 등록(Q5, Issue #3 별도 판단), no_shell_exec 제안(Issue #4), NATURAL_PLAN/RUN_PATTERNS 처리, pipeline evaluator editsAllowed 패턴. 기각: Option B(catalog/prompts/hooks/create-config 얽힘에 의한 shotgun-surgery 중간 상태가 1인 리뷰어 환경에서 단일 큰 PR보다 인지 부하 높음), Option C(nexus-core body.md가 claude-nexus canonical에서 import된 반면 opencode-nexus 기존 prompts.ts는 HOW_OUTPUT/CHECK_OUTPUT/SHARED_EVIDENCE 합성 방식으로 drift 가능성 높아 diff 검증 원리 자체 미성립 — 존재성 검증으로 완화하면 §8.7 e2e-prompts-generated.mjs와 중복되어 병행 정당성 소멸).",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "Option A 채택 근거: (1) bridge 98KB §8이 이미 cutover 전제로 쓰여 §8.5 prompts.ts 교체는 generated 파일과 capability resolution이 준비된 상태에서 성립. (2) Option C의 diff 검증은 본문 drift로 무의미하며 존재성 검증은 §8.7과 중복. (3) Option B는 catalog/prompts/hooks/create-config 네 파일이 buildNexusSystemPrompt({agents,skills})와 buildToolPolicy(disallowedTools) 지점에서 얽혀 중간 상태가 leaky. (4) clean slate 상태(미설치)가 Big-Bang 되돌림 비용을 최소화 — git reset + bun install 한 쌍으로 복원. 보완: 단일 PR이 아닌 브랜치 내 4-commit bisectable(deps+scaffold → generated barrel → capability resolution → e2e 치환). Warnings: W1 prepack build 강제 → commit 경계마다 test:e2e 강제, W2 ERR_* 하드 실패의 prepack 영향 → stable window 30일, W3 Option B 번복 시 shotgun-surgery 재확인."
+            }
+          },
+          {
+            "id": 2,
+            "title": "Runtime 소비 + generate-from-nexus-core lib 재사용 전략 (복사 포팅 vs nexus-core shared lib 승격)",
+            "status": "decided",
+            "decision": "Option γ (Hybrid — 복사 포팅 + upstream 제안) 채택. Phase 1에서는 claude-nexus의 `generate-from-nexus-core.mjs`와 `generate-from-nexus-core.lib.mjs`를 `scripts/` 하위로 복사 포팅한다. opencode 차이점 수정: (1) MODEL_TIER_TO_CLAUDE → MODEL_TIER_TO_OPENCODE, (2) deriveDisallowedTools의 capsMap은 harness_mapping.opencode 배열 추출, (3) transformAgent/transformSkill은 frontmatter emit 대신 TypeScript literal emit(§8.2 canonical 포맷 — AGENT_PROMPTS Record, AGENT_META Record에 disallowedTools 해석 결과 inline), (4) loadHandledTagIdsFromGate()는 opencode-nexus의 src/shared/tag-parser.ts에서 regex로 추출, (5) 출력 경로는 src/agents/prompts.generated.ts + src/skills/prompts.generated.ts. 재사용 그대로: verifyBodyHash, verifyTagDrift, SKILL_PURPOSE_OVERRIDE 5개 상수, verifyManifestVersion. 제거: MAX_TURNS_MAP(Claude Code 전용 maxTurns 개념), FIELD_ORDER(frontmatter 없음, TS 타입 정의로 강제). HANDLED_TAG_IDS 상수 신규 도입 위치 = src/shared/tag-parser.ts (기존 태그 regex 파서와 같은 파일, claude-nexus gate.ts 역할 대응, verifyTagDrift가 이 파일을 source of truth로 regex 추출). 복사 시점에 주석으로 버전 태깅: \"Ported from: claude-nexus/generate-from-nexus-core.lib.mjs @ commit 94997d1\". Runtime 소비 방식: §8.3+§8.2+§8.6 canonical 준수 — devDependency, 빌드 타임 body.md/meta.yml/capabilities.yml 읽어 prompts.generated.ts에 literal inline, catalog.ts as-is 유지, generate-from-nexus-core.mjs 내부에서 id/name/category consistency check(ERR_CATALOG_MISMATCH hard-fail을 §8.8의 3개 ERR에 추가), manifest.json body_hash는 빌드 타임 검증만 수행 런타임 무결성 검사 없음. 기각: Option α(drift 누적, Gap 1/2 fix 수동 sync 부담), Option β(nexus-core shared lib PR 병합 대기가 Issue #1의 7일 브랜치 수명 상한과 양립 불가), Option δ(완전 독립 구현은 verifyBodyHash/verifyTagDrift 같은 수학적으로 동일한 로직을 재작성하는 무가치한 바퀴 재발명, Gap 1/2 workaround 누락 위험).",
+            "how_agents": []
+          },
+          {
+            "id": 3,
+            "title": "하드코딩 제거 범위/순서 (agents, skills, tags, vocabulary) 및 tag 핸들러 동적 등록 타이밍",
+            "status": "decided",
+            "decision": "4-commit bisectable sequence 확정 및 파일 매트릭스 고정.\n\nCommit #1 (`chore: add nexus-core devDependency + generate scaffold`): package.json devDependencies에 `@moreih29/nexus-core: ^0.1.2` 추가, bun install, scripts/generate-from-nexus-core.{mjs,lib.mjs} 신규 (claude-nexus에서 포팅, 버전 태깅 주석), opencode 차이점 수정(MODEL_TIER_TO_OPENCODE, harness_mapping.opencode, TS literal emit). 이 commit에서는 generate 미실행.\n\nCommit #2 (`feat: generate prompts.generated.ts + barrel replacement`): package.json scripts에 generate:prompts 추가, build는 `bun run generate:prompts && tsc -p tsconfig.json`으로 수정. src/agents/prompts.ts 삭제 후 `export { AGENT_PROMPTS, AGENT_META } from './prompts.generated.js'` re-export barrel, src/skills/prompts.ts 동일. prompts.generated.ts 파일은 git tracked (claude-nexus 패턴과 동일, .gitignore 미포함).\n\nCommit #3 (`feat: capability resolution + HANDLED_TAG_IDS drift check + isEditLikeTool 대체`): AGENT_META.disallowedTools가 capability → harness_mapping.opencode 해석 결과로 literal inline, generate-from-nexus-core.mjs 내부에서 NEXUS_AGENT_CATALOG[id].disallowedTools ↔ AGENT_META[id].disallowedTools 동등성 검증 (ERR_CATALOG_MISMATCH hard-fail을 §8.8 3개 ERR에 추가하여 총 4개), src/shared/tag-parser.ts에 `export const HANDLED_TAG_IDS = ['plan', 'run', 'sync', 'd', 'm', 'm-gc', 'rule'] as const` 추가, verifyTagDrift() 호출로 tags.yml과 교차 검증, prompts.generated.ts에 `export const NO_FILE_EDIT_TOOLS: readonly string[] = [...]`(no_file_edit capability의 opencode mapping) 추가, src/plugin/hooks.ts:402-404 isEditLikeTool을 `NO_FILE_EDIT_TOOLS.includes(toolName)`으로 한 줄 수정.\n\nCommit #4 (`test: replace e2e-prompt-parity with §8.7 triple`): scripts/e2e-prompts-generated.mjs (AGENT_PROMPTS/SKILL_PROMPTS 존재성), scripts/e2e-capability-coverage.mjs (AGENT_META.disallowedTools resolution, unknown opencode tool name은 warning-level per §10.2), scripts/e2e-loader-smoke.mjs (dist/index.js를 nexus-core 없이 로드, devDependency contract) 신규. package.json test:e2e에서 e2e-prompt-parity.mjs 제거 + 3개 추가, scripts/e2e-prompt-parity.mjs 삭제. 최종 24개 e2e 스크립트.\n\n파일 매트릭스: src/agents/prompts.ts 삭제→barrel(#2), src/agents/catalog.ts as-is(§8.6), src/agents/prompts.generated.ts 신규(#2/#3), src/skills/prompts.ts 삭제→barrel(#2), src/skills/catalog.ts as-is, src/skills/prompts.generated.ts 신규(#2), src/shared/tag-parser.ts HANDLED_TAG_IDS 상수 추가(#3, NATURAL_PLAN/RUN_PATTERNS는 Phase 1 제외 유지), src/plugin/hooks.ts:402-404 isEditLikeTool 한 줄 수정(#3), src/create-config.ts as-is, src/pipeline/evaluator.ts as-is(Phase 1 제외).\n\nQ5 재정의: \"tag 핸들러 동적 등록\"이 아니라 \"tag id의 single source of truth\" — HANDLED_TAG_IDS 정적 상수(tag-parser.ts) + verifyTagDrift() 빌드 타임 교차 검증으로 해결. 동적 loading 없음, §9.2 runtime 공유 배제 원칙 준수. claude-nexus와 동일 패턴.\n\nPhase 1 제외 (Phase 1 이후 별도 태스크): NATURAL_PLAN_PATTERNS/NATURAL_RUN_PATTERNS 자연어 감지(Issue #6에서 nexus-core 경계 판단), src/pipeline/evaluator.ts editsAllowed throw 패턴(전환과 독립), src/create-config.ts:55-61 buildToolPolicy(변환 로직만, 입력 catalog.ts에서 공급), src/agents/catalog.ts 내부 구조 변경(§8.6 as-is).",
+            "how_agents": []
+          },
+          {
+            "id": 6,
+            "title": "nexus-core 이슈 제출 목록 (postdoc no_shell_exec gap, lib shared 승격, manual_only semantic, natural-language tag 경계)",
+            "status": "decided",
+            "decision": "nexus-core에 단일 통합 이슈로 4개 Gap 제출 (Option i, claude-nexus #2 패턴). 제출 시점: Phase 1 commit #1(nexus-core devDependency 설치) 직후.\n\nGap 1 (Must) — **`no_shell_exec` capability 부재**: bridge §10.1이 \"opencode-nexus catalog가 맞고 nexus-core에 no_shell_exec 유지, claude-nexus postdoc에 Bash 차단 PR\"을 결정했으나 실제 nexus-core v0.1.2 vocabulary/capabilities.yml에 이 capability가 없음. postdoc/meta.yml capabilities 배열에도 no_shell_exec 누락. opencode-nexus는 catalog.ts disallowedTools에 'bash'를 하드코딩 workaround 유지 중. 제안: capabilities.yml에 no_shell_exec 추가(harness_mapping.opencode: [bash], harness_mapping.claude_code: [Bash]) + agents/postdoc/meta.yml capabilities에 no_shell_exec 추가.\n\nGap 2 (Must) — **skill `manual_only` runtime semantic 명세 부재**: nx-setup, nx-init의 meta.yml에 manual_only: true가 있으나 semantic(\"LLM 자동 발동 금지, 사용자 수동 trigger만 허용\")이 schema/skill.schema.json 또는 .nexus/context/boundaries.md 어디에도 명시 없음. Phase-2 adoption brief §5에만 기록. opencode-nexus hooks.ts experimental.chat.system.transform 구현 시 canonical spec 필요. 제안: skill.schema.json의 manual_only 필드 description에 contract 추가 또는 context/boundaries.md에 manual_only contract 섹션 추가.\n\nGap 3 (Should) — **generate-from-nexus-core lib shared 승격 제안**: Issue #2 Option γ의 장기 path. claude-nexus와 opencode-nexus가 harness-agnostic 로직(verifyBodyHash, verifyTagDrift, loadHandledTagIdsFromGate, SKILL_PURPOSE_OVERRIDE, deriveDisallowedTools, verifyManifestVersion)을 각자 복사 보유. boundary 질문: nexus-core가 \"prompt-only\" 원칙 하에서 consumer-facing build lib를 소유할 수 있는가. brief §2 제외 목록에 \"빌드 도구 lib\"는 없음. 제안: scripts/consumer-lib.mjs 승격 + package.json exports에 ./consumer-lib subpath 추가, transformAgent/transformSkill을 emitFormat 콜백으로 파라미터화. 승격 시 Gap 1/2 fix 자동 공유 이점.\n\nGap 4 (Should) — **NATURAL language tag detection 경계 판정**: opencode-nexus src/shared/tag-parser.ts:4-15의 NATURAL_PLAN_PATTERNS(/계획/, /설계/, /분석해/ 등)와 NATURAL_RUN_PATTERNS(/실행해/, /구현해/ 등)가 consumer 소유인지 semi-canonical인지 판정 필요. brief §2 \"Runtime I/O는 consumer 소유\"가 raw matching pattern까지 커버하는지 불분명. 제안: .nexus/context/boundaries.md에 \"natural language patterns는 consumer 소유, vocabulary에 편입하지 않음\" 명시하거나, 반대로 optional hint format 제공. Lead opinion 요청.\n\n이슈 제출 형식 (claude-nexus #2 구조 그대로): Context → Gap N (Current state / Impact on opencode-nexus / Proposal) × 4 → Current opencode-nexus workarounds → Desired flow → Labels (validation, enhancement, consumer-feedback, architecture) → Related (opencode-nexus phase 1 commit SHA, bridge §10.1, Phase-2 adoption brief).\n\nDesired flow 본문:\n1. nexus-core maintainer가 이 이슈 리뷰\n2. Gap별 adopt/reject/alternative 결정\n3. nexus-core에서 합의된 변경 구현\n4. opencode-nexus가 workaround 제거 follow-up PR:\n   - catalog.ts postdoc bash 하드코딩 제거 → no_shell_exec capability 사용 (Gap 1)\n   - hooks.ts에 manual_only skill 차단 로직 추가 (Gap 2)\n   - generate-from-nexus-core.{mjs,lib.mjs}를 shared lib import로 교체 (Gap 3 merge 시)\n5. claude-nexus가 별도 PR: postdoc.md frontmatter에 Bash 차단 추가 (bridge §10.1 action)\n\nPhase 1 block하지 않음: opencode-nexus는 workaround(catalog.ts 하드코딩 + hooks 차단 로컬 로직)로 Phase 1 완료. nexus-core 머지 후 cleanup PR 별도 진행.\n\n제외한 후보: claude-nexus #2 Gap 1/2/3는 이미 제출됨, pipeline evaluator editsAllowed(nexus-code 소관, 04-OPEN_QUESTIONS Q3), ERR 타입 standardization(claude-nexus #2 Gap 1과 중복), skill dispatch 메커니즘(Gap 2로 커버).",
+            "how_agents": []
+          },
+          {
+            "id": 7,
+            "title": "opencode-nexus trusted publishing 전환 (OIDC)",
+            "status": "decided",
+            "decision": "claude-nexus publish-npm.yml을 기준으로 포팅, Must 5 + Should 3 모두 적용. 별도 PR로 Phase 1 시작 전 머지.\n\nMust 변경:\n1. Node 20 → Node 24 (line 28) — npm 11+ 필요, Trusted Publishing 조건\n2. `registry-url` 제거 (line 29) — setup-node에 있으면 NODE_AUTH_TOKEN 자동 주입되어 OIDC 우회\n3. `NODE_AUTH_TOKEN` env 제거 (line 45-46) — token 경로 완전 차단\n4. `secrets.NPM_TOKEN` 참조 제거 (workflow에서만, GitHub repo secret 자체 삭제는 사용자 수동)\n5. 파일 헤더 주석 추가 — \"OIDC Trusted Publishing only\" + `registry-url` 금지 사유 + Trusted Publisher 등록 정보 (moreih29/opencode-nexus + publish-npm.yml)\n\nShould 변경:\n6. `concurrency` group: `publish-${{ github.ref }}`, `cancel-in-progress: false` — 동시 publish 방지\n7. Version match check: git tag v* ↔ package.json.version 교차 검증 (release 프로세스 formalize 전 안전장치)\n8. `workflow_dispatch` dry_run input: pack only, skip publish 옵션\n\nBun version: 기존 `1.3.9` → `\"1.3\"` (loose pinning, claude-nexus와 일치).\n\nBuild chain 고려 (Issue #3 commit #2와 연계): check/test:e2e 스크립트 내부에서 generate:prompts 자동 호출 — Issue #3 commit #2에서 package.json의 build/check/test:e2e 세 스크립트가 모두 generate:prompts를 선행하도록 수정. workflow는 build chain 내부 순서를 몰라도 됨 (Option a 채택).\n\nPR 분리: 별도 PR (PR #A: trusted publishing workflow만 수정). Phase 1 feature branch와 직교하여 main에 먼저 머지. Phase 1 브랜치(PR #B, 4-commit bisectable)는 깨끗한 OIDC workflow 위에서 시작. 첫 publish는 Phase 1 버전 태그(예: v0.2.0) 푸시 시 OIDC로 수행.\n\nPhase 1 완료 전 첫 publish 체크리스트:\n(a) `bun run generate:prompts`가 prompts.generated.ts 생성 — 로컬 확인\n(b) prompts.generated.ts가 git tracked — commit 존재 확인\n(c) `npm pack --dry-run`에서 dist/와 templates/에 generated 파일 포함 확인 (files: [\"dist\", \"templates\"])\n(d) npm web UI에서 Trusted Publisher 등록 확인 (사용자 수행 완료 명시됨)\n(e) GitHub repo secrets에서 NPM_TOKEN 삭제 확인 (사용자 수동)\n(f) workflow_dispatch dry_run으로 pre-release 검증 (선택)\n\nIssue #1 7일 브랜치 수명 상한과 충돌 없음: PR #A가 먼저 머지되고 PR #B가 따로 시작.",
+            "how_agents": []
+          }
+        ],
+        "research_summary": "\n## 현재 상태 (opencode-nexus)\n\n- **v0.1.0**, `@moreih29/nexus-core` 아직 dependency에 없음 (node_modules에도 미설치). `publishConfig.access: public`만 설정됨.\n- `src/agents/catalog.ts` (12-85줄): 9개 에이전트 NEXUS_AGENT_CATALOG. disallowedTools 배열 포함 — architect/designer/strategist는 [edit,write,patch,multiedit,nx_task_add,nx_task_update], postdoc은 추가로 bash, engineer/writer는 [nx_task_add], tester/reviewer는 [edit,write,patch,multiedit,nx_task_add].\n- `src/agents/prompts.ts` (740줄): AGENT_PROMPTS Record 형식 하드코딩.\n- `src/skills/catalog.ts` (8-39줄): 5개 스킬 (nx-plan, nx-run, nx-init, nx-sync, nx-setup).\n- `src/skills/prompts.ts` (207줄): SKILL_PROMPTS Record.\n- `src/shared/tag-parser.ts`: `[plan]`, `[run]`, `[d]`, `[rule(?::*)?]` regex + AGENT_ALIASES에 9개 한글 alias 하드코딩. `[m]`, `[m:gc]`, `[sync]`는 이 파서에서 빠져 있음.\n- `src/plugin/hooks.ts` (1017줄): event/tool.execute.before/tool.execute.after/chat.message/command.execute.before/experimental.session.compacting/experimental.chat.system.transform 훅 등록. `isEditLikeTool()` (402-404줄) 하드코딩. tool.execute.before에서 pipeline evaluator 호출.\n- `src/pipeline/evaluator.ts` (185줄): editsAllowed throw 패턴. taskCycleState 기반 권한.\n- `src/create-config.ts:55-61`: buildToolPolicy로 disallowedTools → OpenCode agent config.\n- `docs/bridge/nexus-core-bootstrap.md`: 98KB / 1946줄. §8(line 1524-1662) opencode-nexus integration, §9.2(line 1662+) runtime 공유 배제 원칙. bridge-quotes.md에 핵심 인용 보존됨.\n- `UPSTREAM.md`: 이미 sibling 관계, canonical source, bidirectional flip, 90-day re-evaluation, Phase 2 trigger 정의됨. \"4-layer 지식 계층 구조 유지\"를 intentional divergence로 명시.\n- `.nexus/` 구조: 이미 flat 구조(memory/, rules/, state/)와 4-layer 구조(core/{identity,codebase,reference})가 **공존**. core/identity, core/codebase는 opencode-nexus 고유, memory/opencode-nexus/는 nexus-temp에서 전달된 브리핑 세트.\n\n## nexus-core v0.1.2 구조\n\n- **manifest.json** (4ffc1e0 commit, schema_contract_version 1.0): 9 agents + 5 skills + vocabulary의 body_hash 포함 snapshot. consumer가 단일 파일 catalog lookup 가능.\n- **9 agents**: architect(how/persistent/high), designer(how/persistent/high), postdoc(how/persistent/high), strategist(how/persistent/high), engineer(do/bounded/standard), writer(do/bounded/standard), researcher(do/persistent/standard), tester(check/ephemeral/standard), reviewer(check/ephemeral/standard). meta.yml 9필드 구조.\n- **5 skills**: nx-plan(triggers:[plan], variants:[auto]), nx-run(triggers:[run]), nx-sync(triggers:[sync]), nx-setup(manual_only:true), nx-init(manual_only:true).\n- **vocabulary/capabilities.yml**: 3개 capability만 정의 — `no_file_edit`, `no_task_create`, `no_task_update`. **각각 harness_mapping.opencode 키에 tool 이름 배열 존재**: no_file_edit→[edit,write,patch,multiedit], no_task_create→[nx_task_add], no_task_update→[nx_task_update]. **`no_shell_exec` 없음**.\n- **vocabulary/tags.yml**: 7 entries / 9 triggers. skill tags 3(plan+variants:[auto], run, sync), inline action tags 4(d→nx_plan_decide, m→memory_store, m-gc→memory_gc, rule+variants:[*]→rule_store).\n- **postdoc meta.yml capabilities**: [no_file_edit, no_task_create, no_task_update]만. **bash 허용 상태** (canonical).\n- **schema/**: common/agent/skill/vocabulary/manifest 5 files (draft 2020-12, additionalProperties: false).\n- **CONSUMING.md**: 5-file upgrade protocol, nx-car marker regex, File Contracts, Consumer Setup template. manifest.json을 먼저 읽고 CHANGELOG의 `<!-- nx-car:vX.Y.Z:start/end -->` 마커 스캔.\n- **OIDC trusted publishing** 완료 (NPM_TOKEN 삭제됨, `npm publish --provenance --access public`, Bun publish 금지, registry-url setup-node 금지).\n- `.nexus/rules/semver-policy.md`: 18-case 표, \"의심스러우면 minor\" heuristic.\n\n## Phase-2 adoption brief 핵심 제약\n\n- nexus-core는 prompt-only + harness-neutral + model-neutral. hook/runtime/MCP/CLI는 consumer 소유.\n- **Capability resolution은 consumer 책임**: `node_modules/@moreih29/nexus-core/vocabulary/capabilities.yml` 읽고 harness_mapping.opencode 배열을 기존 차단 메커니즘(create-config.ts buildToolPolicy, hooks.ts isEditLikeTool)에 주입.\n- **migration plan은 consumer가 직접 plan session으로 수립**. nexus-core는 migration decision을 ship하지 않음.\n- **tester 용어 정렬**: opencode-nexus는 이미 `tester`로 consistent (qa legacy 없음).\n- W4 historical note: body prose 차원 정렬이며 meta.yml 필드에는 qa/tester 없음.\n\n## 이미 제출된 상류 이슈 (moreih29/nexus-core#2)\n\nclaude-nexus가 제출한 3가지 gap:\n- **Gap 1**: tags.yml trigger/id consistency 검증 부재 (Gate 11 제안). opencode-nexus도 동일 영향 — `t.trigger`를 신뢰해야 함.\n- **Gap 2**: skill meta.yml에 harness-display `purpose` 필드 없음. 5-entry SKILL_PURPOSE_OVERRIDE로 workaround 중.\n- **Gap 3**: DO/CHECK agent artifact_granularity hint 없음. 병렬 분해 판단 근거 부재.\n\n이 3개는 opencode-nexus도 동일 영향을 받으며 이미 상류 이슈로 제출됨 → **opencode-nexus에서 재제출 불필요**. opencode-nexus 관점에서는 이 이슈 #2 해결을 기다리거나, opencode-nexus 고유의 추가 gap만 제출.\n\n## opencode-nexus 고유 gap 후보\n\n1. **`no_shell_exec` capability 부재**: opencode-nexus postdoc이 역사적으로 bash 차단. nexus-core canonical에 이 capability가 없어서 \"postdoc bash 차단 유지\"를 canonical로 표현할 방법이 없음. 선택지: (a) canonical 따라 bash 해제, (b) `no_shell_exec` 추가 이슈 제출.\n2. **skill manual_only 런타임 semantic 명세 부재**: manual_only: true가 \"LLM 자동 발동 금지 + 사용자 수동 trigger만\"이라는 것은 brief에만 있음. tags.yml이나 skill schema 문서에 이 semantic이 명시되어 있는지 재확인 필요. hooks.ts의 experimental.chat.system.transform에서 어떻게 반영할지 근거가 필요.\n3. **tag-parser natural language detection (한글 등)**: opencode-nexus는 자연어 패턴(\"계획\", \"설계\", \"분석해\")으로 mode 감지하는 NATURAL_PLAN_PATTERNS/NATURAL_RUN_PATTERNS를 가지고 있음. nexus-core에는 canonical 자연어 패턴 목록이 없음. 이게 consumer에 속하는지 nexus-core에 속하는지 경계 판단 필요 (brief §2에 따르면 \"Runtime I/O는 consumer 소유\"지만 \"언어 패턴\"은 semi-canonical일 수 있음).\n\n## 제약\n\n- bridge 98KB 계획 재작성 금지 (03-IMPLEMENTATION_GUIDE.md 거절 1).\n- permission.ask 훅 의존 금지 (실험 E1, issue #7006).\n- tool.execute.before 훅 범위 엄격히 제한 (실험 E3, issue #5894).\n- opencode acp adapter 작성 금지 (nexus-code 소유).\n- ACP vocabulary를 nexus-core에 편입 시도 금지.\n- runtime 공유 배제 원칙(§9.2): 빌드 타임 소비만 허용. nexus-core 인스턴스 런타임 공유 금지.\n",
+        "created_at": "2026-04-11T12:05:43.948Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "OIDC Trusted Publishing workflow 전환 PR 작성",
+          "context": "Issue #7 — opencode-nexus의 publish-npm.yml을 token 기반에서 OIDC Trusted Publishing으로 전환한다. 사용자가 이미 npm web UI에서 Trusted Publisher를 등록 완료. 이 PR은 Phase 1 시작 전에 main에 머지되어야 Phase 1 브랜치가 깨끗한 OIDC workflow 위에서 시작할 수 있다. claude-nexus publish-npm.yml을 기준으로 포팅.",
+          "approach": ".github/workflows/publish-npm.yml 수정. Must 5: (1) node-version 20→24, (2) setup-node의 registry-url 제거(NODE_AUTH_TOKEN 자동 주입 방지), (3) NODE_AUTH_TOKEN env 제거, (4) secrets.NPM_TOKEN 참조 제거, (5) 파일 헤더 주석 추가(OIDC Trusted Publishing only + registry-url 금지 사유 + moreih29/opencode-nexus + publish-npm.yml Trusted Publisher 등록). Should 3: (6) concurrency group(publish-${{ github.ref }}, cancel-in-progress: false), (7) Version match check(git tag v* ↔ package.json.version), (8) workflow_dispatch dry_run boolean input(pack only, skip publish). Bun version \"1.3.9\" → \"1.3\" loose pinning. 기존 bun install --frozen-lockfile / bun run check / bun run test:e2e / npm pack --dry-run / npm publish --provenance --access public 체인 유지. 별도 PR(PR #A)로 Phase 1 브랜치와 직교하게 main에 머지.",
+          "acceptance": "workflow YAML이 문법 오류 없음(actionlint/yamllint 통과 수준), node-version: 24, registry-url 없음, NODE_AUTH_TOKEN 참조 없음, id-token: write permission 존재, concurrency group 존재, version match check step 존재, dry_run input 존재, 파일 헤더 주석에 Trusted Publisher 등록 키 명시. PR이 main에 머지됨.",
+          "risk": "workflow_dispatch dry_run으로 실제 실행 검증하지 않으면 다음 release에서 실패 가능. Phase 1 시작 전 머지되지 않으면 Phase 1 첫 publish가 token 경로로 fallback. GitHub repo secrets에서 NPM_TOKEN 삭제는 workflow 변경과 별개로 사용자 수동 수행 — 누락 시 legacy 경로 잔존.",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 7,
+          "owner": "engineer",
+          "created_at": "2026-04-11T12:48:28.730Z"
+        },
+        {
+          "id": 2,
+          "title": "OIDC publish workflow 검증 (workflow_dispatch dry_run + 토큰 경로 부재 확인)",
+          "context": "Task 1의 workflow 수정이 실제로 OIDC 경로로 동작하는지 검증. 배포 accident 방지.",
+          "approach": "수정된 publish-npm.yml을 PR에서 실제로 workflow_dispatch + dry_run: true로 실행. `bun install --frozen-lockfile` → `bun run check` → `bun run test:e2e` → `npm pack --dry-run`까지 돌고 publish step은 skip되는지 확인. GitHub Actions log에서 (a) id-token: write permission 사용됨, (b) Node 24 셋업, (c) NODE_AUTH_TOKEN env 주입 없음, (d) concurrency group 적용됨 확인. Tag가 없는 상태의 workflow_dispatch 실행이라 Version match check step은 skip됨을 확인. 이후 PR review + main merge 확인.",
+          "acceptance": "dry_run 실행이 성공 status, publish step이 실행되지 않음(if 조건으로 skip), actions log에 NODE_AUTH_TOKEN 언급 없음, Trusted Publisher 경로로 OIDC 토큰 교환 준비가 확인됨(드라이런에서는 실제 publish 안 하므로 pack까지). PR이 main에 머지됨.",
+          "risk": "GitHub Actions OIDC 환경이 실제 publish 없이 완전 검증되지는 않음 — 첫 실제 release 시 최종 검증. dry_run 경로가 Task 1의 if 조건을 정확히 반영하지 않으면 false positive 가능.",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 7,
+          "owner": "tester",
+          "created_at": "2026-04-11T12:48:43.027Z"
+        },
+        {
+          "id": 3,
+          "title": "Phase 1 feature branch 생성 + 브랜치 수명 추적 설정",
+          "context": "Issue #1 — Big-Bang Cutover의 단일 feature branch(4-commit bisectable sequence)를 생성. 브랜치 수명 상한 7일 규칙 추적. pre-flight check 포함(nexus-core 설치 가능성 확인). Task 2(OIDC workflow 머지)가 선행되어야 Phase 1 브랜치가 깨끗한 OIDC 위에서 시작.",
+          "approach": "main에서 `phase1-nexus-core-adoption` feature branch 생성. 브랜치 README 또는 PR description에 4-commit 경계 명시(commit #1 deps+scaffold / commit #2 generated barrel / commit #3 capability resolution / commit #4 e2e 치환). pre-flight: `bun outdated` 스냅샷 기록, `bun.lock` 현재 상태 백업(git에 이미 tracked), `node_modules/@moreih29/nexus-core` 미설치 확인(Glob으로 none 확인). 복원 시나리오 문서화: `git reset --hard main + bun install`. Task 2 머지 완료 확인.",
+          "acceptance": "`phase1-nexus-core-adoption` 브랜치가 생성되어 로컬/원격 존재. 브랜치 수명 추적 파일 또는 PR description 존재(시작일자 기록). main과 diff가 없는 상태(실질 commit 없음). Task 2 완료 확인(git log에 OIDC workflow 수정 commit 존재).",
+          "risk": "Task 2 머지 전에 브랜치를 시작하면 첫 publish가 token 경로로 fallback. 브랜치 수명 추적이 PR description에만 있으면 revert 시 유실. 7일 경과 시 main rebase 필요.",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "plan_issue": 1,
+          "owner": "lead",
+          "created_at": "2026-04-11T12:48:54.787Z"
+        },
+        {
+          "id": 4,
+          "title": "Commit #1 — devDependency 추가 + generate-from-nexus-core 포팅 (차이점 수정 포함)",
+          "context": "Issue #1/#2/#3 Commit #1 — Phase 1 feature branch의 첫 bisectable commit. nexus-core를 devDependency로 설치하고, claude-nexus의 generate-from-nexus-core.{mjs,lib.mjs}를 scripts/ 하위로 포팅 + opencode 차이점 수정. 이 commit에서는 generate 스크립트를 빌드에서 호출하지 않음(아직 prompts.generated.ts 생성 안 함). 기존 22 e2e 전량 green을 유지해야 하는 \"scaffold only\" 단계.",
+          "approach": "(1) `package.json`의 devDependencies에 `\"@moreih29/nexus-core\": \"^0.1.2\"` 추가, `bun install` 실행, `node_modules/@moreih29/nexus-core/` 존재 확인. (2) claude-nexus `/Users/kih/workspaces/areas/claude-nexus/generate-from-nexus-core.mjs`와 `generate-from-nexus-core.lib.mjs`를 opencode-nexus `scripts/` 하위로 복사. 각 파일 상단에 버전 태깅 주석 추가: `// Ported from: claude-nexus/generate-from-nexus-core.lib.mjs @ commit 94997d1 — sync with upstream when Gap 1/2 fixes merge.` (3) opencode 차이점 수정: (a) MODEL_TIER_TO_CLAUDE 상수 제거하고 `MODEL_TIER_TO_OPENCODE = { high: 'opencode-high-model', standard: 'opencode-standard-model' }` 추가(실제 opencode 모델 이름은 bridge §8.2 예시 또는 기존 catalog.ts 참조), (b) `deriveDisallowedTools()`의 capsMap 생성 시 `cap.harness_mapping?.opencode ?? []` 추출, (c) `transformAgent()`, `transformSkill()`을 frontmatter emit 대신 TypeScript literal emit으로 재작성 — `export const AGENT_PROMPTS: Record<string, string> = { architect: \\`...\\`, ... }` 형식의 문자열 생성(§8.2 canonical 포맷), (d) `loadHandledTagIdsFromGate()`가 `src/shared/tag-parser.ts`에서 `HANDLED_TAG_IDS` 상수를 regex 추출하도록 경로 조정 — 이 상수는 commit #3에서 추가되므로 scaffold 단계에서는 optional path(파일 없으면 empty array return)으로 완화, (e) `MAX_TURNS_MAP`과 `FIELD_ORDER` 제거(Claude Code 전용), (f) 출력 경로를 `src/agents/prompts.generated.ts` + `src/skills/prompts.generated.ts`로 수정. (4) 이 commit에서는 `package.json`의 `build` 스크립트를 아직 수정하지 않음 — generate-prompts 미호출. (5) `bun run build && bun run test:e2e` 실행하여 기존 22 e2e green 확인. (6) commit message: `chore: add @moreih29/nexus-core devDependency + port generate-from-nexus-core scaffold`",
+          "acceptance": "`package.json`에 `@moreih29/nexus-core: ^0.1.2` devDependency 존재. `node_modules/@moreih29/nexus-core/agents/` 및 `vocabulary/capabilities.yml` 파일 읽기 가능(Glob 확인). `scripts/generate-from-nexus-core.mjs`와 `scripts/generate-from-nexus-core.lib.mjs` 두 파일 존재하고 버전 태깅 주석 포함. opencode 차이점 수정 완료(MODEL_TIER_TO_OPENCODE, harness_mapping.opencode, TS literal emit 함수 시그니처, 출력 경로). `package.json`의 build 스크립트는 아직 수정 안 됨(여전히 `tsc -p tsconfig.json`). `bun run build && bun run test:e2e` 전량 green(기존 22 e2e). git log에 이 commit 존재.",
+          "risk": "opencode 실제 모델 이름이 bridge §8.2 예시(`openai/gpt-5.3-codex`)와 다를 경우 Commit #2에서 generate 실행 시 ERR 가능 — 실제 모델 이름은 현재 catalog.ts의 agent model 필드 또는 opencode.example.json에서 확인 필요. TS literal emit 함수를 처음 작성하므로 escape(backtick, ${} 포함) 처리 누락 시 commit #2에서 syntax error. loadHandledTagIdsFromGate의 \"optional path\" 처리를 잊으면 이 commit 자체가 실패.",
+          "status": "completed",
+          "deps": [
+            3
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-11T12:49:29.108Z"
+        },
+        {
+          "id": 5,
+          "title": "Commit #1 검증 (devDependency 설치 + scaffold 무결성 + 22 e2e green)",
+          "context": "Task 4의 commit #1 결과물을 검증. scaffold 단계이므로 \"없는 기능이 생기지 않음\"과 \"기존 기능 무회귀\"가 핵심.",
+          "approach": "(1) package.json devDependency 존재 확인. (2) bun.lock에서 @moreih29/nexus-core 해당 항목 존재 확인. (3) node_modules/@moreih29/nexus-core/manifest.json 읽어서 version 0.1.2 확인. (4) scripts/generate-from-nexus-core.{mjs,lib.mjs} 두 파일의 상단 주석에 \"Ported from:\" 태깅 존재 확인. (5) 포팅된 lib의 차이점 수정 검증: MODEL_TIER_TO_CLAUDE 상수 없음, MODEL_TIER_TO_OPENCODE 존재, harness_mapping.opencode 참조 존재, transformAgent/transformSkill가 TS literal 생성 경로인지 확인. (6) package.json의 build 스크립트가 아직 `tsc -p tsconfig.json`(generate 미호출) 상태인지 확인. (7) bun run build && bun run test:e2e 로컬 실행, 22개 e2e 스크립트 전량 green 확인. (8) loader-smoke 유사 동작: `node -e \"import('@moreih29/nexus-core/manifest.json').then(m => console.log(m.default.nexus_core_version))\"` 실행해서 0.1.2 출력 확인.",
+          "acceptance": "위 8개 검증 항목 모두 통과. 기존 22 e2e green. scaffold 파일들이 실제로는 호출되지 않아 런타임 영향 zero. commit이 main에 rebase 가능한 clean state.",
+          "risk": "ad-hoc node -e 호출이 ESM 환경에서 실패할 수 있음 — 대안: require 경로 사용. `bun run test:e2e` 중 하나가 devDependency 설치의 side effect(bun.lock 재기록)로 false 실패할 가능성.",
+          "status": "completed",
+          "deps": [
+            4
+          ],
+          "plan_issue": 3,
+          "owner": "tester",
+          "created_at": "2026-04-11T12:49:40.099Z"
+        },
+        {
+          "id": 6,
+          "title": "nexus-core 통합 이슈 초안 작성 (4 Gaps: no_shell_exec / manual_only / lib shared / natural tag)",
+          "context": "Issue #6 — Phase 1 commit #1 완료 후 실제 workaround 코드를 인용 가능한 상태에서 nexus-core에 제출할 단일 통합 이슈 초안을 작성. claude-nexus #2(moreih29/nexus-core#2) 포맷을 기준으로.",
+          "approach": "Title: \"Upstream additions needed: opencode-nexus consumer integration gaps\". 구조: Context(opencode-nexus v0.1.x가 Big-Bang Cutover로 nexus-core ^0.1.2 consume 시작, 4개 gap 식별) → Gap 1 Must(no_shell_exec capability 부재, Current state/Impact on opencode-nexus/Proposal) → Gap 2 Must(skill manual_only runtime semantic 명세 부재) → Gap 3 Should(generate-from-nexus-core lib shared 승격 제안) → Gap 4 Should(NATURAL language tag detection 경계 판정) → Current opencode-nexus workarounds(catalog.ts postdoc bash 하드코딩, hooks.ts manual_only 로컬 처리, scripts/generate-from-nexus-core lib 복사 포팅, tag-parser.ts NATURAL_PATTERNS 하드코딩) → Desired flow(리뷰→결정→구현→workaround 제거 follow-up PR→claude-nexus postdoc Bash 차단 PR §10.1) → Labels(validation, enhancement, consumer-feedback, architecture) → Related(opencode-nexus phase 1 commit #1 SHA, bridge §10.1, phase-2-adoption-brief §5). 각 Gap의 Current state에서 실제 파일 경로 + line number를 인용(예: `vocabulary/capabilities.yml`에 no_shell_exec 없음, `postdoc/meta.yml capabilities: [no_file_edit, no_task_create, no_task_update]`). Proposal에서는 구체 YAML 추가 예시 제공(예: `- id: no_shell_exec, description: ..., harness_mapping: { claude_code: [Bash], opencode: [bash] }`).",
+          "acceptance": "초안이 claude-nexus #2 구조를 따름(Context/Gap 섹션/workarounds/Desired flow/Labels/Related). 4개 Gap 모두 포함, 각 Gap에 Current state + Impact + Proposal 섹션 존재. Must/Should priority가 각 Gap 제목에 표기. 파일 경로와 line number 정확. YAML 예시가 valid YAML. workaround가 Commit #1 완료 후 실제 opencode-nexus 코드를 인용(placeholder 아님). 초안 파일을 로컬에 저장(예: `.nexus/memory/opencode-nexus/nexus-core-issue-draft.md`).",
+          "risk": "commit #1이 아직 \"generate 미실행\" 상태이므로 workaround가 완전히 나타나지 않음 — 일부 workaround는 commit #3 이후에야 구체화됨. 이 경우 초안에서 placeholder를 명시하거나, 이슈 제출을 commit #3 완료 후로 연기 판단 필요.",
+          "status": "completed",
+          "deps": [
+            5
+          ],
+          "plan_issue": 6,
+          "owner": "writer",
+          "created_at": "2026-04-11T12:50:07.657Z"
+        },
+        {
+          "id": 7,
+          "title": "nexus-core 이슈 초안 검토 (팩트 정확성 + 포맷 일관성)",
+          "context": "Task 6의 이슈 초안이 claude-nexus #2 포맷과 일치하며 사실 관계가 정확한지 검증. 잘못된 파일 경로/line number/YAML 예시가 실제 nexus-core maintainer에게 전달되면 신뢰도 손상.",
+          "approach": "(1) 초안 파일 Read. (2) 각 Gap의 파일 경로/line number를 실제 nexus-core v0.1.2 패키지 또는 opencode-nexus 코드베이스에서 교차 검증 — 특히 `vocabulary/capabilities.yml`에 no_shell_exec 부재, `postdoc/meta.yml` capabilities 배열, `skills/nx-setup/meta.yml` manual_only 필드, `src/shared/tag-parser.ts` NATURAL_PLAN_PATTERNS 존재를 실제 파일로 확인. (3) YAML 예시를 parser에 넣어서 valid YAML 확인. (4) claude-nexus #2 구조와 섹션 순서 비교 — Context → Gap N (Current state / Impact / Proposal) × N → Current workarounds → Desired flow → Labels → Related. (5) Must/Should priority 명시 확인. (6) 문법/typo 검토(한글이 섞이면 영어 일관성 체크).",
+          "acceptance": "초안의 모든 파일 경로/line number가 실제 파일과 일치. YAML 예시 valid. claude-nexus #2 구조와 정합. Must/Should priority 표기 존재. 중대 오류 0, minor 개선 제안은 리뷰 코멘트로 기록. 승인 또는 writer에게 revision 요청.",
+          "risk": "review가 너무 엄격하면 초안 revision loop가 길어져 Phase 1 진행과 병목. 적당한 깐깐함 유지 필요.",
+          "status": "completed",
+          "deps": [
+            6
+          ],
+          "plan_issue": 6,
+          "owner": "reviewer",
+          "created_at": "2026-04-11T12:50:18.518Z"
+        },
+        {
+          "id": 8,
+          "title": "nexus-core GitHub에 통합 이슈 제출",
+          "context": "Issue #6 — Task 7 검토를 통과한 초안을 moreih29/nexus-core 저장소에 gh CLI로 제출. Phase 1은 이슈 제출을 기다리지 않고 계속 진행(opencode-nexus는 workaround로 Phase 1 완료 가능).",
+          "approach": "(1) Task 6의 초안 파일 Read. (2) `gh issue create --repo moreih29/nexus-core --title \"...\" --body \"$(cat draft.md)\" --label validation,enhancement,consumer-feedback,architecture` 실행. 라벨은 nexus-core 저장소에 존재하는 것만 사용(존재하지 않으면 label 없이 생성 + 제목/본문에 명시). (3) 생성된 이슈 URL을 `.nexus/memory/opencode-nexus/nexus-core-issue-draft.md`에 append하거나 Task 7의 local draft 파일에 URL 추가. (4) 이슈 번호(예: #3)를 이후 workaround 제거 follow-up PR 참조용으로 기록.",
+          "acceptance": "moreih29/nexus-core에 새 이슈가 생성됨. 이슈 URL 기록. gh issue view로 본문 렌더링 확인 — claude-nexus #2 구조와 정합. 라벨이 저장소에 존재하는 것만 적용됨.",
+          "risk": "gh auth 상태가 만료되면 제출 실패 — 사용자에게 `gh auth status` 확인 요청 필요. 라벨이 저장소에 미리 정의되지 않으면 `gh issue create` 실패. 그 경우 라벨 옵션 없이 재시도하거나 제목/본문에 태그로 명시.",
+          "status": "completed",
+          "deps": [
+            7
+          ],
+          "plan_issue": 6,
+          "owner": "lead",
+          "created_at": "2026-04-11T12:50:31.881Z"
+        },
+        {
+          "id": 9,
+          "title": "Commit #2 — generate 스크립트 build chain 편입 + prompts.ts/skills/prompts.ts barrel 교체",
+          "context": "Issue #1/#3 Commit #2 — §8.5 canonical(prompts.ts를 re-export barrel로 교체). prompts.generated.ts가 build 시점에 생성되어 기존 import site의 회귀가 없어야 함. catalog.ts는 §8.6에 따라 as-is.",
+          "approach": "(1) `package.json`에 `\"generate:prompts\": \"node scripts/generate-from-nexus-core.mjs\"` 스크립트 추가. (2) `\"build\"`를 `\"bun run generate:prompts && tsc -p tsconfig.json\"`으로 수정. `\"check\"`와 `\"test:e2e\"`도 generate:prompts를 선행하도록 수정(workflow 변경 불필요하게). (3) `bun run generate:prompts` 로컬 실행 → `src/agents/prompts.generated.ts` + `src/skills/prompts.generated.ts` 생성 확인. prompts.generated.ts에는 AGENT_PROMPTS(body.md literal inline)와 AGENT_META(id/name/category/description만, disallowedTools는 commit #3에서 추가) 포함. SKILL_PROMPTS는 body.md literal inline + manual_only 표시. (4) `src/agents/prompts.ts` **삭제** 후 신규 barrel: `export { AGENT_PROMPTS, AGENT_META } from './prompts.generated.js';`. (5) `src/skills/prompts.ts` **삭제** 후 신규 barrel: `export { SKILL_PROMPTS } from './prompts.generated.js';`. (6) 기존 import site가 깨지지 않는지 확인 — 특히 `src/plugin/hooks.ts:394-396`의 `buildNexusSystemPrompt({agents, skills})`, `src/agents/catalog.ts`에서 AGENT_PROMPTS 참조하는 지점. (7) prompts.generated.ts는 git tracked이므로 `git add` 후 commit. `.gitignore`에 추가하지 않음. (8) `bun run build && bun run test:e2e` 전량 22 e2e green. (9) commit message: `feat: generate prompts.generated.ts + replace prompts.ts with barrel`",
+          "acceptance": "`package.json`의 scripts에 generate:prompts 존재, build/check/test:e2e가 generate:prompts 선행. `src/agents/prompts.generated.ts` 및 `src/skills/prompts.generated.ts` 존재, git tracked, body.md literal inline(비어있지 않은 본문 9 agents + 5 skills). `src/agents/prompts.ts`와 `src/skills/prompts.ts`는 각각 barrel re-export만 포함(10줄 이하). 기존 import site 회귀 없음 — `bun run check` pass. `bun run test:e2e` 22 e2e 전량 green. git log에 commit #2 존재.",
+          "risk": "body.md 본문에 backtick 또는 `${}` template literal 패턴이 있으면 TS literal emit에서 escape 필요. generate 스크립트의 emit 로직이 불완전하면 syntax error 유발. 기존 hooks.ts의 AGENT_PROMPTS 사용 패턴이 Record<string, string> 이외 형태를 가정하면 runtime 오류.",
+          "status": "completed",
+          "deps": [
+            5
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-11T12:50:52.238Z"
+        },
+        {
+          "id": 10,
+          "title": "Commit #2 검증 (prompts.generated.ts 생성 + barrel 회귀 없음 + 22 e2e green)",
+          "context": "Task 9 결과물 검증. 핵심: body.md literal inline의 문자열 무결성, barrel re-export의 import site 호환성, e2e 무회귀.",
+          "approach": "(1) `src/agents/prompts.generated.ts` Read — AGENT_PROMPTS가 9개 non-empty 본문 포함, 각 본문이 claude-nexus와 동일(body.md의 sha256 hash 일치, manifest.json body_hash와 교차 검증). (2) `src/skills/prompts.generated.ts` Read — SKILL_PROMPTS가 5개 non-empty 본문. (3) `prompts.ts` re-export 파일이 `export { ... } from './prompts.generated.js'`만 포함하는 barrel임 확인. (4) `src/plugin/hooks.ts:394-396`의 buildNexusSystemPrompt 호출 동작 확인(import site 회귀 없음). (5) `bun run build && bun run test:e2e` 22 e2e 전량 green — 특히 e2e-prompt-parity.mjs(아직 삭제 전)가 green 또는 generated와의 parity를 감지. (6) .gitignore에 prompts.generated.ts 패턴 없는지 확인. (7) commit이 순서상 commit #1 바로 다음인지 확인(bisectable).",
+          "acceptance": "AGENT_PROMPTS 9 entries × non-empty × body_hash 일치. SKILL_PROMPTS 5 entries × non-empty. prompts.ts 2개 모두 barrel-only. hooks.ts buildNexusSystemPrompt 정상 작동. 22 e2e green. git tracked(prompts.generated.ts가 staged).",
+          "risk": "e2e-prompt-parity.mjs가 기존 하드코딩 AGENT_PROMPTS와 body.md 본문을 비교한다면 drift로 실패할 수 있음 — commit #4까지 일시적으로 유효. Task 9의 commit에서 parity 테스트가 generated 본문으로 전환되어 있어야 함(또는 commit #2에서 테스트가 skip 처리).",
+          "status": "completed",
+          "deps": [
+            9
+          ],
+          "plan_issue": 3,
+          "owner": "tester",
+          "created_at": "2026-04-11T12:51:04.621Z"
+        },
+        {
+          "id": 11,
+          "title": "Commit #3 — capability resolution + HANDLED_TAG_IDS drift check + isEditLikeTool 교체",
+          "context": "Issue #1/#3 Commit #3 — §8.2 canonical의 핵심: capability → opencode tool 해석 결과를 AGENT_META.disallowedTools에 literal inline, consistency check 구현, HANDLED_TAG_IDS 상수 도입 + drift check, isEditLikeTool 하드코딩 제거.",
+          "approach": "(1) `scripts/generate-from-nexus-core.lib.mjs`의 `deriveDisallowedTools()`를 agent meta.yml의 capabilities 배열 → vocabulary/capabilities.yml의 harness_mapping.opencode 배열로 resolve하도록 확인/수정. (2) `transformAgent()`가 AGENT_META emit 시 resolved disallowedTools를 literal 배열로 inline: `disallowedTools: ['edit', 'write', 'patch', 'multiedit', 'nx_task_add', 'nx_task_update']`. (3) `generate-from-nexus-core.mjs` 내부에 consistency check 구현 — 각 agent에 대해 `NEXUS_AGENT_CATALOG[id].disallowedTools`(src/agents/catalog.ts import)와 `AGENT_META[id].disallowedTools` 동등성 검증. 불일치 시 `throw new Error('ERR_CATALOG_MISMATCH: ...')` hard-fail(§8.8 3개 ERR에 이어 4번째 ERR). (4) `transformAgent()`가 AGENT_META emit 외에 `NO_FILE_EDIT_TOOLS` 상수도 emit: `export const NO_FILE_EDIT_TOOLS: readonly string[] = ['edit','write','patch','multiedit'] as const;`(no_file_edit capability의 opencode mapping). (5) `src/shared/tag-parser.ts`에 `export const HANDLED_TAG_IDS = ['plan', 'run', 'sync', 'd', 'm', 'm-gc', 'rule'] as const;` 추가. (6) `scripts/generate-from-nexus-core.mjs`가 `verifyTagDrift()` 호출 — `HANDLED_TAG_IDS`를 tag-parser.ts에서 regex 추출, `vocabulary/tags.yml`의 tag id 집합과 교차 검증. drift 시 hard-fail. (7) `src/plugin/hooks.ts:402-404`의 `isEditLikeTool` 본문을 `return NO_FILE_EDIT_TOOLS.includes(toolName);`로 한 줄 수정. `prompts.generated.ts`에서 import. (8) `bun run build && bun run test:e2e` 22 e2e green. catalog.ts의 disallowedTools가 generate 결과와 일치하도록(postdoc bash 하드코딩은 유지 — Issue #6 Gap 1 workaround). (9) commit message: `feat: resolve capability → opencode tools + HANDLED_TAG_IDS drift check + unify isEditLikeTool`",
+          "acceptance": "prompts.generated.ts에 AGENT_META 9개 × disallowedTools 배열 literal inline. NO_FILE_EDIT_TOOLS 상수 export. catalog.ts ↔ AGENT_META consistency check 구현 — 일치 시 pass, 불일치 시 ERR_CATALOG_MISMATCH. tag-parser.ts에 HANDLED_TAG_IDS 상수 존재. verifyTagDrift() 호출로 tags.yml과 교차 검증 pass. hooks.ts:402-404 한 줄 수정됨(NO_FILE_EDIT_TOOLS.includes 경로). 22 e2e green. 특히 postdoc의 disallowedTools 하드코딩(bash 포함)이 AGENT_META와 불일치를 발생시키지 않음 — 임시로 catalog.ts에서 bash를 제거하거나 consistency check에서 postdoc만 skip하는 workaround(Gap 1 해결 전까지).",
+          "risk": "**큰 risk**: postdoc의 bash 하드코딩과 AGENT_META resolved 결과(no_shell_exec capability 부재로 bash 없음)가 consistency check에서 ERR_CATALOG_MISMATCH 유발. 해결 방법 3가지 — (A) postdoc만 consistency check에서 skip(Gap 1 해결 전 임시), (B) catalog.ts에서 postdoc bash를 제거하고 별도 Set으로 hook에서만 차단(catalog ↔ AGENT_META 완전 일치), (C) nexus-core 이슈 해결 후 no_shell_exec 사용. 가장 pragmatic한 것은 (A) — comment로 명시. commit 전 이 선택지 중 하나를 확정. ERR_CATALOG_MISMATCH 로직이 catalog.ts를 ESM import하면 tsc preprocessing 필요 — 대안: .ts를 읽고 regex 파싱.",
+          "status": "completed",
+          "deps": [
+            10
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-11T12:51:36.022Z"
+        },
+        {
+          "id": 12,
+          "title": "Commit #3 검증 (capability resolution + consistency check + drift check + isEditLikeTool 교체)",
+          "context": "Task 11의 commit #3 결과물을 검증. 핵심: resolved disallowedTools의 정확성, consistency/drift check의 실제 작동, hooks.ts isEditLikeTool의 NO_FILE_EDIT_TOOLS 경로 사용.",
+          "approach": "(1) prompts.generated.ts Read — AGENT_META 9개의 disallowedTools가 capability 해석 결과와 일치. no_file_edit → [edit,write,patch,multiedit], no_task_create → [nx_task_add], no_task_update → [nx_task_update] per agent. NO_FILE_EDIT_TOOLS = ['edit','write','patch','multiedit'] 확인. (2) ERR_CATALOG_MISMATCH 경로 검증 — catalog.ts의 임의 에이전트의 disallowedTools를 일시로 다르게 수정 후 `bun run generate:prompts` 실행하여 hard-fail 확인, 이후 revert. (3) tag-parser.ts HANDLED_TAG_IDS 상수 존재(7 entries), as const 타입 보존 확인. (4) verifyTagDrift 경로 검증 — tag-parser.ts에서 한 엔트리를 임시 삭제 후 generate 실행 시 drift 실패 확인, 이후 revert. (5) `src/plugin/hooks.ts:402-404` Read — isEditLikeTool이 NO_FILE_EDIT_TOOLS.includes(toolName) 호출. prompts.generated.ts에서 import. (6) 22 e2e green. (7) postdoc bash workaround 확인 — consistency check가 postdoc skip 또는 catalog.ts에서 bash 제거 경로 둘 중 하나가 명확한 comment로 표시됨.",
+          "acceptance": "AGENT_META disallowedTools 9개 resolved 결과 정확. NO_FILE_EDIT_TOOLS 상수 존재/올바름. ERR_CATALOG_MISMATCH와 tag drift 실패 경로 실제 작동 검증(임시 수정 테스트). hooks.ts:402-404 한 줄 수정 확인. 22 e2e green. postdoc bash workaround(Gap 1 해결 전) 문서화된 주석 존재.",
+          "risk": "임시 수정 테스트를 실수로 revert하지 않으면 brokken state commit. 테스트 후 `git status`와 `git diff` 확인 필수.",
+          "status": "completed",
+          "deps": [
+            11
+          ],
+          "plan_issue": 3,
+          "owner": "tester",
+          "created_at": "2026-04-11T12:51:48.352Z"
+        },
+        {
+          "id": 13,
+          "title": "Commit #4 — e2e-prompts-generated/capability-coverage/loader-smoke 신규 + e2e-prompt-parity 삭제",
+          "context": "Issue #1/#3 Commit #4 — §8.7 canonical의 3개 e2e 테스트 신규 작성 및 기존 e2e-prompt-parity.mjs 삭제. Phase 1 완료 5개 조건 검증의 핵심 인프라.",
+          "approach": "(1) `scripts/e2e-prompts-generated.mjs` 신규: `dist/`에서 AGENT_PROMPTS/SKILL_PROMPTS를 import하고 9 agents × non-empty + 5 skills × non-empty 검증. 본문 길이 또는 첫 50자 snippet 로깅. (2) `scripts/e2e-capability-coverage.mjs` 신규: AGENT_META 9개에 대해 disallowedTools 배열의 각 tool name이 (a) 비어있지 않고, (b) OpenCode 알려진 tool name 집합에 속하는지 검증 — §10.2에 따라 unknown tool name은 warning-level(fail 아님). 알려진 tool 집합은 `@opencode-ai/plugin` 또는 하드코딩된 whitelist 사용. (3) `scripts/e2e-loader-smoke.mjs` 신규: `dist/index.js`를 `node -e` 또는 ESM import로 로드하고, import 시점에 `@moreih29/nexus-core`가 런타임에 참조되지 않음을 검증 — require.resolve 또는 dynamic import 실패 감지 대신 \"load 성공 & agent prompt 접근 가능\" 확인. devDependency contract(§8.3) 보증. (4) `package.json`의 `test:e2e` 스크립트에서 `e2e-prompt-parity.mjs`를 제거하고 3개 신규 추가. (5) `scripts/e2e-prompt-parity.mjs` 파일 삭제. (6) `bun run test:e2e` 실행 → 24개 스크립트 전량 green 확인(22 - 1 + 3 = 24). (7) commit message: `test: replace e2e-prompt-parity with §8.7 generated/coverage/loader-smoke triple`",
+          "acceptance": "scripts/e2e-prompts-generated.mjs, scripts/e2e-capability-coverage.mjs, scripts/e2e-loader-smoke.mjs 세 파일 존재. scripts/e2e-prompt-parity.mjs 삭제됨. package.json test:e2e 스크립트가 24개 .mjs 포함. `bun run test:e2e` 전량 green(24개). e2e-capability-coverage가 warning-level 정책 적용(unknown tool warn but no fail). e2e-loader-smoke가 dist/index.js 로드 성공.",
+          "risk": "e2e-loader-smoke에서 nexus-core runtime 참조 없음 검증 방법이 까다로움 — 단순 import 성공만 보면 false pass. 대안: dist/index.js 내부 string에 `@moreih29/nexus-core` 텍스트가 없는지 검증(grep 기반). OpenCode tool whitelist가 없어서 e2e-capability-coverage가 전부 warning 상태 — §10.2 intentional이나 의미가 약함.",
+          "status": "completed",
+          "deps": [
+            12
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-11T12:52:06.587Z"
+        },
+        {
+          "id": 14,
+          "title": "Commit #4 검증 + Phase 1 완료 5개 AND 조건 최종 검증",
+          "context": "Task 13 결과물 검증 + Issue #1이 정의한 Phase 1 완료 5개 AND 조건의 최종 확인. 이 task가 pass하면 Phase 1 feature branch를 main에 머지할 준비 완료.",
+          "approach": "Commit #4 검증: (1) e2e-prompts-generated.mjs/e2e-capability-coverage.mjs/e2e-loader-smoke.mjs 세 파일 존재. e2e-prompt-parity.mjs 삭제됨. (2) `bun run test:e2e` 전량 24개 green. (3) package.json test:e2e 스크립트가 3개 신규 포함, prompt-parity 미포함. Phase 1 완료 5개 AND 검증: (A) prompts.generated.ts 9 agents 전부 비어있지 않은 본문(e2e-prompts-generated result). (B) prompts.generated.ts 5 skills 전부 비어있지 않은 본문. (C) 9 agents 전원 capability → opencode tool mapping 성공(generate:prompts 실행 시 ERR_UNKNOWN_CAPABILITY/ERR_MISSING_MAPPING/ERR_CATALOG_MISMATCH 없음 — 임의로 한 capability를 훼손해서 실패 경로 1회 작동 확인 후 revert). (D) 24 e2e green(22 - 1 prompt-parity + 3 §8.7). (E) dist/index.js가 nexus-core 런타임 참조 없이 로드 — e2e-loader-smoke pass + 추가로 `grep -r \"@moreih29/nexus-core\" dist/` 결과 빈 상태 확인. 최종: Phase 1 브랜치가 main에 머지 가능한 상태, 브랜치 수명 7일 이내 확인, 모든 커밋이 bisectable(개별 체크아웃 + test:e2e 가능).",
+          "acceptance": "Commit #4 검증 항목 통과. Phase 1 완료 5개 AND 조건 모두 pass — A,B,C,D,E. 브랜치 수명 7일 이내. 4개 commit이 모두 bisectable(각 commit에서 test:e2e green 재현 가능). Phase 1 완료 선언 가능 상태. 이슈 #6 통합 이슈 링크가 Phase 1 브랜치 PR description에 포함됨(있다면).",
+          "risk": "7일 수명 상한 초과 시 main rebase 추가 작업. capability 훼손 테스트 시 revert 누락 risk — `git status`로 clean 확인 필수. loader-smoke가 dist/ 번들 내부의 주석까지 grep하면 false positive(주석의 텍스트 때문).",
+          "status": "completed",
+          "deps": [
+            13
+          ],
+          "plan_issue": 1,
+          "owner": "tester",
+          "created_at": "2026-04-11T12:52:26.696Z"
+        },
+        {
+          "id": 15,
+          "title": "UPSTREAM.md에 Phase 1 완료 상태 반영",
+          "context": "Phase 1 완료 후 UPSTREAM.md의 \"Phase 1 상태\" 섹션 문구가 시제와 정합성이 맞도록 갱신. 구체적으로 \"opencode-nexus가 먼저 nexus-core 통합을 완료하며\" → \"완료되어\" 시제 변경 + nexus-core ^0.1.2 devDependency 명시.",
+          "approach": "(1) UPSTREAM.md Read(현재 89줄). (2) \"§현재 상태 (Phase 1)\" 섹션(line 22-24)을 다음과 같이 수정: \"Phase 1 기간 동안 claude-nexus는 아직 nexus-core를 consume하지 않는다. opencode-nexus가 먼저 nexus-core 통합을 **완료**하였다(`@moreih29/nexus-core ^0.1.2` devDependency, 20YY-MM-DD 머지). claude-nexus는 Phase 2에서 동일 패키지를 consume하는 방향으로 전환한다.\" + 완료 시점 날짜 기록. (3) 필요시 \"Intentional Divergences\" 섹션에 Phase 1 결과로 생긴 divergence 추가(4-layer 유지는 기존과 동일). (4) 다른 섹션(90-day Re-evaluation, Phase 2 Trigger)은 변경 불필요.",
+          "acceptance": "UPSTREAM.md의 \"현재 상태 (Phase 1)\" 섹션이 \"완료됨\" 상태로 갱신, devDependency 명시, 완료 날짜 기록. diff는 최소 수정(위 섹션만). 다른 문서 내용과 모순 없음.",
+          "risk": "완료 날짜를 잘못 기록하면 90-day re-evaluation window 기산 오류. 시제 변경 누락 시 혼란.",
+          "status": "completed",
+          "deps": [
+            14
+          ],
+          "plan_issue": 1,
+          "owner": "writer",
+          "created_at": "2026-04-11T12:52:38.267Z"
+        },
+        {
+          "id": 16,
+          "title": "UPSTREAM.md 갱신 검토",
+          "context": "Task 15의 UPSTREAM.md 수정이 정확한지 검토. 팩트(devDependency 버전, 완료 날짜, 시제)와 구조 일관성 확인.",
+          "approach": "(1) UPSTREAM.md 수정 diff 확인 — git diff 또는 Read 직접. (2) devDependency 버전(^0.1.2)이 실제 package.json과 일치하는지 교차 검증. (3) 완료 날짜가 Phase 1 머지 commit 날짜와 일치하는지 확인. (4) 문법/시제 일관성 확인 — \"완료하며/할 예정이다\" vs \"완료하였다\"의 시제 변경이 해당 섹션 전체에 적용되었는지. (5) \"Intentional Divergences\" 섹션에 새 divergence가 추가되지 않았는지 확인(기존 4-layer 유지는 변경 없음).",
+          "acceptance": "시제/팩트/구조 모두 정확. 중대 오류 없음.",
+          "risk": "리뷰가 지나치게 엄격하면 revision 반복.",
+          "status": "completed",
+          "deps": [
+            15
+          ],
+          "plan_issue": 1,
+          "owner": "reviewer",
+          "created_at": "2026-04-11T12:52:45.133Z"
+        },
+        {
+          "id": 17,
+          "title": "04-OPEN_QUESTIONS.md Q5 해소 반영 (HANDLED_TAG_IDS 정적 상수 패턴)",
+          "context": ".nexus/memory/opencode-nexus/04-OPEN_QUESTIONS.md의 Q5(\"hooks.ts의 tags.yml 기반 동적 등록 전환 타이밍\")는 본 plan에서 \"정적 상수(HANDLED_TAG_IDS) + verifyTagDrift 빌드 타임 교차 검증\" 패턴으로 재정의 해소되었다. 이 해소 결과를 04-OPEN_QUESTIONS.md에 반영.",
+          "approach": "(1) 04-OPEN_QUESTIONS.md의 Q5 섹션(line 91-108) Read. (2) Q5 하단에 \"Resolution (plan session #16, 20YY-MM-DD)\" 소제목 추가하고 다음 내용 기재: \"Q5는 재정의되어 해소. 원래 질문은 '동적 등록 전환 타이밍'이었으나, claude-nexus의 검증 패턴을 참고하여 다음과 같이 해결 — src/shared/tag-parser.ts에 HANDLED_TAG_IDS 정적 상수를 추가하고, generate-from-nexus-core.mjs가 빌드 타임에 regex로 HANDLED_TAG_IDS를 추출하여 vocabulary/tags.yml의 tag id 집합과 교차 검증(verifyTagDrift). drift 발생 시 hard-fail. 동적 로딩은 필요 없음. §9.2 runtime 공유 배제 원칙 준수. 구현 위치: src/shared/tag-parser.ts, scripts/generate-from-nexus-core.mjs\" + commit #3 참조. (3) 다른 Q는 변경 없음. 단 Q4(ACP question tool hang)가 여전히 미해결로 남아 있는지 확인만 — 변경 없이 유지.",
+          "acceptance": "04-OPEN_QUESTIONS.md의 Q5에 Resolution 소제목 + 내용 추가. 다른 Q(Q1, Q2, Q3, Q4)는 변경 없음. plan session #16 참조가 명시됨. HANDLED_TAG_IDS + verifyTagDrift 패턴이 명확히 기술됨.",
+          "risk": "Q5의 원래 질문을 \"동적 등록이 여전히 필요한가\"로 잘못 해석하여 반쪽 해소만 기록할 risk. 해소 이유를 명확히 쓰는 것이 중요.",
+          "status": "completed",
+          "deps": [
+            14
+          ],
+          "plan_issue": 3,
+          "owner": "writer",
+          "created_at": "2026-04-11T12:53:04.721Z"
+        },
+        {
+          "id": 18,
+          "title": "04-OPEN_QUESTIONS.md Q5 해소 검토",
+          "context": "Task 17의 Q5 해소 기록이 plan session #16의 결정과 정합성이 맞는지 검토.",
+          "approach": "(1) 04-OPEN_QUESTIONS.md Q5 섹션 Read. (2) Resolution이 \"동적 등록 불필요, 정적 상수 + 빌드 타임 drift check\" 결정을 명확히 기술하는지 확인. (3) commit #3(Task 11) 참조가 정확한지 확인. (4) 다른 Q(Q1, Q2, Q3, Q4)가 훼손되지 않았는지 확인. (5) HANDLED_TAG_IDS 상수 내용(['plan', 'run', 'sync', 'd', 'm', 'm-gc', 'rule'])이 tag-parser.ts와 실제로 일치하는지 교차 검증.",
+          "acceptance": "Resolution 기술이 정확. 다른 Q 훼손 없음. 승인.",
+          "risk": "없음 — 단순 문서 갱신 검토.",
+          "status": "completed",
+          "deps": [
+            17
+          ],
+          "plan_issue": 3,
+          "owner": "reviewer",
+          "created_at": "2026-04-11T12:53:10.905Z"
+        },
+        {
+          "id": 19,
+          "title": ".nexus/context/ 업데이트 — nexus-core 기반 아키텍처 반영",
+          "context": "Phase 1 완료 후 .nexus/core/codebase/architecture.md, .nexus/core/codebase/agents-and-orchestration.md 등 관련 문서에 nexus-core consumption 모델 반영. 기존 4-layer .nexus/core/ 구조는 UPSTREAM.md §9.4 intentional divergence로 유지.",
+          "approach": "(1) .nexus/core/codebase/architecture.md Read — 현재 내용 파악. (2) nexus-core consumption 모델 섹션 추가: (a) @moreih29/nexus-core ^0.1.2 devDependency, (b) scripts/generate-from-nexus-core.mjs 빌드 타임 실행, (c) prompts.generated.ts git tracked(AGENT_PROMPTS/AGENT_META/SKILL_PROMPTS/NO_FILE_EDIT_TOOLS), (d) catalog.ts as-is 유지(§8.6), (e) ERR_CATALOG_MISMATCH + verifyTagDrift consistency/drift check, (f) §9.2 runtime 공유 배제 원칙. (3) .nexus/core/codebase/agents-and-orchestration.md Read & Update — agent 정의의 source가 nexus-core로 변경됨을 반영, capability → opencode tool 해석 경로 설명, HANDLED_TAG_IDS 상수 + verifyTagDrift 패턴 기술. (4) 필요시 .nexus/core/codebase/tools.md에 generate-from-nexus-core.{mjs,lib.mjs} 언급. (5) .nexus/core/identity/roadmap.md에 Phase 1 완료 마일스톤 기록, Phase 2 트리거 참조 유지.",
+          "acceptance": "architecture.md와 agents-and-orchestration.md에 nexus-core consumption 모델 반영. 다른 설계 원칙(4-layer 구조, sibling 관계)과 모순 없음. roadmap.md에 Phase 1 완료 기록.",
+          "risk": "기존 .nexus/core/ 문서 구조가 claude-nexus와 다르므로(4-layer vs flat), 직접 참조 복사 대신 옵션을 신중히 판단. 과도한 수정은 4-layer 의도를 훼손할 수 있음.",
+          "status": "completed",
+          "deps": [
+            14
+          ],
+          "plan_issue": 1,
+          "owner": "writer",
+          "created_at": "2026-04-11T12:53:23.696Z"
+        },
+        {
+          "id": 20,
+          "title": ".nexus/context/ 업데이트 검토",
+          "context": "Task 19의 .nexus/core/ 문서 업데이트가 정확하고 일관성 있는지 검토. 특히 4-layer divergence를 훼손하지 않는지 확인.",
+          "approach": "(1) 수정된 architecture.md, agents-and-orchestration.md, roadmap.md 모두 Read. (2) nexus-core consumption 모델이 UPSTREAM.md, bridge §8, phase-2-adoption-brief와 일관되는지 교차 검증. (3) 4-layer 구조 유지 의도가 훼손되지 않았는지 확인 — 예: \"flat 구조로 전환 예정\" 같은 문구가 혹시 추가되지 않았는지. (4) 파일 경로, 스크립트 이름, 상수 이름이 실제 opencode-nexus 코드와 일치하는지 확인. (5) Phase 1 완료 마일스톤 기록의 시제와 날짜 확인.",
+          "acceptance": "3개 문서의 수정이 정확, 일관성 있음, 기존 divergence 유지. 승인 또는 revision 요청.",
+          "risk": "없음 — 단순 문서 리뷰.",
+          "status": "completed",
+          "deps": [
+            19
+          ],
+          "plan_issue": 1,
+          "owner": "reviewer",
+          "created_at": "2026-04-11T12:53:30.242Z"
+        }
+      ]
     }
   ]
 }
