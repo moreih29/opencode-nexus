@@ -203,24 +203,69 @@ export function escapeTemplateLiteral(s) {
 }
 
 /**
- * Build the content of src/agents/prompts.generated.ts from accumulated agent entries.
- * @param {{ id: string, prompt: string }[]} agents
- * @param {string} nexusCoreVersion
- * @param {string} nexusCoreCommit
+ * Emit one AGENT_META entry as a TypeScript object literal string.
+ * @param {{ id: string, name: string, category: string, description: string, model: string, disallowedTools: string[], task?: string, alias_ko?: string, resume_tier: string }} meta
  * @returns {string}
  */
-export function buildAgentPromptsFile(agents, nexusCoreVersion, nexusCoreCommit) {
-  const entries = agents
+function emitAgentMetaEntry(meta) {
+  const lines = [
+    `    id: ${JSON.stringify(meta.id)},`,
+    `    name: ${JSON.stringify(meta.name)},`,
+    `    category: ${JSON.stringify(meta.category)},`,
+    `    description: ${JSON.stringify(meta.description)},`,
+    `    model: ${JSON.stringify(meta.model)},`,
+    `    disallowedTools: [${meta.disallowedTools.map(t => JSON.stringify(t)).join(', ')}],`,
+  ];
+  if (meta.task) lines.push(`    task: ${JSON.stringify(meta.task)},`);
+  if (meta.alias_ko) lines.push(`    alias_ko: ${JSON.stringify(meta.alias_ko)},`);
+  lines.push(`    resume_tier: ${JSON.stringify(meta.resume_tier)},`);
+  return `  ${meta.id}: {\n${lines.join('\n')}\n  },`;
+}
+
+/**
+ * Build the content of src/agents/prompts.generated.ts from accumulated agent entries.
+ * @param {{ id: string, prompt: string, meta: object }[]} agents
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @param {Map<string, string[]>} capsMap
+ * @returns {string}
+ */
+export function buildAgentPromptsFile(agents, nexusCoreVersion, nexusCoreCommit, capsMap) {
+  const promptEntries = agents
     .map(({ id, prompt }) => `  ${id}: \`${escapeTemplateLiteral(prompt)}\`,`)
     .join('\n');
+
+  const metaEntries = agents
+    .map(({ meta }) => emitAgentMetaEntry(meta))
+    .join('\n');
+
+  const noFileEditTools = capsMap.get('no_file_edit') ?? [];
+  const noFileEditLiteral = noFileEditTools.map(t => JSON.stringify(t)).join(', ');
+
   return [
     `// AUTO-GENERATED — do not edit by hand.`,
     `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
     `// Regenerate: bun run generate:prompts`,
     ``,
     `export const AGENT_PROMPTS: Record<string, string> = {`,
-    entries,
+    promptEntries,
     `};`,
+    ``,
+    `export const AGENT_META: Record<string, {`,
+    `  id: string;`,
+    `  name: string;`,
+    `  category: string;`,
+    `  description: string;`,
+    `  model: string;`,
+    `  disallowedTools: string[];`,
+    `  task?: string;`,
+    `  alias_ko?: string;`,
+    `  resume_tier: string;`,
+    `}> = {`,
+    metaEntries,
+    `};`,
+    ``,
+    `export const NO_FILE_EDIT_TOOLS: readonly string[] = [${noFileEditLiteral}] as const;`,
     ``,
   ].join('\n');
 }
@@ -391,6 +436,92 @@ export function verifyTagDrift(tagsVocab, gateSrcPath) {
       `Tag drift detected:\n` +
       (missingInGate.length ? `  Missing in tag-parser.ts: [${missingInGate.join(', ')}]\n` : '') +
       (extraInGate.length ? `  Extra in tag-parser.ts (not in vocab): [${extraInGate.join(', ')}]\n` : '')
+    );
+  }
+}
+
+// ==========================================================================
+// Catalog consistency
+// ==========================================================================
+
+/**
+ * Agents whose catalog.ts disallowedTools intentionally diverges from
+ * AGENT_META (resolved from nexus-core capabilities). Each entry must
+ * reference an open upstream issue explaining the divergence.
+ *
+ * postdoc: opencode-nexus blocks `bash` for the research-methodology agent.
+ *   nexus-core plan session #2 Issue #3 rejected adding `no_shell_exec`
+ *   (see nexus-core/.nexus/context/boundaries.md:100). We filed
+ *   moreih29/nexus-core#3 requesting reconsideration as an opt-in capability.
+ *   Until that lands, postdoc's catalog.ts entry keeps `bash` in disallowedTools
+ *   while AGENT_META does not — consistency check skips this agent.
+ */
+const CATALOG_CONSISTENCY_EXEMPT = new Set([
+  'postdoc', // Gap 1 workaround — see moreih29/nexus-core#3
+]);
+
+/**
+ * Verify that `NEXUS_AGENT_CATALOG[id].disallowedTools` in catalog.ts matches
+ * `AGENT_META[id].disallowedTools` in the generated file, detecting silent
+ * drift. Reads catalog.ts as text (no TypeScript preprocessor available in the
+ * build script) and uses a regex to extract each agent's disallowedTools array.
+ *
+ * Exempt agents (see CATALOG_CONSISTENCY_EXEMPT) are skipped entirely.
+ *
+ * Throws ERR_CATALOG_MISMATCH on any drift (hard-fail; extends the §8.8 error set).
+ *
+ * @param {Array<{id: string, meta: {disallowedTools: string[]}}>} agentEntries
+ * @param {string} catalogPath - absolute path to src/agents/catalog.ts
+ */
+export function verifyCatalogConsistency(agentEntries, catalogPath) {
+  const src = readFileSync(catalogPath, 'utf8');
+  const issues = [];
+
+  for (const entry of agentEntries) {
+    if (CATALOG_CONSISTENCY_EXEMPT.has(entry.id)) continue;
+
+    // Match: id: "architect" ... disallowedTools: ["edit", "write", ...]
+    // Across newlines between id and disallowedTools.
+    const pattern = new RegExp(
+      `id:\\s*["']${entry.id}["'][\\s\\S]*?disallowedTools:\\s*\\[([^\\]]*)\\]`,
+      'm'
+    );
+    const match = src.match(pattern);
+    if (!match) {
+      issues.push(`  ${entry.id}: not found in catalog.ts (or missing disallowedTools field)`);
+      continue;
+    }
+
+    const catalogTools = match[1]
+      .split(',')
+      .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+      .filter(Boolean);
+    const metaTools = entry.meta?.disallowedTools ?? [];
+
+    const catalogSet = new Set(catalogTools);
+    const metaSet = new Set(metaTools);
+    const missingInCatalog = [...metaSet].filter((x) => !catalogSet.has(x));
+    const extraInCatalog = [...catalogSet].filter((x) => !metaSet.has(x));
+
+    if (missingInCatalog.length || extraInCatalog.length) {
+      issues.push(
+        `  ${entry.id}:` +
+          (missingInCatalog.length
+            ? ` missing in catalog.ts=[${missingInCatalog.join(', ')}]`
+            : '') +
+          (extraInCatalog.length
+            ? ` extra in catalog.ts=[${extraInCatalog.join(', ')}]`
+            : '')
+      );
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new Error(
+      `ERR_CATALOG_MISMATCH: catalog.ts disallowedTools drift vs AGENT_META\n` +
+        issues.join('\n') +
+        `\n\nUpdate catalog.ts to match AGENT_META, or add the agent to ` +
+        `CATALOG_CONSISTENCY_EXEMPT with an upstream issue reference.`
     );
   }
 }

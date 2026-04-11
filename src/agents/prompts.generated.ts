@@ -1113,3 +1113,117 @@ When escalating:
 Do not escalate for minor phrasing ambiguity or formatting choices — those are Writer's judgment calls.
 `,
 };
+
+export const AGENT_META: Record<string, {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  model: string;
+  disallowedTools: string[];
+  task?: string;
+  alias_ko?: string;
+  resume_tier: string;
+}> = {
+  architect: {
+    id: "architect",
+    name: "architect",
+    category: "how",
+    description: "Technical design — evaluates How, reviews architecture, advises on implementation approach",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"],
+    task: "Architecture, technical design, code review",
+    alias_ko: "아키텍트",
+    resume_tier: "persistent",
+  },
+  designer: {
+    id: "designer",
+    name: "designer",
+    category: "how",
+    description: "UX/UI design — evaluates user experience, interaction patterns, and how users will experience the product",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"],
+    task: "UI/UX design, interaction patterns, user experience",
+    alias_ko: "디자이너",
+    resume_tier: "persistent",
+  },
+  reviewer: {
+    id: "reviewer",
+    name: "reviewer",
+    category: "check",
+    description: "Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"],
+    task: "Content verification, fact-checking, grammar review",
+    alias_ko: "리뷰어",
+    resume_tier: "ephemeral",
+  },
+  strategist: {
+    id: "strategist",
+    name: "strategist",
+    category: "how",
+    description: "Business strategy — evaluates market positioning, competitive landscape, and business viability of decisions",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"],
+    task: "Business strategy, market analysis, competitive positioning",
+    alias_ko: "전략가",
+    resume_tier: "persistent",
+  },
+  engineer: {
+    id: "engineer",
+    name: "engineer",
+    category: "do",
+    description: "Implementation — writes code, debugs issues, follows specifications from Lead and architect",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["nx_task_add"],
+    task: "Code implementation, edits, debugging",
+    alias_ko: "엔지니어",
+    resume_tier: "bounded",
+  },
+  researcher: {
+    id: "researcher",
+    name: "researcher",
+    category: "do",
+    description: "Independent investigation — conducts web searches, gathers evidence, and reports findings with citations",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"],
+    task: "Web search, independent investigation",
+    alias_ko: "리서처",
+    resume_tier: "persistent",
+  },
+  postdoc: {
+    id: "postdoc",
+    name: "postdoc",
+    category: "how",
+    description: "Research methodology and synthesis — designs investigation approach, evaluates evidence quality, writes synthesis documents",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"],
+    task: "Research methodology, evidence synthesis",
+    alias_ko: "포닥",
+    resume_tier: "persistent",
+  },
+  tester: {
+    id: "tester",
+    name: "tester",
+    category: "check",
+    description: "Testing and verification — tests, verifies, validates stability and security of implementations",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"],
+    task: "Testing, verification, security review",
+    alias_ko: "테스터",
+    resume_tier: "ephemeral",
+  },
+  writer: {
+    id: "writer",
+    name: "writer",
+    category: "do",
+    description: "Technical writing — transforms research findings, code, and analysis into clear documents and presentations for the intended audience",
+    model: "openai/gpt-5.3-codex",
+    disallowedTools: ["nx_task_add"],
+    task: "Technical writing, documentation, presentations",
+    alias_ko: "라이터",
+    resume_tier: "bounded",
+  },
+};
+
+export const NO_FILE_EDIT_TOOLS: readonly string[] = ["edit", "write", "patch", "multiedit"] as const;

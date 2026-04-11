@@ -14,6 +14,7 @@ import {
   loadTagsVocab,
   verifyTagDrift,
   verifyBodyHash,
+  verifyCatalogConsistency,
   transformAgent,
   transformSkill,
   buildAgentPromptsFile,
@@ -43,7 +44,7 @@ async function main() {
     const body = readFileSync(bodyPath, 'utf8');
     verifyBodyHash(body, agentEntry.body_hash, `agents/${agentEntry.id}/body.md`);
     const out = transformAgent(meta, body, capsMap, `agents/${agentEntry.id}`);
-    agentEntries.push({ id: agentEntry.id, prompt: out.prompt });
+    agentEntries.push({ id: agentEntry.id, prompt: out.prompt, meta: out.meta });
   }
 
   const skillEntries = [];
@@ -57,10 +58,17 @@ async function main() {
     skillEntries.push({ id: skillEntry.id, prompt: out.prompt });
   }
 
+  // Consistency check: NEXUS_AGENT_CATALOG[id].disallowedTools must match
+  // AGENT_META[id].disallowedTools (resolved from capabilities). Throws
+  // ERR_CATALOG_MISMATCH on drift (exempt agents like postdoc are skipped).
+  const catalogPath = join(OPENCODE_NEXUS_ROOT, 'src/agents/catalog.ts');
+  verifyCatalogConsistency(agentEntries, catalogPath);
+
   const agentFileContent = buildAgentPromptsFile(
     agentEntries,
     manifest.nexus_core_version,
-    manifest.nexus_core_commit
+    manifest.nexus_core_commit,
+    capsMap
   );
   writeGenerated(
     join(OPENCODE_NEXUS_ROOT, 'src/agents/prompts.generated.ts'),
