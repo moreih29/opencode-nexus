@@ -1,7 +1,6 @@
 // Ported from: claude-nexus/generate-from-nexus-core.mjs @ commit 94997d1 — sync with upstream when Gap fixes merge.
 // Entry point: reads @moreih29/nexus-core assets and writes opencode-nexus
 // src/agents/prompts.generated.ts, src/skills/prompts.generated.ts.
-// Not yet wired into the build chain (commit #2 activates this).
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,7 +16,8 @@ import {
   verifyBodyHash,
   transformAgent,
   transformSkill,
-  transformTags,
+  buildAgentPromptsFile,
+  buildSkillPromptsFile,
   loadPluginName,
   writeGenerated,
 } from './generate-from-nexus-core.lib.mjs';
@@ -35,7 +35,7 @@ async function main() {
   const capsMap = indexCapabilities();
   const pluginName = loadPluginName();
 
-  let agentCount = 0;
+  const agentEntries = [];
   for (const agentEntry of manifest.agents) {
     const metaPath = join(NEXUS_CORE_ROOT, 'agents', agentEntry.id, 'meta.yml');
     const bodyPath = join(NEXUS_CORE_ROOT, 'agents', agentEntry.id, 'body.md');
@@ -43,13 +43,10 @@ async function main() {
     const body = readFileSync(bodyPath, 'utf8');
     verifyBodyHash(body, agentEntry.body_hash, `agents/${agentEntry.id}/body.md`);
     const out = transformAgent(meta, body, capsMap, `agents/${agentEntry.id}`);
-    // TODO (commit #2): write TypeScript literal to src/agents/prompts.generated.ts
-    // writeGenerated(join(OPENCODE_NEXUS_ROOT, 'src/agents/prompts.generated.ts'), out);
-    void out;
-    agentCount++;
+    agentEntries.push({ id: agentEntry.id, prompt: out.prompt });
   }
 
-  let skillCount = 0;
+  const skillEntries = [];
   for (const skillEntry of manifest.skills) {
     const metaPath = join(NEXUS_CORE_ROOT, 'skills', skillEntry.id, 'meta.yml');
     const bodyPath = join(NEXUS_CORE_ROOT, 'skills', skillEntry.id, 'body.md');
@@ -57,19 +54,32 @@ async function main() {
     const body = readFileSync(bodyPath, 'utf8');
     verifyBodyHash(body, skillEntry.body_hash, `skills/${skillEntry.id}/body.md`);
     const out = transformSkill(meta, body, pluginName, `skills/${skillEntry.id}`);
-    // TODO (commit #2): write TypeScript literal to src/skills/prompts.generated.ts
-    // writeGenerated(join(OPENCODE_NEXUS_ROOT, 'src/skills/prompts.generated.ts'), out);
-    void out;
-    skillCount++;
+    skillEntries.push({ id: skillEntry.id, prompt: out.prompt });
   }
 
-  const tags = transformTags(tagsVocab);
-  // TODO (commit #2): decide output path for tags in opencode-nexus (src/data/tags.json or inline)
-  void tags;
+  const agentFileContent = buildAgentPromptsFile(
+    agentEntries,
+    manifest.nexus_core_version,
+    manifest.nexus_core_commit
+  );
+  writeGenerated(
+    join(OPENCODE_NEXUS_ROOT, 'src/agents/prompts.generated.ts'),
+    agentFileContent
+  );
+
+  const skillFileContent = buildSkillPromptsFile(
+    skillEntries,
+    manifest.nexus_core_version,
+    manifest.nexus_core_commit
+  );
+  writeGenerated(
+    join(OPENCODE_NEXUS_ROOT, 'src/skills/prompts.generated.ts'),
+    skillFileContent
+  );
 
   console.log(
-    `[generate-from-nexus-core] Scaffold dry-run — @moreih29/nexus-core@${manifest.nexus_core_version}: ` +
-    `${agentCount} agents, ${skillCount} skills, ${tags.length} tags (no files written yet)`
+    `[generate-from-nexus-core] @moreih29/nexus-core@${manifest.nexus_core_version}: ` +
+    `${agentEntries.length} agents, ${skillEntries.length} skills written`
   );
 }
 

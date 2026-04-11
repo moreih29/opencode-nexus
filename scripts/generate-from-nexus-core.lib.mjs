@@ -186,9 +186,66 @@ export function transformAgent(meta, body, capsMap, label = '') {
     resume_tier: meta.resume_tier,
   };
 
-  // TODO (commit #2): emit TypeScript literal for src/agents/prompts.generated.ts
-  // For now, return raw body as prompt and structured meta for downstream use.
   return { prompt: body, meta: agentMeta };
+}
+
+/**
+ * Escape a raw string for safe embedding inside a JavaScript template literal.
+ * Order matters: backslash must be escaped first.
+ * @param {string} s
+ * @returns {string}
+ */
+export function escapeTemplateLiteral(s) {
+  return s
+    .replaceAll('\\', '\\\\')
+    .replaceAll('`', '\\`')
+    .replaceAll('${', '\\${');
+}
+
+/**
+ * Build the content of src/agents/prompts.generated.ts from accumulated agent entries.
+ * @param {{ id: string, prompt: string }[]} agents
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildAgentPromptsFile(agents, nexusCoreVersion, nexusCoreCommit) {
+  const entries = agents
+    .map(({ id, prompt }) => `  ${id}: \`${escapeTemplateLiteral(prompt)}\`,`)
+    .join('\n');
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Regenerate: bun run generate:prompts`,
+    ``,
+    `export const AGENT_PROMPTS: Record<string, string> = {`,
+    entries,
+    `};`,
+    ``,
+  ].join('\n');
+}
+
+/**
+ * Build the content of src/skills/prompts.generated.ts from accumulated skill entries.
+ * @param {{ id: string, prompt: string }[]} skills
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildSkillPromptsFile(skills, nexusCoreVersion, nexusCoreCommit) {
+  const entries = skills
+    .map(({ id, prompt }) => `  "${id}": \`${escapeTemplateLiteral(prompt)}\`,`)
+    .join('\n');
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Regenerate: bun run generate:prompts`,
+    ``,
+    `export const SKILL_PROMPTS: Record<string, string> = {`,
+    entries,
+    `};`,
+    ``,
+  ].join('\n');
 }
 
 /**
@@ -236,7 +293,6 @@ export function transformSkill(meta, body, pluginName, label = '') {
     ...(meta.manual_only === true ? { disable_model_invocation: true } : {}),
   };
 
-  // TODO (commit #2): emit TypeScript literal for src/skills/prompts.generated.ts
   return { prompt: body, meta: skillMeta };
 }
 
