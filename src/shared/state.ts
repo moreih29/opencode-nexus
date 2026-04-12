@@ -16,7 +16,6 @@ export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
 
   await fs.mkdir(paths.NEXUS_ROOT, { recursive: true });
   await fs.mkdir(paths.CORE_ROOT, { recursive: true });
-  await fs.mkdir(paths.LOGS_ROOT, { recursive: true });
   await fs.mkdir(path.join(paths.CORE_ROOT, "identity"), { recursive: true });
   await fs.mkdir(path.join(paths.CORE_ROOT, "codebase"), { recursive: true });
   await fs.mkdir(path.join(paths.CORE_ROOT, "reference"), { recursive: true });

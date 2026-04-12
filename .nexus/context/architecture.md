@@ -117,9 +117,16 @@ opencode-nexus는 Nexus 생태계의 Authoring layer(`@moreih29/nexus-core`)를 
 
 `dist/index.js`는 `@moreih29/nexus-core`를 런타임에 참조하지 않는다. `scripts/e2e-loader-smoke.mjs`가 컴파일된 번들에서 `@moreih29/nexus-core` 문자열이 주석 외 위치에 등장하지 않음을 검증하여 devDependency contract(§8.3)을 보증한다.
 
-### Intentional divergence
+### `.nexus/` 구조 — 사람 문서 flat + 도구 자동 관리물 4-layer
 
-4-layer `.nexus/core/{identity,codebase,memory,reference}` 구조는 UPSTREAM.md §9.4 intentional divergence로 **유지**된다. claude-nexus의 flat `.nexus/{memory,context,rules}` 구조와 의도적으로 분리되어 있으며, role-based access matrix 지원을 위해 계층 분리가 필요하기 때문. Phase 1/2 scope에서 flattening하지 않는다.
+사람이 직접 작성/관리하는 영역은 claude-nexus 표준과 동일한 flat 구조를 따른다 (2026-04-12 refactor):
+
+- `.nexus/context/` — 정적 설계 문서 (이 파일 포함, principles, orchestration, tools, build-and-release)
+- `.nexus/memory/` — lessons learned, references, anti-patterns, follow-up
+- `.nexus/rules/` — 강제 컨벤션
+- `.nexus/state/` — runtime 데이터 + audit log
+
+`nx_init` / `nx_sync` / `nx_core_*` / `nx_briefing` 도구의 4-layer 인프라(`core/{identity,codebase,memory,reference}`)는 코드 차원에서 유지되며 도구 호출 시 `mkdir(recursive: true)`로 자동 재생성된다. 자동 생성물(`recent-cycle-summary.md`, `recent-changes.md`, `decision-log.md` 등)은 그 4-layer에 작성되며 사람 문서와 디렉토리 충돌이 없다. 향후 도구 redesign 시 4-layer를 flat에 합칠 수 있으나 별도 plan session으로 분리한다 (참조: `memory/phase1-followup.md`).
 
 ## 3. 플러그인 초기화 흐름
 
