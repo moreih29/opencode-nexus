@@ -7,6 +7,7 @@ import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
 import { ensureNexusStructure, fileExists } from "../shared/state.js";
 import { nxInit } from "./workflow.js";
+import { NEXUS_AGENT_CATALOG, type NexusAgentProfile } from "../agents/catalog.js";
 
 const z = tool.schema;
 const MARKER_START = "<!-- NEXUS:START -->";
@@ -20,7 +21,11 @@ export const nxSetup = tool({
     statusline_preset: z.enum(["full", "minimal", "skip"]).default("minimal"),
     install_plugin: z.boolean().default(true),
     init_after_setup: z.boolean().default(false),
-    instructions_file: z.string().optional()
+    instructions_file: z.string().optional(),
+    agent_models: z.record(z.string(), z.string()).optional(),
+    model_preset: z.enum(["unified", "tiered", "budget", "skip"]).default("skip"),
+    lead_model: z.string().optional(),
+    permission_preset: z.enum(["permissive", "standard", "restrictive", "skip"]).default("skip")
   },
   async execute(args, context) {
     const root = context.worktree ?? context.directory;
@@ -29,6 +34,8 @@ export const nxSetup = tool({
     const statuslinePreset = args.statusline_preset ?? "minimal";
     const installPlugin = args.install_plugin ?? true;
     const initAfterSetup = args.init_after_setup ?? false;
+    const modelPreset = args.model_preset ?? "skip";
+    const permissionPreset = args.permission_preset ?? "skip";
     const projectPaths = createNexusPaths(root);
     await ensureNexusStructure(projectPaths);
 
@@ -44,7 +51,7 @@ export const nxSetup = tool({
     const skillFiles = await installEntrypointSkills(targets.skillsRoot);
 
     const config = await readJsonFile<Record<string, unknown>>(targets.configFile, { $schema: "https://opencode.ai/config.json" });
-    const nextConfig = mergeSetupConfig({
+    const next = mergeSetupConfig({
       config,
       installPlugin,
       instructionsPath:
@@ -52,7 +59,11 @@ export const nxSetup = tool({
       profile: resolvedProfile,
       selfHostedLocalPlugin: capabilities.localPluginShim
     });
-    await writeJsonFile(targets.configFile, nextConfig);
+
+    const resolvedAgentModels = mergeAgentModels(next, args.agent_models as Record<string, string> | undefined, modelPreset, args.lead_model, NEXUS_AGENT_CATALOG);
+    mergePermissionPreset(next, permissionPreset);
+
+    await writeJsonFile(targets.configFile, next);
 
     const nexusConfig = await readJsonFile<Record<string, unknown>>(projectPaths.CONFIG_FILE, {});
     nexusConfig.statuslinePreset = statuslinePreset;
@@ -91,7 +102,13 @@ export const nxSetup = tool({
         },
         warnings: buildSetupWarnings(capabilities, resolvedProfile),
         initTriggered: initAfterSetup && scope === "project",
-        initResult
+        initResult,
+        modelConfiguration: {
+          preset: modelPreset,
+          leadModel: args.lead_model ?? null,
+          agentModels: resolvedAgentModels
+        },
+        permissionPreset
       },
       null,
       2
@@ -202,6 +219,85 @@ function mergeSetupConfig(input: {
   }
 
   return next;
+}
+
+function mergeAgentModels(
+  config: Record<string, unknown>,
+  explicitModels: Record<string, string> | undefined,
+  preset: "unified" | "tiered" | "budget" | "skip",
+  leadModel: string | undefined,
+  catalog: NexusAgentProfile[]
+): Record<string, string> {
+  const agent = toRecord(config.agent);
+  const resolved: Record<string, string> = {};
+
+  if (preset !== "skip") {
+    const nexusAgent = toRecord(agent.nexus);
+    const defaultModel =
+      leadModel ??
+      (typeof nexusAgent.model === "string" && nexusAgent.model.trim().length > 0 ? nexusAgent.model : undefined);
+
+    for (const profile of catalog) {
+      let model: string | undefined;
+
+      if (preset === "unified") {
+        model = defaultModel;
+      } else if (preset === "tiered") {
+        model = profile.category === "how" ? defaultModel : defaultModel;
+      } else if (preset === "budget") {
+        model = profile.category === "how" ? defaultModel : defaultModel;
+      }
+
+      if (model) {
+        resolved[profile.id] = model;
+      }
+    }
+  }
+
+  if (explicitModels) {
+    for (const [id, model] of Object.entries(explicitModels)) {
+      resolved[id] = model;
+    }
+  }
+
+  for (const [id, model] of Object.entries(resolved)) {
+    const catalogEntry = catalog.find((p) => p.id === id);
+    if (!catalogEntry) {
+      continue;
+    }
+    const existing = toRecord(agent[id]);
+    agent[id] = { ...existing, mode: "subagent", model };
+  }
+
+  config.agent = agent;
+  return resolved;
+}
+
+function mergePermissionPreset(
+  config: Record<string, unknown>,
+  preset: "permissive" | "standard" | "restrictive" | "skip"
+): void {
+  if (preset === "skip") {
+    return;
+  }
+
+  if (preset === "permissive") {
+    config.permission = { "*": "allow" };
+  } else if (preset === "standard") {
+    config.permission = {
+      "*": "ask",
+      read: { "*": "allow" },
+      bash: {
+        "*": "ask",
+        "git status*": "allow",
+        "git diff*": "allow",
+        "git log*": "allow"
+      },
+      task: { "*": "allow" }
+    };
+  } else if (preset === "restrictive") {
+    config.permission = { "*": "ask" };
+  }
 }
 
 async function detectSetupCapabilities(projectRoot: string, scope: "project" | "user") {

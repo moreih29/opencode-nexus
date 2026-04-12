@@ -3789,6 +3789,12 @@
       "branch": "chore/nexus-core-consuming-sync",
       "plan": null,
       "tasks": []
+    },
+    {
+      "completed_at": "2026-04-12T10:18:29.578Z",
+      "branch": "feat/nx-setup-opencode",
+      "plan": null,
+      "tasks": []
     }
   ]
 }
