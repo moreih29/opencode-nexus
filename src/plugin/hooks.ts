@@ -401,8 +401,8 @@ export function createHooks(ctx: PluginContext) {
 }
 
 function isEditLikeTool(toolName: string): boolean {
-  // Sourced from nexus-core capability `no_file_edit` harness_mapping.opencode
-  // via prompts.generated.ts — keeps opencode-nexus in sync with nexus-core canonical.
+  // Sourced from nexus-core capability `no_file_edit` via capability-map.yml resolution.
+  // Generated into prompts.generated.ts — keeps opencode-nexus in sync with nexus-core.
   return NO_FILE_EDIT_TOOLS.includes(toolName);
 }
 

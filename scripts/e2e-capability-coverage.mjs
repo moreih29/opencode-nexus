@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 import { AGENT_META, NO_FILE_EDIT_TOOLS } from "../dist/agents/prompts.js";
 
@@ -79,7 +83,32 @@ for (const [id, meta] of Object.entries(AGENT_META)) {
   }
 }
 
+// capability-map.yml coverage assertion (v0.2.0 migration Step D):
+// verify that every blocks_semantic_class in nexus-core vocabulary/capabilities.yml
+// has a corresponding entry in capability-map.yml.
+const __e2eDir = dirname(fileURLToPath(import.meta.url));
+const NEXUS_CORE_ROOT = join(__e2eDir, '..', 'node_modules/@moreih29/nexus-core');
+const capsDoc = parseYaml(readFileSync(join(NEXUS_CORE_ROOT, 'vocabulary/capabilities.yml'), 'utf8'));
+const mapDoc = parseYaml(readFileSync(join(__e2eDir, '..', 'capability-map.yml'), 'utf8'));
+
+const allSemanticClasses = new Set();
+for (const cap of capsDoc.capabilities) {
+  for (const cls of cap.blocks_semantic_classes ?? []) {
+    allSemanticClasses.add(cls);
+  }
+}
+
+const mappedClasses = new Set(Object.keys(mapDoc.semantic_class_map));
+const missingClasses = [...allSemanticClasses].filter(c => !mappedClasses.has(c));
+
+assert.equal(
+  missingClasses.length,
+  0,
+  `capability-map.yml missing semantic classes from nexus-core: [${missingClasses.join(', ')}]`
+);
+
 const agentCount = Object.keys(AGENT_META).length;
 console.log(
-  `e2e capability-coverage passed (${agentCount} agents, ${totalTools} tool entries, ${warningCount} warnings)`
+  `e2e capability-coverage passed (${agentCount} agents, ${totalTools} tool entries, ` +
+  `${warningCount} warnings, ${allSemanticClasses.size} semantic classes covered)`
 );

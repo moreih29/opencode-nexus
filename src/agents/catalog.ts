@@ -16,7 +16,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "how",
     description: "Architecture and technical design review",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "nx_task_add", "nx_task_update"]
   },
   {
     id: "designer",
@@ -24,7 +24,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "how",
     description: "UI/UX and interaction design decisions",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "nx_task_add", "nx_task_update"]
   },
   {
     id: "postdoc",
@@ -32,7 +32,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "how",
     description: "Research methodology and evidence synthesis",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "bash", "nx_task_add", "nx_task_update"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "bash", "nx_task_add", "nx_task_update"]
   },
   {
     id: "strategist",
@@ -40,7 +40,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "how",
     description: "Business and product strategy review",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add", "nx_task_update"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "nx_task_add", "nx_task_update"]
   },
   {
     id: "engineer",
@@ -56,7 +56,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "do",
     description: "Independent web and document research",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "nx_task_add"]
   },
   {
     id: "writer",
@@ -72,7 +72,7 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "check",
     description: "Testing, verification, and security review",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "nx_task_add"]
   },
   {
     id: "reviewer",
@@ -80,6 +80,6 @@ export const NEXUS_AGENT_CATALOG: NexusAgentProfile[] = [
     category: "check",
     description: "Fact-checking and content validation",
     model: "openai/gpt-5.3-codex",
-    disallowedTools: ["edit", "write", "patch", "multiedit", "nx_task_add"]
+    disallowedTools: ["write", "edit", "patch", "multiedit", "notebookedit", "nx_task_add"]
   }
 ];

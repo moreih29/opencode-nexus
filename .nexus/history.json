@@ -3753,6 +3753,12 @@
           "created_at": "2026-04-11T12:53:30.242Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-12T07:27:39.379Z",
+      "branch": "chore/nexus-core-0.2.0-upgrade",
+      "plan": null,
+      "tasks": []
     }
   ]
 }

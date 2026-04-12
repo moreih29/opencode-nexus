@@ -30,14 +30,8 @@ export const MODEL_TIER_TO_OPENCODE = {
 
 // SKILL_FIELD_ORDER removed for same reason.
 
-/** opencode-nexus local skill purpose strings (CA-2 workaround). Keyed by skill id. */
-export const SKILL_PURPOSE_OVERRIDE = {
-  'nx-init':  'Full project onboarding: scan codebase, establish project mission and essentials, generate context knowledge',
-  'nx-plan':  'Structured planning — subagent-based analysis, deliberate decisions, produce execution plan',
-  'nx-run':   'Execution — user-directed agent composition',
-  'nx-setup': 'Configure Nexus interactively',
-  'nx-sync':  'Synchronize .nexus/context/ design documents with current project state',
-};
+// SKILL_PURPOSE_OVERRIDE removed in v0.2.0 migration — use manifest.json `summary` field instead.
+// See: MIGRATIONS/v0_1_to_v0_2.md Step 5.5
 
 // ==========================================================================
 // Path helpers
@@ -75,19 +69,40 @@ export function verifyManifestVersion(manifest) {
 
 /**
  * Index capabilities: capability id → opencode tool name array.
- * Reads vocabulary/capabilities.yml directly.
+ * Reads nexus-core vocabulary/capabilities.yml (X3 schema: blocks_semantic_classes)
+ * and resolves through local capability-map.yml.
  * @returns {Map<string, string[]>}
  */
 export function indexCapabilities() {
-  const path = join(NEXUS_CORE_ROOT, 'vocabulary/capabilities.yml');
-  const doc = parseYaml(readFileSync(path, 'utf8'));
-  const map = new Map();
-  for (const cap of doc.capabilities) {
-    // opencode harness mapping (not claude_code)
-    const tools = cap.harness_mapping?.opencode ?? [];
-    map.set(cap.id, tools);
+  const capsPath = join(NEXUS_CORE_ROOT, 'vocabulary/capabilities.yml');
+  const capsDoc = parseYaml(readFileSync(capsPath, 'utf8'));
+
+  const mapPath = join(OPENCODE_NEXUS_ROOT, 'capability-map.yml');
+  const mapDoc = parseYaml(readFileSync(mapPath, 'utf8'));
+  const classMap = mapDoc.semantic_class_map;
+
+  const result = new Map();
+  for (const cap of capsDoc.capabilities) {
+    const seen = new Set();
+    const tools = [];
+    for (const cls of cap.blocks_semantic_classes ?? []) {
+      const mapped = classMap[cls];
+      if (mapped === undefined) {
+        throw new Error(
+          `Semantic class "${cls}" (from capability "${cap.id}") has no entry in capability-map.yml. ` +
+          `Add it to maintain full coverage.`
+        );
+      }
+      for (const tool of mapped) {
+        if (!seen.has(tool)) {
+          seen.add(tool);
+          tools.push(tool);
+        }
+      }
+    }
+    result.set(cap.id, tools);
   }
-  return map;
+  return result;
 }
 
 // ==========================================================================
@@ -116,7 +131,7 @@ export function verifyBodyHash(content, expectedHashPrefixed, label = '') {
 // ==========================================================================
 
 /**
- * Derive disallowedTools array from capability ids using opencode harness mapping.
+ * Derive disallowedTools array from capability ids using capability-map.yml resolution.
  * Preserves insertion order, dedupes via Set, throws on unmapped capability.
  * @param {string[]} capabilityIds
  * @param {Map<string, string[]>} capsMap
@@ -129,7 +144,7 @@ export function deriveDisallowedTools(capabilityIds, capsMap) {
     const tools = capsMap.get(capId);
     if (!tools) {
       throw new Error(
-        `Capability "${capId}" has no harness_mapping.opencode in vocabulary/capabilities.yml. ` +
+        `Capability "${capId}" not found in vocabulary/capabilities.yml. ` +
         `Cannot safely derive disallowedTools.`
       );
     }
@@ -321,11 +336,10 @@ export function deriveSkillTriggerDisplay(meta, pluginName) {
  * @returns {{ prompt: string, meta: { id: string, name: string, description: string, trigger_display: string, purpose: string, disable_model_invocation?: boolean } }}
  */
 export function transformSkill(meta, body, pluginName, label = '') {
-  const purpose = SKILL_PURPOSE_OVERRIDE[meta.id];
+  const purpose = meta.summary ?? collapseDescription(meta.description);
   if (!purpose) {
     throw new Error(
-      `No SKILL_PURPOSE_OVERRIDE entry for skill "${meta.id}". ` +
-      `Add it to generate-from-nexus-core.lib.mjs.`
+      `Skill "${meta.id}" has no summary or description field in meta.yml.`
     );
   }
 
