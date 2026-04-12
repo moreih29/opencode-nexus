@@ -3881,6 +3881,144 @@
       "branch": "fix/plan-start-defaults",
       "plan": null,
       "tasks": []
+    },
+    {
+      "completed_at": "2026-04-12T15:21:39.287Z",
+      "branch": "research/opencode-plugin-reference",
+      "plan": {
+        "id": 17,
+        "topic": "플러그인 시스템 테스트",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "Lead",
+            "joined_at": "2026-04-12T14:49:42.747Z"
+          },
+          {
+            "role": "architect",
+            "name": "Architect",
+            "joined_at": "2026-04-12T14:53:28.638Z"
+          },
+          {
+            "role": "designer",
+            "name": "Designer",
+            "joined_at": "2026-04-12T14:53:28.851Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": 1,
+            "title": "플러그인 기본 동작 확인",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "Lead",
+                "message": "플러그인 시스템이 정상적으로 계획 세션을 생성하고, 토론을 기록하며, 결정을 내릴 수 있는지 확인합니다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-12T14:49:50.967Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "플러그인 기본 동작 정상 - 계획 생성, 토론 기록 기능 확인됨",
+                "kind": "decision",
+                "recorded_at": "2026-04-12T14:49:54.013Z"
+              }
+            ],
+            "decision": "플러그인 기본 동작 정상 - 계획 생성, 토론 기록 기능 확인됨",
+            "task_refs": []
+          },
+          {
+            "id": 2,
+            "title": "계획-실행-검증 사이클 테스트",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "Lead",
+                "message": "계획-실행-검증 사이클 테스트를 위해 간단한 태스크를 만들고 완료하는 과정을 검증합니다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-12T14:50:32.308Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "태스크 사이클 테스트 준비 완료 - [run]으로 실행 단계 진입 가능",
+                "kind": "decision",
+                "recorded_at": "2026-04-12T14:50:34.564Z"
+              }
+            ],
+            "decision": "태스크 사이클 테스트 준비 완료 - [run]으로 실행 단계 진입 가능",
+            "task_refs": []
+          },
+          {
+            "id": 3,
+            "title": "코드베이스 구조 개선 방안",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "Architect",
+                "message": "코드베이스에서 .nexus/ 구조와 tools/ 분리가 잘 되어 있습니다. 다만, state/ 디렉토리의 런타임 파일 관리에 대한 명확한 가이드가 있으면 좋겠습니다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-12T14:53:37.447Z"
+              },
+              {
+                "speaker": "Lead",
+                "message": "아키텍처 제안 감사합니다. 런타임 파일 관리는 별도 이슈로 분리해서 진행하겠습니다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-12T14:53:47.800Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "state/ 디렉토리 런타임 가이드 문서화를 별도 작업으로 등록",
+                "kind": "decision",
+                "recorded_at": "2026-04-12T14:54:14.676Z"
+              }
+            ],
+            "decision": "state/ 디렉토리 런타임 가이드 문서화를 별도 작업으로 등록",
+            "task_refs": []
+          },
+          {
+            "id": 4,
+            "title": "사용자 경험 개선 방향",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "Designer",
+                "message": "현재 CLI 기반 인터페이스는 간결하지만, 사용자가 진행 상황을 한눈에 볼 수 있는 대시보드나 상태 표시가 있으면 UX가 개선될 것입니다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-12T14:53:39.086Z"
+              },
+              {
+                "speaker": "Lead",
+                "message": "UX 개선 아이디어 좋습니다. 우선은 간단한 상태 표시부터 시작하겠습니다.",
+                "kind": "discussion",
+                "recorded_at": "2026-04-12T14:53:49.259Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "상태 표시 개선은 추후 별도 이슈로 진행",
+                "kind": "decision",
+                "recorded_at": "2026-04-12T14:54:22.439Z"
+              }
+            ],
+            "task_refs": [],
+            "decision": "상태 표시 개선은 추후 별도 이슈로 진행"
+          }
+        ],
+        "research_summary": "Nexus 플러그인 시스템의 기본 기능 검증을 위한 간단한 테스트 계획",
+        "created_at": "2026-04-12T14:49:42.747Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "OpenCode 플랫폼 + 플러그인 API 조사",
+          "context": "OpenCode의 동작 모델, 플러그인 API, 에이전트/도구 시스템, 시스템 프롬프트 합성 방식 등 플랫폼 레퍼런스가 .nexus/ 지식에 없음. 공식 문서, @opencode-ai/plugin 패키지, 유명 플러그인 사례를 조사하여 기록 필요.",
+          "approach": "포닥이 조사 방법론 설계, 리서처가 웹 조사 + 코드 조사 병렬 수행, 라이터가 문서 작성, 리뷰어가 검증",
+          "acceptance": "나중에 이 문서만 보고 OpenCode 플러그인을 만들 수 있을 정도의 완성도",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-12T15:06:20.944Z"
+        }
+      ]
     }
   ]
 }
