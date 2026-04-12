@@ -47,19 +47,19 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 | ID | 트리거 | 목적 |
 |---|---|---|
-| `nx-meet` | `[meet]` | 팀 토론 및 결정 기록 |
+| `nx-plan` | `[plan]` | 구조화된 플래닝 및 결정 기록 |
 | `nx-run` | `[run]` | 실행 파이프라인 (intake → design → execute → verify → complete) |
 | `nx-init` | `nx-init` | 온보딩 — 코어 구조 및 기반 지식 초기화 |
 | `nx-sync` | `nx-sync` | 태스크 사이클 완료 후 코어 지식 동기화 |
 | `nx-setup` | `nx-setup` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
 
-### nx-meet 절차
+### nx-plan 절차
 
-1. 의도 파악 → 2. 리서치 → 3. 팀 구성 → 4. 이슈별 토론(`nx_meet_discuss`) → 5. 후속 연속성(`nx_meet_followup`) → 6. 옵션 제시 → 7. 결정 기록(`nx_meet_decide`) → 8. 갭 확인 → 9. `[run]` 전환 제안
+1. 의도 파악 → 2. 리서치 → 3. 팀 구성 → 4. 이슈별 토론(`nx_plan_discuss`) → 5. 후속 연속성(`nx_plan_followup`) → 6. 옵션 제시 → 7. 결정 기록(`nx_plan_decide`) → 8. 갭 확인 → 9. `[run]` 전환 제안
 
 ### nx-run 흐름
 
-1. **Intake** — 방향 확인, meet 결정 검토, 브랜치 가드
+1. **Intake** — 방향 확인, plan 결정 검토, 브랜치 가드
 2. **Design** — 필요 시 HOW 에이전트 투입
 3. **Execute** — 태스크 분해, `nx_task_add` 등록, 구조화된 페이로드로 위임
 4. **Verify** — 빌드·커맨드 확인, QA/Reviewer 트리거
@@ -88,11 +88,11 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 ### 팀 정책
 
 - `requiresTeamInRunMode` — do/check 에이전트는 run 모드에서 팀 레이블 필수
-- `canJoinMeetWithoutTeam` — lead만 팀 없이 meet 참여 가능
+- `canJoinMeetWithoutTeam` — lead만 팀 없이 plan 참여 가능
 
-### Meet / Run 연속성 어댑터
+### Plan / Run 연속성 어댑터
 
-- Meet: `coordination_label=meet-panel` + `agent_type` 조합 우선 조회
+- Plan: `coordination_label=plan-panel` + `agent_type` 조합 우선 조회
 - Run: agent_type + coordination_label 조합 우선 → agent_type만으로 fallback. 재개 필드 자동 주입
 
 ## 4. 파이프라인

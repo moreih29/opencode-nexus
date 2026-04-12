@@ -140,8 +140,8 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 - HOW / DO / CHECK 역할로 나뉜 9개 Nexus 에이전트 카탈로그
 - 기본 primary `nexus`와 specialist subagent 조합
-- `.nexus/state/`에 저장되는 상태 기반 meet/task 워크플로
-- canonical `.nexus`와 분리된 OpenCode sidecar(`meet.opencode.json`) 기반 HOW 패널 연속성
+- `.nexus/state/`에 저장되는 상태 기반 plan/task 워크플로
+- canonical `.nexus`와 분리된 OpenCode sidecar(`plan.opencode.json`) 기반 HOW 패널 연속성
 - HOW 패널 participant별 `task_id/session_id` 재개 힌트 저장
 - `nx_plan_resume`로 HOW participant 재개 핸들 조회 가능
 - `nx_plan_followup`로 HOW participant follow-up delegation 입력 생성 가능
@@ -149,7 +149,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - edit 도구에 대한 task pipeline 가드레일
 - meeting reminder, run notice, 더 엄격한 cycle-close discipline
 - `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
-- 구조화된 meet discussion 레코드와 meet -> task linkage 상태 추적
+- 구조화된 plan discussion 레코드와 plan -> task linkage 상태 추적
 
 ## 지식 구조
 
@@ -159,14 +159,14 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - `rules/` — 팀 규칙
 - `config.json` — Nexus 설정
 - `history.json` — 아카이브된 사이클 기록
-- `state/` — 현재 meet/task 중심 실행 상태
+- `state/` — 현재 plan/task 중심 실행 상태
 
 ## 중요 참고
 
 - `AGENTS.md`가 OpenCode의 기본 instruction 파일입니다.
 - `CLAUDE.md`는 마이그레이션용 legacy 입력으로만 취급합니다.
 - 이 프로젝트는 `claude-nexus`의 OpenCode 네이티브 마이그레이션이지만 아직 완전 parity는 아닙니다.
-- 현재 강한 부분: hook, task/meet 상태 도구, 에이전트 카탈로그, 시스템 가이드.
+- 현재 강한 부분: hook, task/plan 상태 도구, 에이전트 카탈로그, 시스템 가이드.
 - 아직 부분적인 부분: 더 깊은 code intelligence 범위와 일부 워크플로 parity.
 
 ## 문서

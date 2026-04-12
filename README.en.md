@@ -6,7 +6,7 @@
 
 Nexus orchestration plugin for OpenCode.
 
-`opencode-nexus` ports the core workflow of `claude-nexus` into OpenCode so you can run structured decision meetings, task-driven execution, and persistent project knowledge without rebuilding the workflow by hand.
+`opencode-nexus` and `claude-nexus` are sibling projects built on the same `@moreih29/nexus-core`. Instead of ad-hoc prompts, you get structured planning, task-driven execution, and persistent project knowledge in OpenCode.
 
 ## Why
 
@@ -140,8 +140,8 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 - 9-agent Nexus catalog mapped to HOW / DO / CHECK roles
 - Default `nexus` primary paired with specialist subagents
-- Stateful meet and task workflow stored in `.nexus/state/`
-- HOW-panel continuity through OpenCode sidecar state (`meet.opencode.json`) separate from canonical `.nexus`
+- Stateful plan and task workflow stored in `.nexus/state/`
+- HOW-panel continuity through OpenCode sidecar state (`plan.opencode.json`) separate from canonical `.nexus`
 - Resume hints per HOW participant via stored `task_id` / `session_id` handles when OpenCode provides them
 - `nx_plan_resume` to inspect a HOW participant's current resume handle before follow-up delegation
 - `nx_plan_followup` to produce delegation-ready HOW participant follow-up input
@@ -149,7 +149,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 - Task pipeline guardrails for edit tools
 - Meeting reminders, run notices, and stronger cycle-close discipline
 - Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, and `nx_setup`
-- Structured meet discussion records and meet -> task linkage state
+- Structured plan discussion records and plan -> task linkage state
 
 ## Knowledge Layout
 
@@ -159,14 +159,14 @@ This entrypoint routes to the canonical `nx_init` tool.
 - `rules/` — team conventions
 - `config.json` — Nexus config
 - `history.json` — archived cycles
-- `state/` — active runtime state such as meet/task/run trackers
+- `state/` — active runtime state such as plan/task/run trackers
 
 ## Important Notes
 
 - `AGENTS.md` is the primary OpenCode instruction file.
 - `CLAUDE.md` is treated only as legacy migration input.
 - This project is an OpenCode-native migration of `claude-nexus`, not full parity yet.
-- Strong today: hooks, task/meet state tools, agent catalog, system guidance.
+- Strong today: hooks, task/plan state tools, agent catalog, system guidance.
 - Partial today: deeper code intelligence coverage and some workflow parity details.
 
 ## Docs

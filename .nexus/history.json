@@ -3835,6 +3835,52 @@
           "created_at": "2026-04-12T14:35:19.759Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-12T14:45:43.209Z",
+      "branch": "fix/plan-start-defaults",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "ast.ts require → dynamic import 수정",
+          "context": "e2e-code-intel.mjs가 ERR_AMBIGUOUS_MODULE_SYNTAX로 실패. src/tools/ast.ts:24의 require(\"@ast-grep/napi\")가 ESM top-level await와 충돌. Node.js v24에서 발생.",
+          "approach": "loadAstGrep() 함수를 async로 변경하고 require를 await import()로 교체. 호출부(line 37, 63)에 await 추가.",
+          "acceptance": "bun run build 성공, node scripts/e2e-code-intel.mjs 통과",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:42:11.621Z"
+        },
+        {
+          "id": 2,
+          "title": "e2e-meet-continuity-core.mjs → e2e-plan-continuity-core.mjs 리네임",
+          "context": "테스트 파일명과 assert 메시지가 레거시 \"meet\" 용어 사용. 소스 코드는 이미 \"plan\"으로 마이그레이션 완료.",
+          "approach": "파일 내용의 meet → plan 참조 갱신 후 새 파일명으로 생성, 기존 파일 삭제",
+          "acceptance": "e2e-plan-continuity-core.mjs로 리네임 완료, 테스트 통과, 기존 파일 삭제",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:42:14.517Z"
+        },
+        {
+          "id": 3,
+          "title": "package.json test:e2e + README meet→plan 갱신",
+          "context": "package.json test:e2e에 e2e-meet-continuity-core.mjs 참조 잔존 + e2e-plan-start-defaults.mjs 누락. README.md/README.en.md에 meet 레거시 용어 5곳씩.",
+          "approach": "Lead 직접 처리: package.json 참조 갱신, README 양 언어 meet→plan 용어 교체",
+          "acceptance": "package.json이 올바른 파일명 참조, README에 meet 잔여 없음",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-12T14:42:18.991Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-12T14:47:10.338Z",
+      "branch": "fix/plan-start-defaults",
+      "plan": null,
+      "tasks": []
     }
   ]
 }

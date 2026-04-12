@@ -9,7 +9,7 @@ import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
 import { nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart } from "../dist/tools/plan.js";
 
-const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-meet-core-first-"));
+const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-plan-core-first-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });
 await fs.writeFile(path.join(root, ".git", "HEAD"), "ref: refs/heads/test\n", "utf8");
 
@@ -63,7 +63,7 @@ await logState("after hook completion", paths);
 
 const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
 const architect = sidecar.panel.participants.find((item) => item.role.toLowerCase() === "architect");
-assert.ok(architect, "architect participant must exist in sidecar after meet start");
+assert.ok(architect, "architect participant must exist in sidecar after plan start");
 architect.task_id = "sidecar-task-architect-desync";
 architect.session_id = "sidecar-session-architect-desync";
 architect.updated_at = new Date().toISOString();
@@ -122,7 +122,7 @@ assert.equal(
 await nxPlanJoin.execute({ role: "strategist", name: "Strategist" }, ctx);
 const sidecarWithStrategist = await readJson(paths.PLAN_SIDECAR_FILE);
 const strategist = sidecarWithStrategist.panel.participants.find((item) => item.role.toLowerCase() === "strategist");
-assert.ok(strategist, "strategist participant must exist in sidecar after joining meet");
+assert.ok(strategist, "strategist participant must exist in sidecar after joining plan");
 strategist.task_id = "sidecar-task-strategist-only";
 strategist.session_id = "sidecar-session-strategist-only";
 strategist.updated_at = new Date().toISOString();
@@ -137,7 +137,7 @@ const resumeStrategist = await nxPlanResume.execute(
 assert.equal(
   resumeStrategist,
   "No participant continuity found for strategist.",
-  "nxPlanResume should not resume from meet sidecar when orchestration has no continuity"
+  "nxPlanResume should not resume from plan sidecar when orchestration has no continuity"
 );
 
 const followupStrategist = parseToolJson(
@@ -153,7 +153,7 @@ const followupStrategist = parseToolJson(
 assert.equal(
   followupStrategist.recommendation.mode,
   "rehydrate-from-summary",
-  "nxPlanFollowup should avoid resume-existing when continuity only exists in meet sidecar"
+  "nxPlanFollowup should avoid resume-existing when continuity only exists in plan sidecar"
 );
 assert.equal(
   followupStrategist.delegation.resume_task_id,
@@ -169,10 +169,10 @@ assert.equal(
 const sidecarProjection = await readJson(paths.PLAN_SIDECAR_FILE);
 assert.ok(
   sidecarProjection.panel.participants.some((item) => item.role.toLowerCase() === "strategist"),
-  "meet sidecar should still retain panel membership independently of resumability"
+  "plan sidecar should still retain panel membership independently of resumability"
 );
 
-console.log("e2e meet continuity core-first passed");
+console.log("e2e plan continuity core-first passed");
 
 async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, "utf8"));
@@ -183,7 +183,7 @@ async function logState(label, paths) {
   const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
   console.log(`[inspect:${label}] orchestration-core`);
   console.log(JSON.stringify(core, null, 2));
-  console.log(`[inspect:${label}] meet-sidecar`);
+  console.log(`[inspect:${label}] plan-sidecar`);
   console.log(JSON.stringify(sidecar, null, 2));
 }
 
