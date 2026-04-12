@@ -19,9 +19,8 @@ function getLang(filePath: string): string {
   return EXT_TO_LANG[ext] ?? "TypeScript";
 }
 
-function loadAstGrep(): any {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("@ast-grep/napi");
+async function loadAstGrep(): Promise<any> {
+  return await import("@ast-grep/napi");
 }
 
 export const nxAstSearch = tool({
@@ -34,7 +33,7 @@ export const nxAstSearch = tool({
     const abs = path.isAbsolute(args.file) ? args.file : path.join(context.worktree ?? context.directory, args.file);
     const lang = getLang(abs);
 
-    const ag = loadAstGrep();
+    const ag = await loadAstGrep();
     const source = await fs.readFile(abs, "utf8");
     const root = ag.parse(lang, source).root();
     const nodes = root.findAll(args.pattern);
@@ -60,7 +59,7 @@ export const nxAstReplace = tool({
     const abs = path.isAbsolute(args.file) ? args.file : path.join(context.worktree ?? context.directory, args.file);
     const lang = getLang(abs);
 
-    const ag = loadAstGrep();
+    const ag = await loadAstGrep();
     const original = await fs.readFile(abs, "utf8");
     const root = ag.parse(lang, original).root();
     const nodes: any[] = root.findAll(args.pattern);

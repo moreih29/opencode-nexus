@@ -3795,6 +3795,92 @@
       "branch": "feat/nx-setup-opencode",
       "plan": null,
       "tasks": []
+    },
+    {
+      "completed_at": "2026-04-12T14:37:28.617Z",
+      "branch": "fix/plan-start-defaults",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Plan start 기본값 테스트 작성",
+          "context": "nxPlanStart에서 attendees/issues가 빈 배열이거나 생략될 때의 동작을 검증하는 e2e 테스트가 없음. 기존 e2e-meet-continuity-core.mjs는 항상 명시적 배열을 전달하여 기본값 경로를 테스트하지 않음.",
+          "approach": "scripts/e2e-plan-start-defaults.mjs 신규 작성. 기존 e2e-meet-continuity-core.mjs의 setup 패턴을 따르되, 4가지 케이스 커버: (1) attendees: [], issues: [] (2) attendees/issues 생략 (3) 정상 케이스 확인",
+          "acceptance": "빈 배열과 생략 케이스 모두에서 nxPlanStart가 에러 없이 실행되고, plan 객체가 올바르게 생성됨을 assert",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:35:11.557Z"
+        },
+        {
+          "id": 2,
+          "title": "plan.ts attendees/issues Array.isArray 가드 적용",
+          "context": "src/tools/plan.ts:54-55에서 (args.attendees ?? []).map()이 OpenCode 플러그인 프레임워크에서 .map is not a function 에러 발생. z.array(...).default([])가 의도대로 작동하지 않아 빈 배열이 배열이 아닌 값으로 처리될 수 있음.",
+          "approach": "line 54: Array.isArray(args.attendees) ? args.attendees.map(...) : [] 패턴 적용. line 55: issues에도 동일 패턴 적용.",
+          "acceptance": "(1) Array.isArray 가드가 attendees와 issues 모두에 적용됨 (2) 정상 배열 입력 시 기존 동작 유지",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:35:16.737Z"
+        },
+        {
+          "id": 3,
+          "title": "README.md sibling 관계 수정",
+          "context": "README.md 9번 줄이 opencode-nexus를 claude-nexus의 downstream/포팅처럼 표현. UPSTREAM.md에 명시된 sibling 관계와 불일치.",
+          "approach": "9번 줄을 sibling 관계 표현으로 수정",
+          "acceptance": "README.md가 UPSTREAM.md와 일관된 sibling 관계를 표현",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-12T14:35:19.759Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-12T14:45:43.209Z",
+      "branch": "fix/plan-start-defaults",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "ast.ts require → dynamic import 수정",
+          "context": "e2e-code-intel.mjs가 ERR_AMBIGUOUS_MODULE_SYNTAX로 실패. src/tools/ast.ts:24의 require(\"@ast-grep/napi\")가 ESM top-level await와 충돌. Node.js v24에서 발생.",
+          "approach": "loadAstGrep() 함수를 async로 변경하고 require를 await import()로 교체. 호출부(line 37, 63)에 await 추가.",
+          "acceptance": "bun run build 성공, node scripts/e2e-code-intel.mjs 통과",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:42:11.621Z"
+        },
+        {
+          "id": 2,
+          "title": "e2e-meet-continuity-core.mjs → e2e-plan-continuity-core.mjs 리네임",
+          "context": "테스트 파일명과 assert 메시지가 레거시 \"meet\" 용어 사용. 소스 코드는 이미 \"plan\"으로 마이그레이션 완료.",
+          "approach": "파일 내용의 meet → plan 참조 갱신 후 새 파일명으로 생성, 기존 파일 삭제",
+          "acceptance": "e2e-plan-continuity-core.mjs로 리네임 완료, 테스트 통과, 기존 파일 삭제",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:42:14.517Z"
+        },
+        {
+          "id": 3,
+          "title": "package.json test:e2e + README meet→plan 갱신",
+          "context": "package.json test:e2e에 e2e-meet-continuity-core.mjs 참조 잔존 + e2e-plan-start-defaults.mjs 누락. README.md/README.en.md에 meet 레거시 용어 5곳씩.",
+          "approach": "Lead 직접 처리: package.json 참조 갱신, README 양 언어 meet→plan 용어 교체",
+          "acceptance": "package.json이 올바른 파일명 참조, README에 meet 잔여 없음",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-12T14:42:18.991Z"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-04-12T14:47:10.338Z",
+      "branch": "fix/plan-start-defaults",
+      "plan": null,
+      "tasks": []
     }
   ]
 }

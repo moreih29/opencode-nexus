@@ -51,14 +51,18 @@ export const nxPlanStart = tool({
     const plan: PlanFile = {
       id: await nextPlanId(paths.HISTORY_FILE),
       topic: args.topic,
-      attendees: (args.attendees ?? []).map((a) => ({ ...a, joined_at: now })),
-      issues: (args.issues ?? []).map((title, idx) => ({
-        id: idx + 1,
-        title,
-        status: "pending",
-        discussion: [],
-        task_refs: []
-      })),
+      attendees: Array.isArray(args.attendees)
+        ? args.attendees.map((a) => ({ ...a, joined_at: now }))
+        : [],
+      issues: Array.isArray(args.issues)
+        ? args.issues.map((title, idx) => ({
+            id: idx + 1,
+            title,
+            status: "pending",
+            discussion: [],
+            task_refs: []
+          }))
+        : [],
       research_summary: args.research_summary,
       created_at: now
     };

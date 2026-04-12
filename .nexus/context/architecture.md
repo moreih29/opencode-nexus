@@ -41,7 +41,7 @@ OpenCode 런타임
 
 - `core.ts` / `core-store.ts`: 호출 등록(`registerStart`/`registerEnd`), `.nexus/state/orchestration.opencode.json` 기반 상태 영속화.
 - `run-continuity-adapter.ts`: `task` 도구 호출 전 연속성 힌트 주입.
-- `meet-continuity-adapter.ts`: Meet 세션의 참여자별 연속성 관리.
+- `plan-continuity-adapter.ts`: Plan 세션의 참여자별 연속성 관리.
 - `team-policy.ts`: run 모드에서 team_name 필수 여부, Meet 참여 허용 여부 등 정책 판단.
 - `delegation.ts`: 서브에이전트 위임 페이로드 생성.
 
@@ -67,8 +67,8 @@ OpenCode 런타임
 - `state.ts`: `.nexus/` 디렉터리 초기화, 태스크 요약, 에이전트 트래커 리셋.
 - `audit-log.ts`: 세션별·서브에이전트별·글로벌 감사 로그 기록.
 - `agent-tracker.ts`: 현재 실행 중인 팀 상태 추적.
-- `meet-sidecar.ts`: Meet 세션의 OpenCode 사이드카 동기화.
-- `tag-parser.ts`: 프롬프트에서 `[meet]`, `[run]`, `[d]`, `[rule]` 태그 감지.
+- `plan-sidecar.ts`: Plan 세션의 OpenCode 사이드카 동기화.
+- `tag-parser.ts`: 프롬프트에서 `[plan]`, `[run]`, `[d]`, `[rule]` 태그 감지.
 - `schema.ts`, `json-store.ts`, `markdown.ts`, `history.ts`: 공통 타입, JSON 스토어, 마크다운, 히스토리 관리.
 
 ### skills

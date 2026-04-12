@@ -27,11 +27,11 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 
 | Skill | Trigger | Purpose |
 |---|---|---|
-| nx-plan | [plan] | Team discussion and decision recording |
-| nx-run | [run] | Execution pipeline |
-| nx-init | nx-init | Onboarding |
-| nx-sync | nx-sync | Core sync |
-| nx-setup | nx-setup | Setup wizard |
+| nx-plan | [plan] | Structured planning — subagent-based analysis, deliberate decisions, produce execution plan |
+| nx-run | [run] | Execution — user-directed agent composition |
+| nx-init | nx-init | Project onboarding — scan, mission, essentials, context generation |
+| nx-sync | nx-sync | Context knowledge synchronization |
+| nx-setup | nx-setup | Interactive Nexus configuration wizard |
 
 ### Tags
 
@@ -70,12 +70,4 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 - Claude slash skills map to `nx_*` tools plus tags and hook injection.
 - Claude team APIs map to lead-coordinated OpenCode delegation with `team_name` labels.
 - Exit/edit guardrails replace Claude nonstop behavior.
-
-### @moreih29/nexus-core upgrade protocol
-
-When `@moreih29/nexus-core` version in `package.json` changes:
-
-1. Read `node_modules/@moreih29/nexus-core/manifest.json`
-2. WebFetch `https://github.com/moreih29/nexus-core/blob/main/CONSUMING.md`
-3. Follow the Upgrade Protocol documented there
 <!-- NEXUS:END -->
