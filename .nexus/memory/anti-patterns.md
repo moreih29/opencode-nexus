@@ -1,0 +1,59 @@
+# Anti-patterns — opencode-nexus 영구 거절 목록
+
+> Phase 1 plan session #1 (`.nexus/history.json`에 archive)에서 도출된 거절 목록 6개. Phase 1 완료 이후에도 별도 결정 없이는 수행하지 않는다. 03-IMPLEMENTATION_GUIDE.md §2에서 추출.
+
+---
+
+## 1. bridge 98KB 재작성 금지
+
+`docs/bridge/nexus-core-bootstrap.md`(98KB, 1946줄)의 기존 내용을 요약, 재구성, 삭제, 또는 다른 형식으로 교체하는 행위는 금지된다. 추가만 허용한다. "더 읽기 쉽게 만들려는" 시도도 이 거절에 해당한다.
+
+**근거**: 기존 계획은 Phase 1/2 작업의 근거 문서로 기능하며, 재작성 시 의사결정 추적이 끊긴다.
+
+---
+
+## 2. ACP vocabulary를 nexus-core에 편입 시도 금지
+
+Agent Client Protocol(ACP) 관련 vocabulary, 태그, 또는 에이전트 정의를 nexus-core에 추가하려는 시도는 금지된다. ACP는 구독제 생태계 밖이며(`ecosystem-primer.md` §4.4), nexus-core는 구독제 호환 범위 내의 항목만 canonical하게 정의한다. 이 경계를 opencode-nexus에서 제안하거나 직접 변경해서는 안 된다.
+
+---
+
+## 3. tool.execute.before 훅의 서브에이전트 유출 금지
+
+`tool.execute.before` 훅이 서브에이전트 컨텍스트로 의도치 않게 전파되는 OpenCode 버그가 있다(GitHub issue #5894, 2026-04 시점 미해결). `src/plugin/hooks.ts`에서 이 훅을 등록할 때 호출 범위를 명확히 제한해야 한다. 훅 로직이 서브에이전트로 유출되거나 nexus-code의 OpenCode adapter와 충돌하는 구현은 금지된다. issue #5894가 수정될 때까지 이 훅에 의존하는 중요 로직은 추가하지 않는다.
+
+---
+
+## 4. permission.ask 훅 의존 구현 금지
+
+`permission.ask` 훅은 현재 OpenCode에서 작동하지 않음이 실험으로 확인되었다(GitHub issue #7006). 훅 등록 자체는 성공하지만 permission 요청 발생 시 핸들러가 호출되지 않는다. `src/plugin/hooks.ts`에 이 훅을 사용하는 코드를 추가하면 안 된다. 권한 처리가 필요한 경우 HTTP/SSE 경로(`opencode serve`의 `/events` SSE + `POST /permission/:id/reply`)를 사용하거나 issue #7006 해결 이후로 미룬다.
+
+---
+
+## 5. bridge §9.2 runtime 공유 배제 원칙 위반 금지
+
+opencode-nexus와 `@moreih29/nexus-core` 사이의 관계는 **빌드 타임 소비**(prompt 파일, vocabulary 파일 읽기)에 한정된다. 다음 패턴은 §9.2를 위반하므로 금지:
+
+- 런타임에 nexus-core를 동적으로 import (`require('@moreih29/nexus-core')`)
+- nexus-core 인스턴스를 opencode-nexus 런타임에 공유
+- 두 패키지가 런타임 상태를 공유하는 구현
+- nexus-core를 `dependency`로 승격 (devDependency 유지가 §8.3 canonical)
+
+**검증**: `scripts/e2e-loader-smoke.mjs`가 컴파일된 `dist/` 번들에서 `@moreih29/nexus-core` 문자열이 비주석 라인에 등장하지 않음을 매 release마다 확인한다.
+
+---
+
+## 6. opencode acp adapter를 opencode-nexus에서 작성 금지
+
+OpenCode의 `opencode acp` stdio JSON-RPC 2.0 경로를 소비하는 adapter는 **nexus-code의 소유**다. opencode-nexus가 이 adapter를 구현하거나 prototype을 작성하는 것은 layer 경계 침범이다.
+
+opencode-nexus는 OpenCode 플러그인 API를 통해 OpenCode **내부**에서 실행되며, 외부 supervisor 역할은 맡지 않는다. supervisor 패턴은 nexus-code(Supervision layer)의 책임이다.
+
+---
+
+## 항목 추가 시 규칙
+
+- 새 anti-pattern은 plan session에서 결정된 후 추가
+- 항목 번호는 추가 순서대로 (재정렬 금지 — 외부 문서가 번호로 참조 가능)
+- 각 항목에 근거(experiment, issue, 또는 plan decision)를 명시
+- 해소된 항목은 삭제하지 말고 "RESOLVED" 마커 + 해소 시점/방법을 추가
