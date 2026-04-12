@@ -1,8 +1,8 @@
 // Ported from: claude-nexus/generate-from-nexus-core.mjs @ commit 94997d1 — sync with upstream when Gap fixes merge.
 // Entry point: reads @moreih29/nexus-core assets and writes opencode-nexus
-// src/agents/prompts.generated.ts, src/skills/prompts.generated.ts.
+// src/agents/generated/{id}.ts + index.ts, src/skills/generated/{id}.ts + index.ts.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
@@ -17,11 +17,32 @@ import {
   verifyCatalogConsistency,
   transformAgent,
   transformSkill,
-  buildAgentPromptsFile,
-  buildSkillPromptsFile,
+  buildAgentIndividualFile,
+  buildAgentIndexFile,
+  buildSkillIndividualFile,
+  buildSkillIndexFile,
   loadPluginName,
   writeGenerated,
 } from './generate-from-nexus-core.lib.mjs';
+
+/**
+ * Remove all *.ts files from a directory if it exists.
+ * @param {string} dir
+ */
+function cleanGeneratedDir(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    // Directory doesn't exist yet — nothing to clean.
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.endsWith('.ts')) {
+      rmSync(join(dir, entry), { force: true });
+    }
+  }
+}
 
 async function main() {
   const manifest = loadManifest();
@@ -64,30 +85,43 @@ async function main() {
   const catalogPath = join(OPENCODE_NEXUS_ROOT, 'src/agents/catalog.ts');
   verifyCatalogConsistency(agentEntries, catalogPath);
 
-  const agentFileContent = buildAgentPromptsFile(
-    agentEntries,
-    manifest.nexus_core_version,
-    manifest.nexus_core_commit,
-    capsMap
-  );
+  const agentsGeneratedDir = join(OPENCODE_NEXUS_ROOT, 'src/agents/generated');
+  const skillsGeneratedDir = join(OPENCODE_NEXUS_ROOT, 'src/skills/generated');
+
+  cleanGeneratedDir(agentsGeneratedDir);
+  cleanGeneratedDir(skillsGeneratedDir);
+
+  // Write individual agent files
+  for (const agent of agentEntries) {
+    writeGenerated(
+      join(agentsGeneratedDir, `${agent.id}.ts`),
+      buildAgentIndividualFile(agent, manifest.nexus_core_version, manifest.nexus_core_commit)
+    );
+  }
+
+  // Write agent index
   writeGenerated(
-    join(OPENCODE_NEXUS_ROOT, 'src/agents/prompts.generated.ts'),
-    agentFileContent
+    join(agentsGeneratedDir, 'index.ts'),
+    buildAgentIndexFile(agentEntries, capsMap, manifest.nexus_core_version, manifest.nexus_core_commit)
   );
 
-  const skillFileContent = buildSkillPromptsFile(
-    skillEntries,
-    manifest.nexus_core_version,
-    manifest.nexus_core_commit
-  );
+  // Write individual skill files
+  for (const skill of skillEntries) {
+    writeGenerated(
+      join(skillsGeneratedDir, `${skill.id}.ts`),
+      buildSkillIndividualFile(skill, manifest.nexus_core_version, manifest.nexus_core_commit)
+    );
+  }
+
+  // Write skill index
   writeGenerated(
-    join(OPENCODE_NEXUS_ROOT, 'src/skills/prompts.generated.ts'),
-    skillFileContent
+    join(skillsGeneratedDir, 'index.ts'),
+    buildSkillIndexFile(skillEntries, manifest.nexus_core_version, manifest.nexus_core_commit)
   );
 
   console.log(
     `[generate-from-nexus-core] @moreih29/nexus-core@${manifest.nexus_core_version}: ` +
-    `${agentEntries.length} agents, ${skillEntries.length} skills written`
+    `${agentEntries.length} agents, ${skillEntries.length} skills written to generated/`
   );
 }
 

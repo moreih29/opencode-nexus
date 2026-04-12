@@ -309,6 +309,156 @@ export function buildSkillPromptsFile(skills, nexusCoreVersion, nexusCoreCommit)
 }
 
 /**
+ * Build the content for one agent's individual file (src/agents/generated/{id}.ts).
+ * @param {{ id: string, prompt: string, meta: object }} agent
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildAgentIndividualFile(agent, nexusCoreVersion, nexusCoreCommit) {
+  const { id, prompt, meta } = agent;
+  const lines = [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Regenerate: bun run generate:prompts`,
+    ``,
+    `export const PROMPT = \`${escapeTemplateLiteral(prompt)}\`;`,
+    ``,
+    `export const META = {`,
+    `  id: ${JSON.stringify(meta.id)},`,
+    `  name: ${JSON.stringify(meta.name)},`,
+    `  category: ${JSON.stringify(meta.category)},`,
+    `  description: ${JSON.stringify(meta.description)},`,
+    `  model: ${JSON.stringify(meta.model)},`,
+    `  disallowedTools: [${meta.disallowedTools.map(t => JSON.stringify(t)).join(', ')}],`,
+  ];
+  if (meta.task) lines.push(`  task: ${JSON.stringify(meta.task)},`);
+  if (meta.alias_ko) lines.push(`  alias_ko: ${JSON.stringify(meta.alias_ko)},`);
+  lines.push(`  resume_tier: ${JSON.stringify(meta.resume_tier)},`);
+  lines.push(`} as const;`);
+  lines.push(``);
+  return lines.join('\n');
+}
+
+/**
+ * Build the index file content for src/agents/generated/index.ts.
+ * @param {{ id: string, prompt: string, meta: object }[]} agents
+ * @param {Map<string, string[]>} capsMap
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildAgentIndexFile(agents, capsMap, nexusCoreVersion, nexusCoreCommit) {
+  const imports = agents
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `import { PROMPT as ${varId}_prompt, META as ${varId}_meta } from './${id}.js';`;
+    })
+    .join('\n');
+
+  const promptEntries = agents
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `  ${JSON.stringify(id)}: ${varId}_prompt,`;
+    })
+    .join('\n');
+
+  const metaEntries = agents
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `  ${JSON.stringify(id)}: ${varId}_meta,`;
+    })
+    .join('\n');
+
+  const noFileEditTools = capsMap.get('no_file_edit') ?? [];
+  const noFileEditLiteral = noFileEditTools.map(t => JSON.stringify(t)).join(', ');
+
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Aggregates all agent prompts and metadata.`,
+    ``,
+    imports,
+    ``,
+    `export const AGENT_PROMPTS: Record<string, string> = {`,
+    promptEntries,
+    `};`,
+    ``,
+    `export const AGENT_META: Record<string, {`,
+    `  id: string;`,
+    `  name: string;`,
+    `  category: string;`,
+    `  description: string;`,
+    `  model: string;`,
+    `  disallowedTools: readonly string[];`,
+    `  task?: string;`,
+    `  alias_ko?: string;`,
+    `  resume_tier: string;`,
+    `}> = {`,
+    metaEntries,
+    `};`,
+    ``,
+    `export const NO_FILE_EDIT_TOOLS: readonly string[] = [${noFileEditLiteral}] as const;`,
+    ``,
+  ].join('\n');
+}
+
+/**
+ * Build the content for one skill's individual file (src/skills/generated/{id}.ts).
+ * @param {{ id: string, prompt: string }} skill
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildSkillIndividualFile(skill, nexusCoreVersion, nexusCoreCommit) {
+  const { prompt } = skill;
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Regenerate: bun run generate:prompts`,
+    ``,
+    `export const PROMPT = \`${escapeTemplateLiteral(prompt)}\`;`,
+    ``,
+  ].join('\n');
+}
+
+/**
+ * Build the index file content for src/skills/generated/index.ts.
+ * @param {{ id: string, prompt: string }[]} skills
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildSkillIndexFile(skills, nexusCoreVersion, nexusCoreCommit) {
+  const imports = skills
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `import { PROMPT as ${varId} } from './${id}.js';`;
+    })
+    .join('\n');
+
+  const entries = skills
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `  ${JSON.stringify(id)}: ${varId},`;
+    })
+    .join('\n');
+
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Aggregates all skill prompts.`,
+    ``,
+    imports,
+    ``,
+    `export const SKILL_PROMPTS: Record<string, string> = {`,
+    entries,
+    `};`,
+    ``,
+  ].join('\n');
+}
+
+/**
  * Derive skill trigger_display.
  * @param {any} meta
  * @param {string} pluginName
