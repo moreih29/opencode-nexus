@@ -16,22 +16,22 @@ await ensureNexusStructure(paths);
 
 const ctx = { directory: root, worktree: root };
 const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Lifecycle task" }, ctx));
-assert.equal(typeof addResult.nexus_task_id, "number");
-assert.equal(addResult.status, "pending");
-const id = addResult.nexus_task_id;
+assert.equal(typeof addResult.task.id, "number");
+assert.equal(addResult.task.status, "pending");
+const id = addResult.task.id;
 
 let updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "completed" }, ctx));
-assert.equal(updateResult.nexus_task_id, id);
-assert.equal(updateResult.status, "completed");
+assert.equal(updateResult.task.id, id);
+assert.equal(updateResult.task.status, "completed");
 
 updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "pending" }, ctx));
-assert.equal(updateResult.status, "pending");
+assert.equal(updateResult.task.status, "pending");
 
 updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "blocked" }, ctx));
-assert.equal(updateResult.status, "blocked");
+assert.equal(updateResult.task.status, "blocked");
 
 updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "completed" }, ctx));
-assert.equal(updateResult.status, "completed");
+assert.equal(updateResult.task.status, "completed");
 
 await assert.rejects(
   () => nxTaskUpdate.execute({ id: 999, status: "in_progress" }, ctx),

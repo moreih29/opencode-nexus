@@ -83,11 +83,14 @@ export const nxTaskAdd = tool({
 
     return JSON.stringify(
       {
-        nexus_task_id: id,
-        title: args.title,
-        status: task.status,
-        owner: task.owner ?? null,
-        plan_issue: task.plan_issue ?? null,
+        task: {
+          id,
+          title: args.title,
+          status: task.status,
+          deps: task.deps ?? [],
+          plan_issue: task.plan_issue ?? null,
+          created_at: task.created_at
+        },
         message: `Added task ${id}: ${args.title}${linkageNote}`
       },
       null,
@@ -117,7 +120,14 @@ export const nxTaskList = tool({
       completed: tasksFile.tasks.filter((task) => task.status === "completed").length,
       pending: tasksFile.tasks.filter((task) => task.status === "pending").length,
       in_progress: tasksFile.tasks.filter((task) => task.status === "in_progress").length,
-      blocked: tasksFile.tasks.filter((task) => task.status === "blocked").length
+      blocked: tasksFile.tasks.filter((task) => task.status === "blocked").length,
+      ready: tasksFile.tasks
+        .filter(
+          (t) =>
+            t.status === "pending" &&
+            (t.deps ?? []).every((depId) => tasksFile.tasks.find((d) => d.id === depId)?.status === "completed")
+        )
+        .map((t) => t.id)
     };
 
     return JSON.stringify({ summary: totals, tasks }, null, 2);
@@ -156,8 +166,7 @@ export const nxTaskUpdate = tool({
 
     return JSON.stringify(
       {
-        nexus_task_id: args.id,
-        status: args.status,
+        task: { id: args.id, status: args.status },
         note: args.note ?? null,
         message: args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`
       },
@@ -178,18 +187,8 @@ export const nxTaskClose = tool({
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
     const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
 
-    if (tasks) {
-      const evaluation = await evaluatePipelineSnapshot({
-        hasTasksFile: true,
-        hasTaskCycle: true,
-        tasks: tasks.tasks.map((task) => ({ id: task.id, status: task.status })),
-        qaTriggerReasons: []
-      });
-
-      if (!evaluation.canCloseCycle && evaluation.taskCycleState !== "empty") {
-        throw new Error("Cannot close cycle before all tasks are completed.");
-      }
-    }
+    // Note: conformance contract (nexus-core v0.2.0) specifies task_close always succeeds.
+    // Pipeline evaluation is used for advisory guidance only, not as a gate.
 
     const taskCount = tasks?.tasks.length ?? 0;
     const decisionCount = Array.isArray((plan as { issues?: unknown[] } | null)?.issues)
@@ -206,15 +205,22 @@ export const nxTaskClose = tool({
         .filter(Boolean)
     };
 
-    if (args.archive && (plan || tasks)) {
+    const cycleTimestamp = new Date().toISOString();
+    const branch = await readCurrentBranch(context.worktree ?? context.directory);
+    const shouldArchive = args.archive ?? true;
+
+    if (shouldArchive) {
       await appendHistory(paths.HISTORY_FILE, {
-        completed_at: new Date().toISOString(),
-        branch: await readCurrentBranch(context.worktree ?? context.directory),
+        completed_at: cycleTimestamp,
+        branch,
         plan: plan ?? undefined,
-        tasks: tasks ?? undefined,
+        tasks: tasks?.tasks ?? [],
         memoryHint
       });
     }
+
+    const history = await readJsonFile<{ cycles: unknown[] }>(paths.HISTORY_FILE, { cycles: [] });
+    const totalCycles = history.cycles.length;
 
     await safeUnlink(paths.PLAN_FILE);
     await safeUnlink(paths.TASKS_FILE);
@@ -226,6 +232,14 @@ export const nxTaskClose = tool({
     return JSON.stringify(
       {
         closed: true,
+        cycle: cycleTimestamp,
+        branch,
+        archived: {
+          plan: plan !== null,
+          decisions: decisionCount,
+          tasks: taskCount
+        },
+        total_cycles: totalCycles,
         memoryHint,
         nextStep: "Run nx_sync to promote this archived cycle into core knowledge."
       },
