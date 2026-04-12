@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { applyRegisterEnd, applyRegisterStart, createEmptyOrchestrationCoreState } from "../dist/orchestration/core.js";
 import { writeOrchestrationCoreState } from "../dist/orchestration/core-store.js";
-import { readPlanParticipantContinuityFromCore } from "../dist/orchestration/meet-continuity-adapter.js";
+import { readPlanParticipantContinuityFromCore } from "../dist/orchestration/plan-continuity-adapter.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-orch-filename-migrate-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });

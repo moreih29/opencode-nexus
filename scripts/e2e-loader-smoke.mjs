@@ -14,9 +14,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const distRoot = join(__dirname, "..", "dist");
 const distIndex = join(distRoot, "index.js");
 const distAgentsBarrel = join(distRoot, "agents", "prompts.js");
-const distAgentsGenerated = join(distRoot, "agents", "prompts.generated.js");
+const distAgentsGenerated = join(distRoot, "agents", "generated", "index.js");
 const distSkillsBarrel = join(distRoot, "skills", "prompts.js");
-const distSkillsGenerated = join(distRoot, "skills", "prompts.generated.js");
+const distSkillsGenerated = join(distRoot, "skills", "generated", "index.js");
 
 // (1) dist/index.js imports successfully
 const plugin = await import(distIndex);
