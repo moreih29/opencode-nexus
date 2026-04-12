@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
   "description": "Nexus orchestration plugin for OpenCode",
@@ -35,10 +35,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
+    "generate:prompts": "node scripts/generate-from-nexus-core.mjs",
+    "build": "bun run generate:prompts && tsc -p tsconfig.json",
+    "check": "bun run generate:prompts && tsc -p tsconfig.json --noEmit",
     "generate:template": "bun run build && bun scripts/generate-template.mjs",
-    "test:e2e": "bun run build && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-pipeline-evaluator.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-orchestration-core.mjs && bun scripts/e2e-orchestration-core-persistence.mjs && bun scripts/e2e-orchestration-filename-migration.mjs && bun scripts/e2e-run-continuity-core.mjs && bun scripts/e2e-run-continuity-persistence.mjs && bun scripts/e2e-meet-continuity-core.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-prompt-parity.mjs",
+    "test:e2e": "bun run build && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-pipeline-evaluator.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-orchestration-core.mjs && bun scripts/e2e-orchestration-core-persistence.mjs && bun scripts/e2e-orchestration-filename-migration.mjs && bun scripts/e2e-run-continuity-core.mjs && bun scripts/e2e-run-continuity-persistence.mjs && bun scripts/e2e-meet-continuity-core.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-prompts-generated.mjs && bun scripts/e2e-capability-coverage.mjs && bun scripts/e2e-loader-smoke.mjs",
     "prepack": "bun run generate:template"
   },
   "dependencies": {
@@ -46,8 +47,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@moreih29/nexus-core": "^0.1.2",
     "@opencode-ai/plugin": "latest",
     "@types/node": "^22.10.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "yaml": "^2.7.0"
   }
 }

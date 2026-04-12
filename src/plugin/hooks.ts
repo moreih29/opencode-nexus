@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
+import { NO_FILE_EDIT_TOOLS } from "../agents/prompts.js";
 import { registerEnd, registerStart } from "../orchestration/core.js";
 import {
   buildRunContinuityAdapterHints,
@@ -400,7 +401,9 @@ export function createHooks(ctx: PluginContext) {
 }
 
 function isEditLikeTool(toolName: string): boolean {
-  return toolName === "edit" || toolName === "write" || toolName === "patch" || toolName === "multiedit";
+  // Sourced from nexus-core capability `no_file_edit` harness_mapping.opencode
+  // via prompts.generated.ts — keeps opencode-nexus in sync with nexus-core canonical.
+  return NO_FILE_EDIT_TOOLS.includes(toolName);
 }
 
 function getTargetPath(args: Record<string, unknown>, projectRoot: string): string | null {

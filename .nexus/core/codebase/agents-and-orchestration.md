@@ -35,6 +35,8 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 에이전트 프롬프트 구조
 
+에이전트 프롬프트 본체는 `@moreih29/nexus-core`를 canonical source로 하며, 빌드 타임 generator(`scripts/generate-from-nexus-core.mjs`)가 `src/agents/prompts.generated.ts`를 생성한다. `src/agents/prompts.ts`는 이를 re-export하는 thin barrel이다. `src/agents/catalog.ts`(에이전트 메타) 및 `src/skills/catalog.ts`(스킬 메타)는 as-is canonical로 유지된다.
+
 공통 구조: `<role>` → `<constraints>` → `<guidelines>`
 
 - HOW 출력 형식: 현재 상태 / 문제 / 권고안 / 트레이드오프 / 리스크

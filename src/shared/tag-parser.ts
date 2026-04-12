@@ -1,3 +1,9 @@
+// Single source of truth for tag ids handled by opencode-nexus.
+// generate-from-nexus-core.mjs reads this constant at build time via regex and
+// cross-checks it with nexus-core/vocabulary/tags.yml to detect drift (verifyTagDrift).
+// See plan session #16 Issue #3 for the Q5 resolution (static constant + build-time drift check).
+export const HANDLED_TAG_IDS = ['plan', 'run', 'sync', 'd', 'm', 'm-gc', 'rule'] as const;
+
 const ERROR_CONTEXT = /(error|bug|exception|stack trace|traceback|fix\s+.*(plan|run|rule|\[d\])|에러|버그|오류|이슈)/i;
 const QUESTION_CONTEXT = /(what\s+is|what\s+does|explain|define|뭐야|뭔가요|설명해)\s*(plan|run|rule|\[d\])?/i;
 const QUOTE_CONTEXT = /[`"'](?:[^`"']*)(plan|run|rule|\[d\])(?:[^`"']*)[`"']/i;

@@ -94,6 +94,33 @@ OpenCode 런타임
 | AST | `ast.ts` | nx_ast_search, nx_ast_replace |
 | 설정 | `setup.ts` | nx_setup |
 
+## nexus-core Consumption (Phase 1 adoption — 2026-04-11 완료)
+
+opencode-nexus는 Nexus 생태계의 Authoring layer(`@moreih29/nexus-core`)를 **빌드 타임 read-only consumer**로 소비한다. Phase 1 adoption은 `phase1-nexus-core-adoption` feature branch에서 4-commit bisectable sequence(`a9cb773` → `4df4451` → `ff813e6` → `ee52ed5`)로 완료되었다.
+
+### 구조
+
+- **Dependency**: `@moreih29/nexus-core ^0.1.2` (devDependency 전용 — 최종 사용자 환경에 미설치)
+- **Generator**: `scripts/generate-from-nexus-core.{mjs,lib.mjs}` (claude-nexus 포팅, opencode 차이점 수정). 빌드 타임에 `node_modules/@moreih29/nexus-core`를 읽어 `src/agents/prompts.generated.ts`와 `src/skills/prompts.generated.ts`를 생성
+- **Barrel re-export**: `src/agents/prompts.ts`와 `src/skills/prompts.ts`는 thin re-export barrel. 기존 import site 회귀 없이 generated에 연결
+- **Catalog**: `src/agents/catalog.ts`와 `src/skills/catalog.ts`는 as-is 유지 (§8.6 canonical). `NEXUS_AGENT_CATALOG.disallowedTools`는 `verifyCatalogConsistency`로 `AGENT_META.disallowedTools`와 교차 검증(postdoc은 Gap 1 workaround로 exempt, 참조: moreih29/nexus-core#3)
+
+### Capability resolution
+
+`scripts/generate-from-nexus-core.lib.mjs`의 `deriveDisallowedTools`가 `vocabulary/capabilities.yml`의 각 capability(`no_file_edit`, `no_task_create`, `no_task_update`)를 `harness_mapping.opencode` 배열(예: `no_file_edit → [edit, write, patch, multiedit]`)로 해석하여 `AGENT_META.disallowedTools`에 literal로 inline. 하드코딩된 `isEditLikeTool`(hooks.ts:402-404)은 generated 상수 `NO_FILE_EDIT_TOOLS`를 참조하도록 수정되어 single source of truth 유지.
+
+### Tag id drift 보호
+
+`src/shared/tag-parser.ts`의 `HANDLED_TAG_IDS = ['plan', 'run', 'sync', 'd', 'm', 'm-gc', 'rule'] as const` 정적 상수는 빌드 타임에 `verifyTagDrift`가 `nexus-core/vocabulary/tags.yml`과 교차 검증. drift 시 hard-fail. claude-nexus와 동일 패턴 (04-OPEN_QUESTIONS Q5 해소 참조).
+
+### Runtime 공유 배제 (§9.2)
+
+`dist/index.js`는 `@moreih29/nexus-core`를 런타임에 참조하지 않는다. `scripts/e2e-loader-smoke.mjs`가 컴파일된 번들에서 `@moreih29/nexus-core` 문자열이 주석 외 위치에 등장하지 않음을 검증하여 devDependency contract(§8.3)을 보증한다.
+
+### Intentional divergence
+
+4-layer `.nexus/core/{identity,codebase,memory,reference}` 구조는 UPSTREAM.md §9.4 intentional divergence로 **유지**된다. claude-nexus의 flat `.nexus/{memory,context,rules}` 구조와 의도적으로 분리되어 있으며, role-based access matrix 지원을 위해 계층 분리가 필요하기 때문. Phase 1/2 scope에서 flattening하지 않는다.
+
 ## 3. 플러그인 초기화 흐름
 
 ```
