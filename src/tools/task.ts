@@ -107,11 +107,12 @@ export const nxTaskList = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.TASKS_FILE))) {
-      return "No active tasks.";
+      return JSON.stringify({ exists: false });
     }
 
     const tasksFile = TasksFileSchema.parse(await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] }));
-    const tasks = args.include_completed
+    const includeCompleted = args.include_completed ?? true;
+    const tasks = includeCompleted
       ? tasksFile.tasks
       : tasksFile.tasks.filter((task) => task.status !== "completed");
 
@@ -130,7 +131,7 @@ export const nxTaskList = tool({
         .map((t) => t.id)
     };
 
-    return JSON.stringify({ summary: totals, tasks }, null, 2);
+    return JSON.stringify({ goal: tasksFile.goal ?? "", summary: totals, tasks }, null, 2);
   }
 });
 
@@ -143,12 +144,15 @@ export const nxTaskUpdate = tool({
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
+    if (!(await fileExists(paths.TASKS_FILE))) {
+      throw new Error("tasks.json not found");
+    }
     const tasksFile = TasksFileSchema.parse(await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] }));
     const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
     const task = tasksFile.tasks.find((item) => item.id === args.id);
 
     if (!task) {
-      throw new Error(`Task not found: ${args.id}`);
+      throw new Error(`Task id ${args.id} not found`);
     }
 
     const previousStatus = task.status;
@@ -166,7 +170,7 @@ export const nxTaskUpdate = tool({
 
     return JSON.stringify(
       {
-        task: { id: args.id, status: args.status },
+        task: { id: args.id, title: task.title, status: args.status },
         note: args.note ?? null,
         message: args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`
       },
