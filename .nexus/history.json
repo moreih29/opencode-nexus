@@ -3795,6 +3795,46 @@
       "branch": "feat/nx-setup-opencode",
       "plan": null,
       "tasks": []
+    },
+    {
+      "completed_at": "2026-04-12T14:37:28.617Z",
+      "branch": "fix/plan-start-defaults",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Plan start 기본값 테스트 작성",
+          "context": "nxPlanStart에서 attendees/issues가 빈 배열이거나 생략될 때의 동작을 검증하는 e2e 테스트가 없음. 기존 e2e-meet-continuity-core.mjs는 항상 명시적 배열을 전달하여 기본값 경로를 테스트하지 않음.",
+          "approach": "scripts/e2e-plan-start-defaults.mjs 신규 작성. 기존 e2e-meet-continuity-core.mjs의 setup 패턴을 따르되, 4가지 케이스 커버: (1) attendees: [], issues: [] (2) attendees/issues 생략 (3) 정상 케이스 확인",
+          "acceptance": "빈 배열과 생략 케이스 모두에서 nxPlanStart가 에러 없이 실행되고, plan 객체가 올바르게 생성됨을 assert",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:35:11.557Z"
+        },
+        {
+          "id": 2,
+          "title": "plan.ts attendees/issues Array.isArray 가드 적용",
+          "context": "src/tools/plan.ts:54-55에서 (args.attendees ?? []).map()이 OpenCode 플러그인 프레임워크에서 .map is not a function 에러 발생. z.array(...).default([])가 의도대로 작동하지 않아 빈 배열이 배열이 아닌 값으로 처리될 수 있음.",
+          "approach": "line 54: Array.isArray(args.attendees) ? args.attendees.map(...) : [] 패턴 적용. line 55: issues에도 동일 패턴 적용.",
+          "acceptance": "(1) Array.isArray 가드가 attendees와 issues 모두에 적용됨 (2) 정상 배열 입력 시 기존 동작 유지",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-12T14:35:16.737Z"
+        },
+        {
+          "id": 3,
+          "title": "README.md sibling 관계 수정",
+          "context": "README.md 9번 줄이 opencode-nexus를 claude-nexus의 downstream/포팅처럼 표현. UPSTREAM.md에 명시된 sibling 관계와 불일치.",
+          "approach": "9번 줄을 sibling 관계 표현으로 수정",
+          "acceptance": "README.md가 UPSTREAM.md와 일관된 sibling 관계를 표현",
+          "status": "completed",
+          "deps": [],
+          "owner": "lead",
+          "created_at": "2026-04-12T14:35:19.759Z"
+        }
+      ]
     }
   ]
 }

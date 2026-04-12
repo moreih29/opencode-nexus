@@ -6,7 +6,7 @@
 
 OpenCode를 위한 Nexus 오케스트레이션 플러그인.
 
-`opencode-nexus`는 `claude-nexus`의 핵심 워크플로를 OpenCode에 맞게 옮긴 프로젝트입니다. 복잡한 작업을 즉흥 프롬프트로 굴리는 대신, 구조화된 미팅, 태스크 기반 실행, 지속되는 프로젝트 지식 흐름을 OpenCode에서 그대로 사용할 수 있게 합니다.
+`opencode-nexus`와 `claude-nexus`는 동일한 `@moreih29/nexus-core`를 기반으로 하는 자매(sibling) 프로젝트입니다. 복잡한 작업을 즉흥 프롬프트로 굴리는 대신, 구조화된 플래닝, 태스크 기반 실행, 지속되는 프로젝트 지식 흐름을 OpenCode에서 사용할 수 있게 합니다.
 
 ## Why
 
