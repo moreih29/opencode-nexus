@@ -1,14 +1,22 @@
-# Subagent Audit Fields
+# Audit Log Schema Reference
 
-This document summarizes the fields currently observable when a subagent is invoked and recorded by the experimental audit logs under `.nexus/state/audit/`.
+Source: `docs/subagent-audit-fields.md`
 
-## Log locations
+This document describes the experimental audit log structure under `.nexus/state/audit/` and the full field schema for subagent invocation records.
 
-- Global stream: `.nexus/state/audit/all.jsonl`
-- Per-session stream: `.nexus/state/audit/sessions/<session-id>/session.jsonl`
-- Per-subagent stream: `.nexus/state/audit/sessions/<parent-session-id>/subagents/<invocation-id>.jsonl`
+---
 
-## Observable fields
+## Log Directory Structure
+
+| Path | Contents |
+|---|---|
+| `.nexus/state/audit/all.jsonl` | Global stream — all events across all sessions |
+| `.nexus/state/audit/sessions/<session-id>/session.jsonl` | Per-session stream |
+| `.nexus/state/audit/sessions/<parent-session-id>/subagents/<invocation-id>.jsonl` | Per-subagent stream |
+
+---
+
+## Field Schema
 
 | Category | Field | Meaning | Example |
 |---|---|---|---|
@@ -50,16 +58,17 @@ This document summarizes the fields currently observable when a subagent is invo
 | Message part | `payload.properties.part.text` | Text content | prompt or streamed response text |
 | Message part | `payload.properties.part.tool` | Tool used by the subagent | `bash`, `task` |
 | Message part | `payload.properties.part.callID` | Tool call id | `call_...` |
-| Message delta | `payload.properties.delta` | Streamed text fragment | `현재` |
+| Message delta | `payload.properties.delta` | Streamed text fragment | streamed text |
 | Tool metadata | `metadata.output` | Full tool output if present | `git status` output |
 | Tool metadata | `metadata.exit` | Exit code for bash-like tools | `0` |
 | Error | `payload.properties.error.name` | Error type | `APIError` |
 | Error | `payload.properties.error.data.message` | Error message | unsupported model, etc. |
 | Error | `payload.properties.error.data.statusCode` | HTTP status code | `400` |
 
+---
+
 ## Notes
 
-- `team_name` is a coordination label, not the persistence key for subagent conversation history.
-- Actual continuity comes from the child `session_id` and any returned `task_id`/resume handles.
+- `team_name` is a coordination label, not the persistence key for subagent conversation history. Actual continuity comes from the child `session_id` and any returned `task_id`/resume handles.
 - The audit logs can show parent-child session linkage, model identity, prompts, tool calls, streamed output, and failures.
-- The logs do not expose chain-of-thought; reasoning content appears only as encrypted or empty placeholders in current payloads.
+- Chain-of-thought is not exposed. Reasoning content appears only as encrypted or empty placeholders in current payloads.

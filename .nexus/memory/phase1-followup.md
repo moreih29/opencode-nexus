@@ -123,3 +123,27 @@ nexus-core upgrade 시 항상 다음 5개 파일 확인:
 3. **하드코딩 제거**: 4-commit 매트릭스 + HANDLED_TAG_IDS 정적 상수 + isEditLikeTool 교체
 4. **nexus-core 이슈**: 4 Gap 통합 이슈, commit #1 직후 제출 → moreih29/nexus-core#3
 5. **OIDC Trusted Publishing**: Must 5 + Should 3 적용, 별도 PR로 Phase 1 시작 전 머지 → 첫 v0.2.0 release에서 검증 완료
+
+---
+
+## Deferred Items (from docs/)
+
+### Phase 1 커버리지 현황 요약 (docs/coverage-matrix.md)
+
+Phase 1 항목(state file pattern, task pipeline guardrails, 4-layer knowledge)은 모두 Complete. Phase 2 항목 중 How/Do/Check 카탈로그, nexus primary orchestration lead, structured delegation은 Complete; MATRIX briefing, init/setup/sync workflows, CLAUDE.md migration handling은 Partial; Claude-native slash skill runtime은 Missing. Phase 3+ 항목은 대부분 Partial 또는 Missing — team_name semantics는 coordination label로만 지원되고, Claude-native team messaging(TeamCreate/SendMessage)은 대체 없이 Missing. Phase 4 LSP/AST 도구는 등록됐으나 heuristic/lightweight 수준으로 Partial.
+
+### D8: `[m]` / `[m:gc]` / `[sync]` 태그 (부분 해결)
+
+`[m]`, `[m:gc]`, `[sync]` 태그가 `HANDLED_TAG_IDS`에 등록되었고 대응 도구(`nx_init`, `nx_sync`)도 구현됨. 단, claude-nexus와 완전히 동등한 동작 여부는 미확인. 원래 기록: `src/shared/tag-parser.ts` / `src/shared/tags.ts`에 트리거 미정의, 대응 워크플로 미구현.
+
+### D9: `resume_tier` 스킴 미구현 (from docs/deferred-from-claude-nexus.md)
+
+- **현황**: opencode-nexus 런타임이 `resume_tier` 값을 읽고 활용하는 로직 없음. orchestration core는 invocation 단위 등록만 처리. nexus-core `meta.yml`에 필드 정의됐어도 런타임에서 무시됨.
+- **미구현 이유**: orchestration core 확장이 필요한 runtime decision logic — Phase 1 prompt-only scope 밖.
+- **재검토 조건**: 복잡한 멀티턴 서브에이전트 작업에서 재현성 요구 발생 시, 또는 Phase 2 이후 양 harness 동등 feature 정렬 시점.
+
+### D10: `nx_history_search` 도구 부재 (from docs/deferred-from-claude-nexus.md)
+
+- **현황**: `src/tools/`에 `nx_history_search` 미존재. 현재 구현 도구는 `nx_plan_*`, `nx_task_*` 계열. topic / decisions / research_summary 기준 과거 사이클 검색 불가.
+- **미구현 이유**: MCP tool 구현 + history 저장소 구조 + 검색 인덱스 전략 설계가 모두 필요한 런타임 작업 — Phase 1 scope 밖.
+- **재검토 조건**: opencode-nexus 사용자가 history 검색 유스케이스(이전 plan 세션 결정 조회 등)를 명시적으로 요청할 때.

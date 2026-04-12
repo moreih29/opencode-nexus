@@ -3771,6 +3771,12 @@
       "branch": "chore/nexus-core-0.2.0-upgrade",
       "plan": null,
       "tasks": []
+    },
+    {
+      "completed_at": "2026-04-12T09:28:19.816Z",
+      "branch": "chore/nexus-core-0.2.0-upgrade",
+      "plan": null,
+      "tasks": []
     }
   ]
 }

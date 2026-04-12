@@ -329,6 +329,8 @@ export function deriveSkillTriggerDisplay(meta, pluginName) {
 /**
  * Transform one skill's meta + body.
  * Returns a structured object for TypeScript literal emission (commit #2).
+ * If meta.harness_docs_refs is a non-empty array, appends each harness doc
+ * from harness-docs/{ref}.md to the prompt body. Missing files warn but do not fail.
  * @param {any} meta
  * @param {string} body - already verified
  * @param {string} pluginName
@@ -352,7 +354,24 @@ export function transformSkill(meta, body, pluginName, label = '') {
     ...(meta.manual_only === true ? { disable_model_invocation: true } : {}),
   };
 
-  return { prompt: body, meta: skillMeta };
+  let prompt = body;
+  if (Array.isArray(meta.harness_docs_refs) && meta.harness_docs_refs.length > 0) {
+    for (const ref of meta.harness_docs_refs) {
+      const docPath = join(OPENCODE_NEXUS_ROOT, 'harness-docs', `${ref}.md`);
+      let content;
+      try {
+        content = readFileSync(docPath, 'utf8');
+      } catch {
+        console.warn(
+          `[generate-from-nexus-core] harness_docs_refs: "${ref}.md" not found at ${docPath} — skipping`
+        );
+        continue;
+      }
+      prompt += `\n\n---\n\n## Harness-Specific: ${ref}\n\n${content}`;
+    }
+  }
+
+  return { prompt, meta: skillMeta };
 }
 
 /**
