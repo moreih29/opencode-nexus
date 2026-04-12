@@ -1,12 +1,12 @@
 # Subagent Audit Fields
 
-This document summarizes the fields currently observable when a subagent is invoked and recorded by the experimental audit logs under `.nexus/logs/opencode-audit/`.
+This document summarizes the fields currently observable when a subagent is invoked and recorded by the experimental audit logs under `.nexus/state/audit/`.
 
 ## Log locations
 
-- Global stream: `.nexus/logs/opencode-audit/all.jsonl`
-- Per-session stream: `.nexus/logs/opencode-audit/sessions/<session-id>/session.jsonl`
-- Per-subagent stream: `.nexus/logs/opencode-audit/sessions/<parent-session-id>/subagents/<invocation-id>.jsonl`
+- Global stream: `.nexus/state/audit/all.jsonl`
+- Per-session stream: `.nexus/state/audit/sessions/<session-id>/session.jsonl`
+- Per-subagent stream: `.nexus/state/audit/sessions/<parent-session-id>/subagents/<invocation-id>.jsonl`
 
 ## Observable fields
 

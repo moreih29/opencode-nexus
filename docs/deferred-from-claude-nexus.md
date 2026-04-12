@@ -18,9 +18,13 @@ claude-nexus v0.24.1+는 메모리/컨텍스트 동기화 워크플로를 태그
 
 이 태그들은 Lead가 사이클 종료 시점에 호출하며, 프로젝트 지식을 세션을 넘어 지속시키는 핵심 메커니즘이다.
 
-### opencode-nexus에 없는 것
+### 현재 상태 (부분 해결)
 
-`[m]`, `[m:gc]`, `[sync]` 태그 트리거가 `src/shared/tag-parser.ts` 또는 `src/shared/tags.ts`에 정의되어 있지 않다. 이에 대응하는 워크플로도 구현되어 있지 않다.
+`[m]`, `[m:gc]`, `[sync]` 태그가 `HANDLED_TAG_IDS`에 등록되었고, 대응하는 도구(`nx_init`, `nx_sync`)도 구현되어 있다. 단, 태그 트리거가 claude-nexus와 완전히 동등한 동작을 보이는지는 아직 확인되지 않았다.
+
+### opencode-nexus에 없던 것 (원래 기록)
+
+`[m]`, `[m:gc]`, `[sync]` 태그 트리거가 `src/shared/tag-parser.ts` 또는 `src/shared/tags.ts`에 정의되어 있지 않았다. 이에 대응하는 워크플로도 구현되어 있지 않았다.
 
 ### Phase 1에서 제외한 이유
 

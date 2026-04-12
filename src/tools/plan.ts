@@ -1,9 +1,9 @@
 import { tool } from "@opencode-ai/plugin";
 import { appendHistory, nextPlanId } from "../shared/history.js";
-import { readPlanParticipantContinuityFromCore, type PlanParticipantContinuity } from "../orchestration/meet-continuity-adapter.js";
+import { readPlanParticipantContinuityFromCore, type PlanParticipantContinuity } from "../orchestration/plan-continuity-adapter.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
-import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../shared/meet-sidecar.js";
+import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../shared/plan-sidecar.js";
 import { fileExists } from "../shared/state.js";
 import {
   PlanFileSchema,

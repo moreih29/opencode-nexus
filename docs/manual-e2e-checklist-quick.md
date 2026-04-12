@@ -3,17 +3,17 @@
 ## 확인할 파일
 
 - `.nexus/state/orchestration.opencode.json`
-- `.nexus/state/meet.opencode.json`
+- `.nexus/state/plan.opencode.json`
 - `.nexus/state/tasks.json`
-- `.nexus/logs/opencode-audit/all.jsonl`
+- `.nexus/state/audit/all.jsonl`
 - `.nexus/history.json`
 
-## 1. Meet continuity
+## 1. Plan continuity
 
 ### 프롬프트
 
-1. `[meet] 아키텍트 참석해. 이 구조의 장단점 짧게 말해줘.`
-2. `[meet] 아까 아키텍트에게 이어서 물어봐. 이 접근의 가장 큰 리스크는 뭐야?`
+1. `[plan] 아키텍트 참석해. 이 구조의 장단점 짧게 말해줘.`
+2. `[plan] 아까 아키텍트에게 이어서 물어봐. 이 접근의 가장 큰 리스크는 뭐야?`
 
 ### PASS 기준
 
@@ -49,14 +49,14 @@
 
 ### PASS 기준
 
-- Nexus task 출력은 `nexus_task_id`
-- meet follow-up 출력은 `opencode_task_tool_resume_handle`
+- Nexus task 출력은 `task.id`
+- plan follow-up 출력은 `opencode_task_tool_resume_handle`
 - `task-...`와 `ses_...`를 서로 혼용하지 않음
 
 ## 문제 생기면 보는 순서
 
 1. `all.jsonl`
 2. `orchestration.opencode.json`
-3. `meet.opencode.json`
+3. `plan.opencode.json`
 4. `tasks.json`
 5. `history.json`

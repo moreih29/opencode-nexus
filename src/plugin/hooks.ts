@@ -14,7 +14,7 @@ import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
 import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, toAuditRecord } from "../shared/audit-log.js";
-import { loadCanonicalPlan, syncPlanSidecar } from "../shared/meet-sidecar.js";
+import { loadCanonicalPlan, syncPlanSidecar } from "../shared/plan-sidecar.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";

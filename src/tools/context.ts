@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { readPlanParticipantContinuityFromCore } from "../orchestration/meet-continuity-adapter.js";
+import { readPlanParticipantContinuityFromCore } from "../orchestration/plan-continuity-adapter.js";
 import { summarizeCoordinationGroups } from "../shared/agent-tracker.js";
-import { readPlanSidecar } from "../shared/meet-sidecar.js";
+import { readPlanSidecar } from "../shared/plan-sidecar.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile } from "../shared/json-store.js";
 import { fileExists, readTasksSummary } from "../shared/state.js";
