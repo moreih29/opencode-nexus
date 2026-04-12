@@ -111,3 +111,31 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 ### QA 자동 트리거
 
 `git diff --name-only`로 변경 파일 조회. 트리거 조건: 변경 파일 3개 이상, 테스트 파일 변경, API/DB 영역 변경, 과거 실패 신호.
+
+---
+
+### 운영 규칙 (from docs/operations.md)
+
+#### 절차적 기대 (Procedural Expectations)
+
+- `[plan]`은 토론 전용 모드. 리서치를 먼저 하고 meeting을 시작하거나 재개할 것.
+- `[run]`은 태스크 기반 모드. `tasks.json`을 실행의 단일 소스 오브 트루스로 취급.
+- Branch Guard: run 모드에서 `main` / `master`에 직접 실질적 작업을 하지 않는다.
+
+#### 인스트럭션 파일 (Instruction Files)
+
+- OpenCode 기본 인스트럭션 경로: `AGENTS.md` + `opencode.json.instructions`
+- `CLAUDE.md`는 `nx_init` 마이그레이션 입력으로만 스캔됨. 런타임 인스트럭션 소스가 아님.
+
+#### 호환성 주의사항 (Compatibility Notes)
+
+- `plan.json`은 canonical하고 플랫폼 중립. OpenCode 전용 연속성 데이터는 `plan.opencode.json`에 저장.
+- `plan.opencode.json`은 best-effort. 없거나 무시되더라도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
+- Claude ↔ OpenCode 전환은 canonical-first handoff로 취급. 동시 공동 편집이 아님.
+
+#### HOW 패널 연속성 절차 (HOW-panel Continuity)
+
+- HOW 서브에이전트 호출 시 OpenCode는 `task_id` / `session_id` 핸들을 `plan.opencode.json` 사이드카에 저장.
+- 후속 질문 전에 `nx_plan_resume`으로 현재 재개 핸들과 마지막 요약을 확인. `recommendation` 페이로드로 기존 참가자 재개 vs 요약 기반 재수화 여부 판단.
+- 위임 준비된 후속 가이던스가 필요하면 `nx_plan_followup` 사용 — 연속성 데이터를 구체적인 프롬프트와 suggested resume handle 필드로 패키징.
+- `nx_context` / `nx_plan_status`는 follow-up 준비된 HOW 역할을 노출하므로 후속 질문 전에 참조 가능.

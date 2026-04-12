@@ -4,11 +4,9 @@
 
 ---
 
-## 1. bridge 98KB 재작성 금지
+## 1. ~~bridge 98KB 재작성 금지~~ — RESOLVED (2026-04-12)
 
-`docs/bridge/nexus-core-bootstrap.md`(98KB, 1946줄)의 기존 내용을 요약, 재구성, 삭제, 또는 다른 형식으로 교체하는 행위는 금지된다. 추가만 허용한다. "더 읽기 쉽게 만들려는" 시도도 이 거절에 해당한다.
-
-**근거**: 기존 계획은 Phase 1/2 작업의 근거 문서로 기능하며, 재작성 시 의사결정 추적이 끊긴다.
+`docs/bridge/nexus-core-bootstrap.md`는 nexus-core v0.2.0 출시 완료로 목적 달성. 의사결정 추적은 nexus-core 자체 CHANGELOG + .nexus/history.json에 보존됨. docs/ 디렉토리 전체 정리 시 삭제.
 
 ---
 

@@ -30,14 +30,8 @@ export const MODEL_TIER_TO_OPENCODE = {
 
 // SKILL_FIELD_ORDER removed for same reason.
 
-/** opencode-nexus local skill purpose strings (CA-2 workaround). Keyed by skill id. */
-export const SKILL_PURPOSE_OVERRIDE = {
-  'nx-init':  'Full project onboarding: scan codebase, establish project mission and essentials, generate context knowledge',
-  'nx-plan':  'Structured planning — subagent-based analysis, deliberate decisions, produce execution plan',
-  'nx-run':   'Execution — user-directed agent composition',
-  'nx-setup': 'Configure Nexus interactively',
-  'nx-sync':  'Synchronize .nexus/context/ design documents with current project state',
-};
+// SKILL_PURPOSE_OVERRIDE removed in v0.2.0 migration — use manifest.json `summary` field instead.
+// See: MIGRATIONS/v0_1_to_v0_2.md Step 5.5
 
 // ==========================================================================
 // Path helpers
@@ -75,19 +69,40 @@ export function verifyManifestVersion(manifest) {
 
 /**
  * Index capabilities: capability id → opencode tool name array.
- * Reads vocabulary/capabilities.yml directly.
+ * Reads nexus-core vocabulary/capabilities.yml (X3 schema: blocks_semantic_classes)
+ * and resolves through local capability-map.yml.
  * @returns {Map<string, string[]>}
  */
 export function indexCapabilities() {
-  const path = join(NEXUS_CORE_ROOT, 'vocabulary/capabilities.yml');
-  const doc = parseYaml(readFileSync(path, 'utf8'));
-  const map = new Map();
-  for (const cap of doc.capabilities) {
-    // opencode harness mapping (not claude_code)
-    const tools = cap.harness_mapping?.opencode ?? [];
-    map.set(cap.id, tools);
+  const capsPath = join(NEXUS_CORE_ROOT, 'vocabulary/capabilities.yml');
+  const capsDoc = parseYaml(readFileSync(capsPath, 'utf8'));
+
+  const mapPath = join(OPENCODE_NEXUS_ROOT, 'capability-map.yml');
+  const mapDoc = parseYaml(readFileSync(mapPath, 'utf8'));
+  const classMap = mapDoc.semantic_class_map;
+
+  const result = new Map();
+  for (const cap of capsDoc.capabilities) {
+    const seen = new Set();
+    const tools = [];
+    for (const cls of cap.blocks_semantic_classes ?? []) {
+      const mapped = classMap[cls];
+      if (mapped === undefined) {
+        throw new Error(
+          `Semantic class "${cls}" (from capability "${cap.id}") has no entry in capability-map.yml. ` +
+          `Add it to maintain full coverage.`
+        );
+      }
+      for (const tool of mapped) {
+        if (!seen.has(tool)) {
+          seen.add(tool);
+          tools.push(tool);
+        }
+      }
+    }
+    result.set(cap.id, tools);
   }
-  return map;
+  return result;
 }
 
 // ==========================================================================
@@ -116,7 +131,7 @@ export function verifyBodyHash(content, expectedHashPrefixed, label = '') {
 // ==========================================================================
 
 /**
- * Derive disallowedTools array from capability ids using opencode harness mapping.
+ * Derive disallowedTools array from capability ids using capability-map.yml resolution.
  * Preserves insertion order, dedupes via Set, throws on unmapped capability.
  * @param {string[]} capabilityIds
  * @param {Map<string, string[]>} capsMap
@@ -129,7 +144,7 @@ export function deriveDisallowedTools(capabilityIds, capsMap) {
     const tools = capsMap.get(capId);
     if (!tools) {
       throw new Error(
-        `Capability "${capId}" has no harness_mapping.opencode in vocabulary/capabilities.yml. ` +
+        `Capability "${capId}" not found in vocabulary/capabilities.yml. ` +
         `Cannot safely derive disallowedTools.`
       );
     }
@@ -294,6 +309,156 @@ export function buildSkillPromptsFile(skills, nexusCoreVersion, nexusCoreCommit)
 }
 
 /**
+ * Build the content for one agent's individual file (src/agents/generated/{id}.ts).
+ * @param {{ id: string, prompt: string, meta: object }} agent
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildAgentIndividualFile(agent, nexusCoreVersion, nexusCoreCommit) {
+  const { id, prompt, meta } = agent;
+  const lines = [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Regenerate: bun run generate:prompts`,
+    ``,
+    `export const PROMPT = \`${escapeTemplateLiteral(prompt)}\`;`,
+    ``,
+    `export const META = {`,
+    `  id: ${JSON.stringify(meta.id)},`,
+    `  name: ${JSON.stringify(meta.name)},`,
+    `  category: ${JSON.stringify(meta.category)},`,
+    `  description: ${JSON.stringify(meta.description)},`,
+    `  model: ${JSON.stringify(meta.model)},`,
+    `  disallowedTools: [${meta.disallowedTools.map(t => JSON.stringify(t)).join(', ')}],`,
+  ];
+  if (meta.task) lines.push(`  task: ${JSON.stringify(meta.task)},`);
+  if (meta.alias_ko) lines.push(`  alias_ko: ${JSON.stringify(meta.alias_ko)},`);
+  lines.push(`  resume_tier: ${JSON.stringify(meta.resume_tier)},`);
+  lines.push(`} as const;`);
+  lines.push(``);
+  return lines.join('\n');
+}
+
+/**
+ * Build the index file content for src/agents/generated/index.ts.
+ * @param {{ id: string, prompt: string, meta: object }[]} agents
+ * @param {Map<string, string[]>} capsMap
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildAgentIndexFile(agents, capsMap, nexusCoreVersion, nexusCoreCommit) {
+  const imports = agents
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `import { PROMPT as ${varId}_prompt, META as ${varId}_meta } from './${id}.js';`;
+    })
+    .join('\n');
+
+  const promptEntries = agents
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `  ${JSON.stringify(id)}: ${varId}_prompt,`;
+    })
+    .join('\n');
+
+  const metaEntries = agents
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `  ${JSON.stringify(id)}: ${varId}_meta,`;
+    })
+    .join('\n');
+
+  const noFileEditTools = capsMap.get('no_file_edit') ?? [];
+  const noFileEditLiteral = noFileEditTools.map(t => JSON.stringify(t)).join(', ');
+
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Aggregates all agent prompts and metadata.`,
+    ``,
+    imports,
+    ``,
+    `export const AGENT_PROMPTS: Record<string, string> = {`,
+    promptEntries,
+    `};`,
+    ``,
+    `export const AGENT_META: Record<string, {`,
+    `  id: string;`,
+    `  name: string;`,
+    `  category: string;`,
+    `  description: string;`,
+    `  model: string;`,
+    `  disallowedTools: readonly string[];`,
+    `  task?: string;`,
+    `  alias_ko?: string;`,
+    `  resume_tier: string;`,
+    `}> = {`,
+    metaEntries,
+    `};`,
+    ``,
+    `export const NO_FILE_EDIT_TOOLS: readonly string[] = [${noFileEditLiteral}] as const;`,
+    ``,
+  ].join('\n');
+}
+
+/**
+ * Build the content for one skill's individual file (src/skills/generated/{id}.ts).
+ * @param {{ id: string, prompt: string }} skill
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildSkillIndividualFile(skill, nexusCoreVersion, nexusCoreCommit) {
+  const { prompt } = skill;
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Regenerate: bun run generate:prompts`,
+    ``,
+    `export const PROMPT = \`${escapeTemplateLiteral(prompt)}\`;`,
+    ``,
+  ].join('\n');
+}
+
+/**
+ * Build the index file content for src/skills/generated/index.ts.
+ * @param {{ id: string, prompt: string }[]} skills
+ * @param {string} nexusCoreVersion
+ * @param {string} nexusCoreCommit
+ * @returns {string}
+ */
+export function buildSkillIndexFile(skills, nexusCoreVersion, nexusCoreCommit) {
+  const imports = skills
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `import { PROMPT as ${varId} } from './${id}.js';`;
+    })
+    .join('\n');
+
+  const entries = skills
+    .map(({ id }) => {
+      const varId = id.replace(/-/g, '_');
+      return `  ${JSON.stringify(id)}: ${varId},`;
+    })
+    .join('\n');
+
+  return [
+    `// AUTO-GENERATED — do not edit by hand.`,
+    `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
+    `// Aggregates all skill prompts.`,
+    ``,
+    imports,
+    ``,
+    `export const SKILL_PROMPTS: Record<string, string> = {`,
+    entries,
+    `};`,
+    ``,
+  ].join('\n');
+}
+
+/**
  * Derive skill trigger_display.
  * @param {any} meta
  * @param {string} pluginName
@@ -314,6 +479,8 @@ export function deriveSkillTriggerDisplay(meta, pluginName) {
 /**
  * Transform one skill's meta + body.
  * Returns a structured object for TypeScript literal emission (commit #2).
+ * If meta.harness_docs_refs is a non-empty array, appends each harness doc
+ * from harness-docs/{ref}.md to the prompt body. Missing files warn but do not fail.
  * @param {any} meta
  * @param {string} body - already verified
  * @param {string} pluginName
@@ -321,11 +488,10 @@ export function deriveSkillTriggerDisplay(meta, pluginName) {
  * @returns {{ prompt: string, meta: { id: string, name: string, description: string, trigger_display: string, purpose: string, disable_model_invocation?: boolean } }}
  */
 export function transformSkill(meta, body, pluginName, label = '') {
-  const purpose = SKILL_PURPOSE_OVERRIDE[meta.id];
+  const purpose = meta.summary ?? collapseDescription(meta.description);
   if (!purpose) {
     throw new Error(
-      `No SKILL_PURPOSE_OVERRIDE entry for skill "${meta.id}". ` +
-      `Add it to generate-from-nexus-core.lib.mjs.`
+      `Skill "${meta.id}" has no summary or description field in meta.yml.`
     );
   }
 
@@ -338,7 +504,24 @@ export function transformSkill(meta, body, pluginName, label = '') {
     ...(meta.manual_only === true ? { disable_model_invocation: true } : {}),
   };
 
-  return { prompt: body, meta: skillMeta };
+  let prompt = body;
+  if (Array.isArray(meta.harness_docs_refs) && meta.harness_docs_refs.length > 0) {
+    for (const ref of meta.harness_docs_refs) {
+      const docPath = join(OPENCODE_NEXUS_ROOT, 'harness-docs', `${ref}.md`);
+      let content;
+      try {
+        content = readFileSync(docPath, 'utf8');
+      } catch {
+        console.warn(
+          `[generate-from-nexus-core] harness_docs_refs: "${ref}.md" not found at ${docPath} — skipping`
+        );
+        continue;
+      }
+      prompt += `\n\n---\n\n## Harness-Specific: ${ref}\n\n${content}`;
+    }
+  }
+
+  return { prompt, meta: skillMeta };
 }
 
 /**

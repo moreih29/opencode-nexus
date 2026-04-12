@@ -167,3 +167,18 @@ Phase 2 trigger 조건은 참고 지표일 뿐 엄격한 게이트가 아니다.
 ---
 
 *문서 버전: plan session #1, 2026-04-10. 생태계 구조 변경 시 이 문서를 업데이트하고 4개 레포지토리에 동시 배포할 것.*
+
+---
+
+## 문서 분류 체계 (from docs/reference-boundaries.md)
+
+opencode-nexus 문서는 4개 범주로 분류된다:
+
+| 범주 | 의미 | 현재 예시 |
+|---|---|---|
+| runtime | 이 레포지토리에서 현재 동작하는 opencode-nexus 동작 | `AGENTS.md`, `opencode.json`, 플러그인 훅, 커스텀 도구 |
+| legacy compatibility | 마이그레이션을 돕기 위해 여전히 읽는 입력 또는 개념 | `nx_init` 중 마이그레이션 소스로서의 `CLAUDE.md` |
+| historical reference | 설계 비교용으로 보관된 원본 소스 개념 | `.claude-plugin`, Claude Code 훅 포맷, TeamCreate/SendMessage |
+| docs debt | 명확히 하지 않으면 사용자를 오도할 수 있는 표현 | Claude와 동등한 것처럼 들리는 팀 시맨틱 |
+
+**구현 진실 vs 역사적 기록 규범**: `docs/operations.md`와 `docs/coverage-matrix.md`를 구현 진실(implementation truth)로 취급한다. `nexus-reference-for-opencode.md`는 역사적/소스 분석 문서이며 현재 런타임 지원의 서술이 아니다. Claude 전용 파일이나 API는 OpenCode에서 active로 명시적으로 문서화되지 않은 한 마이그레이션 맥락으로만 취급한다.

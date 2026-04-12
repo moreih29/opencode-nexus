@@ -38,7 +38,7 @@ const ctx = { directory: root, worktree: root };
 await nxPlanJoin.execute({ role: "architect", name: "Architect" }, ctx);
 const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Implement workflow" }, ctx));
 assert.match(addResult.message, /Link this task to its plan issue/);
-assert.equal(typeof addResult.nexus_task_id, "number");
+assert.equal(typeof addResult.task.id, "number");
 
 await hooks["tool.execute.before"](
   { tool: "task" },

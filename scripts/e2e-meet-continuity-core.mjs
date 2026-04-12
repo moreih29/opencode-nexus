@@ -28,7 +28,8 @@ const started = await nxPlanStart.execute(
   },
   ctx
 );
-assert.match(started, /Plan started/);
+const startedParsed = JSON.parse(started);
+assert.equal(startedParsed.created, true);
 
 const delegationArgs = {
   subagent_type: "architect",

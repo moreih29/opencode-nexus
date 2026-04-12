@@ -81,7 +81,7 @@ export const PlanIssueSchema = z
 export const PlanFileSchema = z.object({
   id: z.number(),
   topic: z.string(),
-  attendees: z.array(PlanAttendeeSchema),
+  attendees: z.array(PlanAttendeeSchema).default([]),
   issues: z.array(PlanIssueSchema),
   research_summary: z.string().optional(),
   created_at: z.string()

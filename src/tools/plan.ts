@@ -1,9 +1,9 @@
 import { tool } from "@opencode-ai/plugin";
 import { appendHistory, nextPlanId } from "../shared/history.js";
-import { readPlanParticipantContinuityFromCore, type PlanParticipantContinuity } from "../orchestration/meet-continuity-adapter.js";
+import { readPlanParticipantContinuityFromCore, type PlanParticipantContinuity } from "../orchestration/plan-continuity-adapter.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
-import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../shared/meet-sidecar.js";
+import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../shared/plan-sidecar.js";
 import { fileExists } from "../shared/state.js";
 import {
   PlanFileSchema,
@@ -31,6 +31,9 @@ export const nxPlanStart = tool({
     issues: z.array(z.string()).default([])
   },
   async execute(args, context) {
+    if (!args.research_summary) {
+      throw new Error("research_summary is required");
+    }
     const paths = createNexusPaths(context.worktree ?? context.directory);
 
     if (await fileExists(paths.PLAN_FILE)) {
@@ -48,8 +51,8 @@ export const nxPlanStart = tool({
     const plan: PlanFile = {
       id: await nextPlanId(paths.HISTORY_FILE),
       topic: args.topic,
-      attendees: args.attendees.map((a) => ({ ...a, joined_at: now })),
-      issues: args.issues.map((title, idx) => ({
+      attendees: (args.attendees ?? []).map((a) => ({ ...a, joined_at: now })),
+      issues: (args.issues ?? []).map((title, idx) => ({
         id: idx + 1,
         title,
         status: "pending",
@@ -63,7 +66,7 @@ export const nxPlanStart = tool({
     PlanFileSchema.parse(plan);
     await writeJsonFile(paths.PLAN_FILE, plan);
     await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
-    return `Plan started: ${args.topic} (#${plan.id})`;
+    return JSON.stringify({ created: true, plan_id: plan.id, topic: args.topic, issueCount: plan.issues.length });
   }
 });
 
@@ -73,7 +76,7 @@ export const nxPlanStatus = tool({
   async execute(_args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.PLAN_FILE))) {
-      return "No active plan session.";
+      return "No active plan session";
     }
 
     const plan = await readPlan(paths.PLAN_FILE);
@@ -216,7 +219,7 @@ export const nxPlanUpdate = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.PLAN_FILE))) {
-      throw new Error("No active plan session.");
+      throw new Error("No active plan session");
     }
     const plan = PlanFileSchema.parse(await readJsonFile<PlanFile>(paths.PLAN_FILE, {} as PlanFile));
 
@@ -283,7 +286,7 @@ export const nxPlanDiscuss = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.PLAN_FILE))) {
-      throw new Error("No active plan session.");
+      throw new Error("No active plan session");
     }
     const plan = await readPlan(paths.PLAN_FILE);
     const issue = plan.issues.find((item) => item.id === args.issue_id);
@@ -329,7 +332,7 @@ export const nxPlanDecide = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.PLAN_FILE))) {
-      throw new Error("No active plan session.");
+      throw new Error("No active plan session");
     }
     const plan = await readPlan(paths.PLAN_FILE);
     const issue = plan.issues.find((item) => item.id === args.issue_id);
@@ -352,9 +355,11 @@ export const nxPlanDecide = tool({
     await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker: "lead", message: args.summary ?? args.decision });
 
     const allDecided = plan.issues.every((item) => item.status === "decided" || item.status === "tasked");
-    return allDecided
-      ? `Decision recorded for ${args.issue_id}. All issues decided. You can move to [run] or [rule].`
-      : `Decision recorded for ${args.issue_id}`;
+    return JSON.stringify({
+      decided: true,
+      allComplete: allDecided,
+      remaining: plan.issues.filter((i) => i.status === "pending").map((i) => i.id)
+    });
   }
 });
 
@@ -367,7 +372,7 @@ export const nxPlanJoin = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.PLAN_FILE))) {
-      throw new Error("No active plan session.");
+      throw new Error("No active plan session");
     }
     const plan = await readPlan(paths.PLAN_FILE);
 

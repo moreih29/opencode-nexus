@@ -100,14 +100,14 @@ opencode-nexus는 Nexus 생태계의 Authoring layer(`@moreih29/nexus-core`)를 
 
 ### 구조
 
-- **Dependency**: `@moreih29/nexus-core ^0.1.2` (devDependency 전용 — 최종 사용자 환경에 미설치)
+- **Dependency**: `@moreih29/nexus-core ^0.2.0` (devDependency 전용 — 최종 사용자 환경에 미설치)
 - **Generator**: `scripts/generate-from-nexus-core.{mjs,lib.mjs}` (claude-nexus 포팅, opencode 차이점 수정). 빌드 타임에 `node_modules/@moreih29/nexus-core`를 읽어 `src/agents/prompts.generated.ts`와 `src/skills/prompts.generated.ts`를 생성
 - **Barrel re-export**: `src/agents/prompts.ts`와 `src/skills/prompts.ts`는 thin re-export barrel. 기존 import site 회귀 없이 generated에 연결
 - **Catalog**: `src/agents/catalog.ts`와 `src/skills/catalog.ts`는 as-is 유지 (§8.6 canonical). `NEXUS_AGENT_CATALOG.disallowedTools`는 `verifyCatalogConsistency`로 `AGENT_META.disallowedTools`와 교차 검증(postdoc은 Gap 1 workaround로 exempt, 참조: moreih29/nexus-core#3)
 
 ### Capability resolution
 
-`scripts/generate-from-nexus-core.lib.mjs`의 `deriveDisallowedTools`가 `vocabulary/capabilities.yml`의 각 capability(`no_file_edit`, `no_task_create`, `no_task_update`)를 `harness_mapping.opencode` 배열(예: `no_file_edit → [edit, write, patch, multiedit]`)로 해석하여 `AGENT_META.disallowedTools`에 literal로 inline. 하드코딩된 `isEditLikeTool`(hooks.ts:402-404)은 generated 상수 `NO_FILE_EDIT_TOOLS`를 참조하도록 수정되어 single source of truth 유지.
+`scripts/generate-from-nexus-core.lib.mjs`의 `indexCapabilities`가 nexus-core `vocabulary/capabilities.yml`의 X3 schema(`blocks_semantic_classes`)를 consumer-local `capability-map.yml`의 `semantic_class_map`을 통해 opencode 구체 tool 이름으로 해석한다. `deriveDisallowedTools`가 각 agent capability(`no_file_edit`, `no_task_create`, `no_task_update`, `no_shell_exec`)를 tool 배열로 변환하여 `AGENT_META.disallowedTools`에 literal로 inline. `isEditLikeTool`(hooks.ts)은 generated 상수 `NO_FILE_EDIT_TOOLS`를 참조하여 single source of truth 유지. `e2e-capability-coverage.mjs`가 CI에서 capability-map 전체 커버리지를 검증한다.
 
 ### Tag id drift 보호
 

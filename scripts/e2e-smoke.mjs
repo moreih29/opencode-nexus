@@ -45,7 +45,7 @@ await nxPlanDecide.execute({ issue_id: 1, decision: "Use explicit plan-to-task l
 
 const addText = JSON.parse(await nxTaskAdd.execute({ title: "Implement", owner: "engineer", plan_issue: 1 }, ctx));
 assert.match(addText.message, /Added task/);
-assert.equal(typeof addText.nexus_task_id, "number");
+assert.equal(typeof addText.task.id, "number");
 
 const tasksRaw = JSON.parse(await fs.readFile(paths.TASKS_FILE, "utf8"));
 assert.equal(tasksRaw.tasks.length, 1);
