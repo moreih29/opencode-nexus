@@ -181,4 +181,11 @@ opencode-nexus 문서는 4개 범주로 분류된다:
 | historical reference | 설계 비교용으로 보관된 원본 소스 개념 | `.claude-plugin`, Claude Code 훅 포맷, TeamCreate/SendMessage |
 | docs debt | 명확히 하지 않으면 사용자를 오도할 수 있는 표현 | Claude와 동등한 것처럼 들리는 팀 시맨틱 |
 
-**구현 진실 vs 역사적 기록 규범**: `docs/operations.md`와 `docs/coverage-matrix.md`를 구현 진실(implementation truth)로 취급한다. `nexus-reference-for-opencode.md`는 역사적/소스 분석 문서이며 현재 런타임 지원의 서술이 아니다. Claude 전용 파일이나 API는 OpenCode에서 active로 명시적으로 문서화되지 않은 한 마이그레이션 맥락으로만 취급한다.
+**구현 진실 vs 역사적 기록 규범**: `.nexus/context/` 문서들이 구현 진실(implementation truth)이다. 과거 `docs/` 디렉토리의 내용은 `.nexus/`로 흡수 완료 후 삭제됨. Claude 전용 파일이나 API는 OpenCode에서 active로 명시적으로 문서화되지 않은 한 마이그레이션 맥락으로만 취급한다.
+
+## nexus-core 참조 URL
+
+upstream 변경 반영 시 항상 참조:
+- **CONSUMING.md**: `https://github.com/moreih29/nexus-core/blob/main/CONSUMING.md`
+- **CHANGELOG.md**: `https://github.com/moreih29/nexus-core/blob/main/CHANGELOG.md`
+- **MIGRATIONS/**: `https://github.com/moreih29/nexus-core/tree/main/MIGRATIONS`

@@ -17,7 +17,7 @@ const EXPECTED_AGENTS = [
   "writer"
 ];
 
-const EXPECTED_SKILLS = ["nx-init", "nx-plan", "nx-run", "nx-setup", "nx-sync"];
+const EXPECTED_SKILLS = ["nx-init", "nx-plan", "nx-run", "nx-sync"];
 
 // AGENT_PROMPTS: 9 non-empty bodies
 assert.equal(typeof AGENT_PROMPTS, "object", "AGENT_PROMPTS is not an object");

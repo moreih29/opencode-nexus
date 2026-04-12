@@ -9,7 +9,7 @@
         "zod": "^3.23.8",
       },
       "devDependencies": {
-        "@moreih29/nexus-core": "^0.2.0",
+        "@moreih29/nexus-core": "^0.3.0",
         "@opencode-ai/plugin": "latest",
         "@types/node": "^22.10.1",
         "typescript": "^5.6.3",
@@ -38,7 +38,7 @@
 
     "@ast-grep/napi-win32-x64-msvc": ["@ast-grep/napi-win32-x64-msvc@0.42.1", "", { "os": "win32", "cpu": "x64" }, "sha512-NAeA2Q6jp7F9uXtSuG12c1xjTzipXFCTvuAcEBnsTwBXq0kdPV6H6Y4GZJVcDhsHk3TX4sGlQGkuV/6FT2Ngig=="],
 
-    "@moreih29/nexus-core": ["@moreih29/nexus-core@0.2.0", "", {}, "sha512-Ua4WakMVei33CuJ6ErrO6Xc6nFV5U8lPCUgYIpG1UuwBFk9GD/3yHImY59nzHRzQ0TlipVpq9Y3JIH3E2E463Q=="],
+    "@moreih29/nexus-core": ["@moreih29/nexus-core@0.3.0", "", {}, "sha512-+b/Xm1DEU2zp2fnUQVUSaBlz6NuCozpE7tOyPdnrw/pvUg5Uo8BQZKdzZXUSVarkPkNAHpVTJ8/XwFiq58eZXQ=="],
 
     "@opencode-ai/plugin": ["@opencode-ai/plugin@1.3.13", "", { "dependencies": { "@opencode-ai/sdk": "1.3.13", "zod": "4.1.8" }, "peerDependencies": { "@opentui/core": ">=0.1.95", "@opentui/solid": ">=0.1.95" }, "optionalPeers": ["@opentui/core", "@opentui/solid"] }, "sha512-zHgtWfdDz8Wu8srE8f8HUtPT9i6c3jTmgQKoFZUZ+RR5CMQF1kAlb1cxeEe9Xm2DRNFVJog9Cv/G1iUHYgXSUQ=="],
 
