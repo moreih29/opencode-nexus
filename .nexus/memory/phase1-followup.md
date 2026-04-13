@@ -58,33 +58,46 @@ OIDC Trusted Publishing으로 전환 완료. GitHub repo `moreih29/opencode-nexu
 
 `docs/bridge/nexus-core-bootstrap.md` §10.1의 required action: claude-nexus의 `agents/postdoc.md` frontmatter에 `Bash`를 `disallowedTools`로 추가. 이는 nexus-core#3의 결과와 별개로 진행 가능. opencode-nexus 작업 아니지만 작성자 동일 인물이므로 추적 대상.
 
-### 5. `core/` 4-layer 도구 인프라 redesign (✅ 완료, plan #22)
+### 5. `core/` 4-layer 도구 인프라 redesign (✅ 완료, plan #22 + plan #23)
 
-2026-04-12 `refactor/flatten-nexus-structure`에서 사람 작성 문서를 `.nexus/context/`로 flat화했으나 **도구 인프라**(`nx_init`, `nx_sync`, `nx_core_read`, `nx_core_write`, `nx_briefing`)가 사용하는 `core/{identity,codebase,memory,reference}` 4-layer는 코드 차원에서 유지됐다. plan #22(2026-04-13)에서 4-layer 코드 인프라를 완전 폐지하고 자동 생성물 위치를 `.nexus/state/auto/`로 확정했다.
+2026-04-12 `refactor/flatten-nexus-structure`에서 사람 작성 문서를 `.nexus/context/`로 flat화했으나 **도구 인프라**(`nx_init`, `nx_sync`, `nx_core_read`, `nx_core_write`, `nx_briefing`)가 사용하는 `core/{identity,codebase,memory,reference}` 4-layer는 코드 차원에서 유지됐다. plan #22(2026-04-13)에서 4-layer 코드 인프라를 완전 폐지했다.
 
-**결정**: 자동 생성물 위치 → `.nexus/state/auto/`
+**plan #22 결정 (원안)**: 자동 생성물 위치 → `.nexus/state/auto/`
 
-**완료된 작업 항목:**
+**plan #23 정정**: 자동 생성물 자체 폐지. derived cache는 nexus-core canonical nx-sync(LLM-driven `.nexus/context/` update)와 misalign이며 사용처 0건 dead write로 확인됐다. `.nexus/state/auto/` 인프라(AUTO_ROOT) 및 관련 파일 생성 로직 전체를 plan #23에서 완전 폐지.
+
+**완료된 작업 항목 (plan #22):**
 
 - [x] `nx_core_read` / `nx_core_write` 도구의 layer 파라미터 제거 (`src/tools/core-store.ts`) — **core-store.ts 삭제, 도구 폐지**
 - [x] `nx_briefing`의 role-based access matrix 재설계 (`src/tools/briefing.ts`) — **MATRIX 제거, 3-디렉토리 collect 방식으로 교체**
-- [x] `nx_init` / `nx_sync`의 layer 기반 디렉토리 생성 + `syncIdentityDocs` 재작성 (`src/tools/workflow.ts`) — **4-layer mkdir 제거, 자동 생성물 AUTO_ROOT로 이동**
-- [x] `writeMemoryCycleNote` 작성 위치 변경 (`src/tools/task.ts:224`) — **AUTO_ROOT로 변경**
+- [x] `nx_init` / `nx_sync`의 layer 기반 디렉토리 생성 + `syncIdentityDocs` 재작성 (`src/tools/workflow.ts`) — **4-layer mkdir 제거**
 - [x] `src/plugin/hooks.ts:347` layer 순회 로직 — **제거 완료**
 - [x] `src/shared/state.ts`의 4-layer mkdir 제거 — **완료**
 - [x] `scripts/e2e-smoke.mjs:75` 검증 경로 수정 — **완료 (T5에서 e2e 일괄 정리 진행)**
-- [x] 자동 생성물의 새 위치 결정 — **결정: `.nexus/state/auto/`**
 
-**수정된 코드 파일:**
+**추가 완료 항목 (plan #23 — derived cache 폐지):**
 
-- `src/shared/paths.ts` — CORE_ROOT 제거, AUTO_ROOT / CONTEXT_ROOT / MEMORY_ROOT 추가
-- `src/shared/state.ts` — 4-layer mkdir → AUTO_ROOT mkdir
+- [x] `nx_sync` 단순화 — `ensureNexusStructure` 호출 + nx-sync skill 워크플로 안내 메시지만 출력. 자동 생성물 write 로직 전체 제거 (`src/tools/workflow.ts`)
+- [x] `writeMemoryCycleNote` 제거 (`src/tools/task.ts`) — cycle note auto-write 폐지
+- [x] `AUTO_ROOT` 경로 상수 제거 (`src/shared/paths.ts`)
+- [x] `AUTO_ROOT` mkdir 제거 (`src/shared/state.ts`)
+
+**수정된 코드 파일 (plan #22):**
+
+- `src/shared/paths.ts` — CORE_ROOT 제거 (AUTO_ROOT는 plan #23에서 추가 후 즉시 폐지)
+- `src/shared/state.ts` — 4-layer mkdir 제거
 - `src/tools/core-store.ts` — 삭제
 - `src/tools/index.ts` — nx_core_read / nx_core_write export 제거
 - `src/tools/briefing.ts` — MATRIX 제거, 3-디렉토리 collect
-- `src/tools/workflow.ts` — 자동 생성물 AUTO_ROOT로, 4-layer mkdir 제거
-- `src/tools/task.ts` — writeMemoryCycleNote AUTO_ROOT로
+- `src/tools/workflow.ts` — 4-layer mkdir 제거
 - `src/plugin/hooks.ts` — 4-layer 순회 제거
+
+**추가 수정 파일 (plan #23):**
+
+- `src/tools/workflow.ts` — nxSync 단순화: 자동 생성물 write 제거, ensureNexusStructure + 안내 메시지로 교체
+- `src/tools/task.ts` — writeMemoryCycleNote 제거
+- `src/shared/paths.ts` — AUTO_ROOT 제거
+- `src/shared/state.ts` — AUTO_ROOT mkdir 제거
 
 ---
 

@@ -8,7 +8,6 @@ export function createNexusPaths(projectRoot: string) {
   const MEMORY_ROOT = path.join(NEXUS_ROOT, "memory");
   const RULES_ROOT = path.join(NEXUS_ROOT, "rules");
   const STATE_ROOT = path.join(NEXUS_ROOT, "state");
-  const AUTO_ROOT = path.join(STATE_ROOT, "auto");
 
   return {
     PROJECT_ROOT: projectRoot,
@@ -17,7 +16,6 @@ export function createNexusPaths(projectRoot: string) {
     MEMORY_ROOT,
     RULES_ROOT,
     STATE_ROOT,
-    AUTO_ROOT,
     HISTORY_FILE: path.join(NEXUS_ROOT, "history.json"),
     CONFIG_FILE: path.join(NEXUS_ROOT, "config.json"),
     PLAN_FILE: path.join(STATE_ROOT, "plan.json"),

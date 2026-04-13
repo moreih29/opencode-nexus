@@ -70,14 +70,13 @@ const tasksFile = JSON.parse(await fs.readFile(paths.TASKS_FILE, "utf8"));
 await nxTaskUpdate.execute({ id: tasksFile.tasks[0].id, status: "completed" }, ctx);
 await nxTaskClose.execute({ archive: true }, ctx);
 
-const syncResult = JSON.parse(await nxSync.execute({ scope: "all" }, ctx));
-assert.equal(syncResult.synced, true);
-assert.equal(syncResult.sources.includes("archived cycle history"), true);
-assert.equal(syncResult.scannedLayers.includes("codebase"), true);
-assert.equal(syncResult.generatedFiles.includes(path.join("state", "auto", "recent-cycle-summary.md")), true);
-assert.equal(syncResult.generatedFiles.includes(path.join("state", "auto", "recent-changes.md")), true);
-assert.equal(syncResult.generatedFiles.includes(path.join("state", "auto", "decision-log.md")), true);
-assert.equal(Array.isArray(syncResult.summary.changedFiles), true);
-assert.equal(Array.isArray(syncResult.summary.recentCommits), true);
+const syncMessage = await nxSync.execute({}, ctx);
+assert.equal(typeof syncMessage, "string");
+assert.ok(syncMessage.length > 0, "nxSync should return a non-empty guidance message");
+// Verify ensureNexusStructure was called: core nexus dirs must exist
+const { access } = await import("node:fs/promises");
+await access(path.join(root, ".nexus", "context"));
+await access(path.join(root, ".nexus", "memory"));
+await access(path.join(root, ".nexus", "state"));
 
 console.log("e2e init sync passed");

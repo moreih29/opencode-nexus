@@ -19,20 +19,20 @@
 
 | 도구 | 역할 |
 |------|------|
-| `nx_meet_start` | Meet 세션 시작. 주제, 참석자, 이슈 목록 초기화 |
-| `nx_meet_status` | 현재 Meet 상태 조회 |
-| `nx_meet_resume` | HOW 역할 참여자의 재개 라우팅 정보 조회 |
-| `nx_meet_followup` | 참여자에 대한 위임 준비 팔로업 안내 생성 |
-| `nx_meet_update` | Meet 이슈 추가·제거·수정·재오픈 |
-| `nx_meet_discuss` | Meet 이슈에 토론 항목 추가 |
-| `nx_meet_decide` | Meet 이슈에 결정 사항 기록 |
-| `nx_meet_join` | 실행 중인 Meet에 참석자 추가 |
+| `nx_plan_start` | Plan 세션 시작. 주제, 참석자, 이슈 목록 초기화 |
+| `nx_plan_status` | 현재 Plan 상태 조회 |
+| `nx_plan_resume` | HOW 역할 참여자의 재개 라우팅 정보 조회 |
+| `nx_plan_followup` | 참여자에 대한 위임 준비 팔로업 안내 생성 |
+| `nx_plan_update` | Plan 이슈 추가·제거·수정·재오픈 |
+| `nx_plan_discuss` | Plan 이슈에 토론 항목 추가 |
+| `nx_plan_decide` | Plan 이슈에 결정 사항 기록 |
+| `nx_plan_join` | 실행 중인 Plan에 참석자 추가 |
 | `nx_task_add` | 태스크 사이클에 태스크 추가 |
 | `nx_task_list` | 태스크 목록 및 상태 요약 조회 |
 | `nx_task_update` | 태스크 상태 변경 |
 | `nx_task_close` | 태스크 사이클 종료 및 히스토리 아카이브 |
 | `nx_init` | 저장소 스캔 후 core 지식 초기화 |
-| `nx_sync` | 아카이브된 사이클 히스토리를 core 지식에 반영 |
+| `nx_sync` | `ensureNexusStructure` 호출 + nx-sync skill 워크플로 안내 메시지 반환. LLM이 `[sync]` 태그 시 git diff 실행 → Writer agent spawn → `.nexus/context/` Read/Write 직접 처리 |
 | `nx_setup` | OpenCode 설정 파일과 스킬 파일 생성·병합 |
 
 ### 지식 관리 (Knowledge Management)
@@ -72,7 +72,7 @@
 
 | 카테고리 | 도구 수 | 주요 목적 |
 |----------|---------|-----------|
-| 워크플로 | 15 | Meet·태스크 사이클, 초기화·동기화, 설정 |
+| 워크플로 | 15 | Plan·태스크 사이클, 초기화·동기화, 설정 |
 | 지식 관리 | 5 | rules 저장소, 컨텍스트, 브리핑, 아티팩트 |
 | 코드 인텔리전스 | 10 | 휴리스틱 LSP, AST 검색·치환 |
 | 위임 | 1 | 위임 템플릿 |

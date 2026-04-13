@@ -4660,6 +4660,58 @@
           "created_at": "2026-04-13T04:51:29.056Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-13T05:30:39.766Z",
+      "branch": "feat/skill-delivery-option-d",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "nxSync 도구 단순화 + derived cache 생성 일괄 폐지 (workflow/task/paths/state/tools)",
+          "context": "cycle 22가 4-layer를 폐지했지만 derived cache(recent-cycle-summary, recent-changes, decision-log, roadmap-sync, cycle-N) 생성 자체는 .nexus/state/auto/로 옮겨 잔존. nexus-core nx-sync canonical(LLM이 .nexus/context/ 직접 update)과 misalign + 사용처 0건 dead write. 본 cycle은 derived cache 생성 자체를 폐지하고 nxSync 도구를 단순화</context>\n<parameter name=\"approach\">1. src/tools/workflow.ts:\n   - nxSync 도구 단순화: derived cache 생성 코드(syncIdentityDocs, summarizeCycle, recent-* 호출) 모두 제거\n   - 단순화 후 동작: ensureNexusStructure(디렉토리 보장) + 안내 메시지 반환 (\"Run [sync] tag workflow per nx-sync skill: read .nexus/context/, git diff, Writer agent로 update\")\n   - syncIdentityDocs, summarizeCycle, writeRecent* 등 helper 함수 모두 제거\n   - nxInit이 syncIdentityDocs 호출하는 부분 있으면 그 부분도 제거\n2. src/tools/task.ts:\n   - writeMemoryCycleNote 함수 + 호출(line 234) 제거\n3. src/shared/paths.ts:\n   - AUTO_ROOT 정의 제거\n4. src/shared/state.ts:\n   - ensureNexusStructure에서 AUTO_ROOT mkdir 제거\n5. src/tools/index.ts:\n   - nxSync export는 유지 (도구 자체는 단순화된 채 유지). 변경 없을 수도\n6. nx_artifact_write는 유지 (nexus-core canonical 도구, 5개 에이전트 disallowedTools에 등록됨)\n7. bun run check + build 통과</parameter>\n<parameter name=\"acceptance\">- workflow.ts에서 syncIdentityDocs/summarizeCycle/writeRecent* 등 derived 생성 함수 부재 (grep)\n- workflow.ts nxSync execute가 ensureNexusStructure + 안내 메시지 반환 (5-10줄로 축소)\n- task.ts writeMemoryCycleNote 함수 부재 + 호출 부재\n- paths.ts AUTO_ROOT 부재\n- state.ts AUTO_ROOT mkdir 부재\n- nx_artifact_write 도구는 유지\n- bun run check, bun run build PASS</parameter>\n<parameter name=\"risk\">nxInit이 syncIdentityDocs 호출하면 nxInit도 같이 영향. nxInit이 architecture/development/tools.md 등 자동 생성하는 핵심 부분은 보존",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-13T05:19:31.974Z"
+        },
+        {
+          "id": 2,
+          "title": "e2e-init-sync.mjs 자동 생성물 검증 제거 + 전체 e2e PASS",
+          "context": "T1 후 derived cache 생성이 사라져서 검증도 새로운 동작에 맞게 수정. nxSync 단순화된 동작 검증으로 변경",
+          "approach": "1. scripts/e2e-init-sync.mjs:\n   - 자동 생성물(.nexus/state/auto/recent-* 등) 존재 검증 제거\n   - nxSync 호출 결과가 단순 안내 메시지 + ensureNexusStructure 동작 검증\n   - 또는 nxSync 부분 자체 e2e 단순화\n2. scripts/ 전수 grep으로 AUTO_ROOT, recent-cycle-summary 등 잔재 검증 0건 확인\n3. bun run test:e2e 전체 PASS</parameter>\n<parameter name=\"acceptance\">- e2e-init-sync.mjs에서 .nexus/state/auto/ 검증 부재\n- bun run test:e2e 전체 PASS (28+ suites)\n- 잔재 grep 결과 0건</parameter>\n<parameter name=\"risk\">e2e가 derived cache 가정 다수 — 모두 update 필요",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "owner": "tester",
+          "created_at": "2026-04-13T05:19:38.560Z"
+        },
+        {
+          "id": 3,
+          "title": "문서 정정 (architecture/tools/phase1-followup §5 cycle 22 정정)",
+          "context": "cycle 22가 derived cache를 .nexus/state/auto/로 이동한다고 문서화했으나 본 cycle에서 derived cache 자체 폐지. 문서 정정 필요",
+          "approach": "1. .nexus/context/architecture.md:\n   - \"auto-generated documentation\" 섹션 (cycle 22 신설) 제거 또는 정정\n   - .nexus/state/auto/ 언급 제거\n   - nxSync 단순화된 동작 반영\n2. .nexus/context/tools.md:\n   - nxSync 항목 갱신 (derived cache 생성 → LLM-driven workflow 안내)\n   - 자동 생성물 위치 표 제거\n3. .nexus/memory/phase1-followup.md §5:\n   - cycle 22 결정 정정 — \"자동 생성물 .nexus/state/auto/ 이동\" → \"derived cache 자체 폐지 (cycle 23)\"\n   - 새 결정 추가: derived cache misalign + 폐지 근거 (canonical nx-sync는 LLM-driven)\n   - 변경된 코드 파일 목록 update\n4. UPSTREAM.md: 도구 인프라 폐지 서술 정정 (4-layer만이 아니라 derived cache까지 완전 폐지)</parameter>\n<parameter name=\"acceptance\">- 위 4개 문서에서 .nexus/state/auto/ 언급 0건\n- recent-cycle-summary, recent-changes, decision-log, roadmap-sync 언급 0건 (역사 컨텍스트 보존 제외)\n- nxSync 새 동작 (단순화 + canonical 의도) 정확히 기술\n- phase1-followup §5에 cycle 23 정정 기록</parameter>\n<parameter name=\"risk\">cycle 22 결정의 일부 정정 — 마크다운 무결 + 톤 일관 유지",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "owner": "writer",
+          "created_at": "2026-04-13T05:19:48.924Z"
+        },
+        {
+          "id": 4,
+          "title": "문서 reviewer pair",
+          "context": "T3 writer 산출물 검증",
+          "approach": "1. 4개 문서에서 .nexus/state/auto/, recent-*/decision-log/roadmap-sync 잔재 grep\n2. nxSync 새 동작 설명이 src/tools/workflow.ts 실제 코드와 일치\n3. phase1-followup §5의 cycle 23 정정이 명확\n4. 마크다운 무결성</parameter>\n<parameter name=\"acceptance\">- 잔재 0건\n- 코드/문서 align\n- 마크다운 무결</parameter>\n<parameter name=\"risk\">reviewer는 보고만",
+          "status": "completed",
+          "deps": [
+            3
+          ],
+          "owner": "reviewer",
+          "created_at": "2026-04-13T05:19:52.522Z"
+        }
+      ]
     }
   ]
 }

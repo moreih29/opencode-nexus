@@ -5,7 +5,6 @@ import { promisify } from "node:util";
 import { tool } from "@opencode-ai/plugin";
 import { createNexusPaths } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists } from "../shared/state.js";
-import { readJsonFile } from "../shared/json-store.js";
 
 const execFileAsync = promisify(execFile);
 const z = tool.schema;
@@ -123,89 +122,12 @@ export const nxInit = tool({
 });
 
 export const nxSync = tool({
-  description: "Promote archived cycle history into Nexus core knowledge",
-  args: {
-    scope: z.enum(["all", "identity", "memory", "codebase", "reference"]).default("all"),
-    cycle_index: z.number().optional()
-  },
-  async execute(args, context) {
-    const root = context.worktree ?? context.directory;
-    const paths = createNexusPaths(root);
+  description: "Trigger Nexus context knowledge synchronization",
+  args: {},
+  async execute(_args, context) {
+    const paths = createNexusPaths(context.worktree ?? context.directory);
     await ensureNexusStructure(paths);
-
-    const history = await readJsonFile<{ cycles?: Array<any> }>(paths.HISTORY_FILE, { cycles: [] });
-    const cycles = history.cycles ?? [];
-    if (cycles.length === 0) {
-      return "No archived cycles found. Complete a task cycle before syncing knowledge.";
-    }
-
-    const index = args.cycle_index ?? cycles.length - 1;
-    const cycle = cycles[index];
-    if (!cycle) {
-      throw new Error(`Cycle index out of range: ${index}`);
-    }
-
-    const gitSignals = await readGitSignals(root);
-    const summary = summarizeCycle(cycle, gitSignals);
-    const generatedFiles: string[] = [];
-    const scannedLayers = args.scope === "all" ? ["identity", "memory", "codebase", "reference"] : [args.scope];
-    const sources = [
-      "archived cycle history",
-      gitSignals.changedFiles.length > 0 ? "git working tree changes" : "git working tree changes (none detected)",
-      gitSignals.recentCommits.length > 0 ? "recent git commits" : "recent git commits (none detected)",
-      "current core files"
-    ];
-    const needsVerification = [
-      ...(gitSignals.changedFiles.length === 0 ? ["No git working tree changes detected during sync."] : []),
-      ...(summary.decisionCount === 0 ? ["No recorded plan decisions were available in the archived cycle."] : [])
-    ];
-
-    if (args.scope === "all" || args.scope === "identity") {
-      const identitySync = await syncIdentityDocs(paths.AUTO_ROOT, summary);
-      generatedFiles.push(...identitySync.generatedFiles);
-      needsVerification.push(...identitySync.needsVerification);
-    }
-    if (args.scope === "all" || args.scope === "memory") {
-      generatedFiles.push(
-        ...(await writeIfChanged(
-          path.join(paths.AUTO_ROOT, "recent-cycle-summary.md"),
-          buildRecentCycleMemoryDoc(summary),
-          path.join("state", "auto", "recent-cycle-summary.md")
-        ))
-      );
-    }
-    if (args.scope === "all" || args.scope === "codebase") {
-      generatedFiles.push(
-        ...(await writeIfChanged(
-          path.join(paths.AUTO_ROOT, "recent-changes.md"),
-          buildRecentChangesDoc(summary),
-          path.join("state", "auto", "recent-changes.md")
-        ))
-      );
-    }
-    if (args.scope === "all" || args.scope === "reference") {
-      generatedFiles.push(
-        ...(await writeIfChanged(
-          path.join(paths.AUTO_ROOT, "decision-log.md"),
-          buildDecisionLogDoc(summary),
-          path.join("state", "auto", "decision-log.md")
-        ))
-      );
-    }
-
-    return JSON.stringify(
-      {
-        synced: true,
-        cycleIndex: index,
-        sources,
-        scannedLayers,
-        generatedFiles,
-        needsVerification,
-        summary
-      },
-      null,
-      2
-    );
+    return "Sync triggered. Follow nx-sync skill workflow: read .nexus/context/, run git diff, spawn Writer agent to update files. See [sync] tag.";
   }
 });
 
@@ -345,165 +267,6 @@ function buildRulesDoc(scan: Awaited<ReturnType<typeof scanProject>>): string {
   ].join("\n");
 }
 
-function summarizeCycle(cycle: any, gitSignals: Awaited<ReturnType<typeof readGitSignals>>) {
-  const tasks = Array.isArray(cycle?.tasks?.tasks) ? cycle.tasks.tasks : [];
-  const issues = Array.isArray(cycle?.plan?.issues) ? cycle.plan.issues : [];
-  const decisions = issues
-    .filter((issue: any) => typeof issue?.decision === "string" && issue.decision.length > 0)
-    .map((issue: any) => ({ id: String(issue.id ?? "unknown"), title: String(issue.title ?? "untitled"), decision: issue.decision }));
-  return {
-    completedAt: String(cycle?.completed_at ?? new Date().toISOString()),
-    branch: String(cycle?.branch ?? "unknown"),
-    topic: typeof cycle?.plan?.topic === "string" ? cycle.plan.topic : null,
-    taskTitles: tasks.map((task: any) => String(task.title ?? task.id ?? "unknown task")),
-    decisions,
-    taskCount: tasks.length,
-    decisionCount: decisions.length,
-    changedFiles: gitSignals.changedFiles,
-    recentCommits: gitSignals.recentCommits,
-    memoryHint:
-      cycle?.memoryHint && typeof cycle.memoryHint === "object"
-        ? {
-            hadLoopDetection: Boolean((cycle.memoryHint as { hadLoopDetection?: unknown }).hadLoopDetection),
-            reopenCount: Number((cycle.memoryHint as { reopenCount?: unknown }).reopenCount ?? 0),
-            blockedTransitions: Number((cycle.memoryHint as { blockedTransitions?: unknown }).blockedTransitions ?? 0)
-          }
-        : null
-  };
-}
-
-function buildRecentCycleMemoryDoc(summary: ReturnType<typeof summarizeCycle>): string {
-  return [
-    "<!-- tags: memory, cycle -->",
-    "# Recent Cycle Summary",
-    "",
-    `- Completed at: ${summary.completedAt}`,
-    `- Branch: ${summary.branch}`,
-    `- Topic: ${summary.topic ?? "none"}`,
-    `- Task count: ${summary.taskCount}`,
-    `- Decision count: ${summary.decisionCount}`,
-    `- Loop detection: ${summary.memoryHint?.hadLoopDetection ? "yes" : "no"}`,
-    `- Reopen count: ${summary.memoryHint?.reopenCount ?? 0}`,
-    `- Blocked transitions: ${summary.memoryHint?.blockedTransitions ?? 0}`,
-    `- Git changed files seen during sync: ${summary.changedFiles.length}`,
-    "",
-    "## Tasks",
-    ...summary.taskTitles.map((task: string) => `- ${task}`),
-    "",
-    "## Decisions",
-    ...(summary.decisions.length > 0
-      ? summary.decisions.map((decision: { id: string; title: string; decision: string }) => `- ${decision.id} ${decision.title}: ${decision.decision}`)
-      : ["- none recorded"]),
-    "",
-    "## Git Signals",
-    ...(summary.changedFiles.length > 0 ? summary.changedFiles.map((file: string) => `- ${file}`) : ["- none detected"])
-  ].join("\n");
-}
-
-function buildRecentChangesDoc(summary: ReturnType<typeof summarizeCycle>): string {
-  return [
-    "<!-- tags: codebase, changes -->",
-    "# Recent Changes",
-    "",
-    `- Latest archived branch: ${summary.branch}`,
-    `- Latest plan topic: ${summary.topic ?? "none"}`,
-    `- Lifecycle signals: reopen=${summary.memoryHint?.reopenCount ?? 0}, blocked=${summary.memoryHint?.blockedTransitions ?? 0}`,
-    "",
-    "## Completed Work",
-    ...summary.taskTitles.map((task: string) => `- ${task}`),
-    "",
-    "## Git Diff Signals",
-    ...(summary.changedFiles.length > 0 ? summary.changedFiles.map((file: string) => `- ${file}`) : ["- none detected"]),
-    "",
-    "## Recent Commits",
-    ...(summary.recentCommits.length > 0 ? summary.recentCommits.map((commit: string) => `- ${commit}`) : ["- none detected"]),
-    "",
-    "## Design Decisions",
-    ...(summary.decisions.length > 0
-      ? summary.decisions.map((decision: { title: string; decision: string }) => `- ${decision.title}: ${decision.decision}`)
-      : ["- none recorded"])
-  ].join("\n");
-}
-
-function buildDecisionLogDoc(summary: ReturnType<typeof summarizeCycle>): string {
-  return [
-    "<!-- tags: reference, decisions -->",
-    "# Decision Log",
-    "",
-    `- Synced from archived cycle on ${summary.completedAt}`,
-    `- Branch: ${summary.branch}`,
-    `- Topic: ${summary.topic ?? "none"}`,
-    "",
-    ...(summary.decisions.length > 0
-      ? summary.decisions.map(
-          (decision: { id: string; title: string; decision: string }) => `## ${decision.id}: ${decision.title}\n\n${decision.decision}`
-        )
-      : ["No decisions were recorded in this cycle."])
-  ].join("\n\n");
-}
-
-async function syncIdentityDocs(
-  autoRoot: string,
-  summary: ReturnType<typeof summarizeCycle>
-): Promise<{ generatedFiles: string[]; needsVerification: string[] }> {
-  const roadmapSyncPath = path.join(autoRoot, "roadmap-sync.md");
-  const generatedFiles: string[] = [];
-  const needsVerification: string[] = [];
-
-  const syncBlock = buildRoadmapSyncBlock(summary);
-  const existing = await fileExists(roadmapSyncPath) ? await fs.readFile(roadmapSyncPath, "utf8") : null;
-
-  if (existing !== null) {
-    if (!existing.includes(syncBlock)) {
-      generatedFiles.push(
-        ...(await writeIfChanged(
-          roadmapSyncPath,
-          appendSection(existing, syncBlock),
-          path.join("state", "auto", "roadmap-sync.md")
-        ))
-      );
-    }
-  } else {
-    generatedFiles.push(
-      ...(await writeIfChanged(
-        roadmapSyncPath,
-        [
-          "<!-- tags: identity, roadmap -->",
-          "# Roadmap Sync",
-          "",
-          "This file is auto-generated by nx_sync from archived cycle history.",
-          "",
-          syncBlock
-        ].join("\n"),
-        path.join("state", "auto", "roadmap-sync.md")
-      ))
-    );
-    needsVerification.push("Roadmap sync was created from archived cycle evidence and still needs user confirmation.");
-  }
-
-  return { generatedFiles, needsVerification };
-}
-
-function buildRoadmapSyncBlock(summary: ReturnType<typeof summarizeCycle>): string {
-  const heading = `## Synced Update (${summary.completedAt})`;
-  return [
-    heading,
-    "",
-    `- Source branch: ${summary.branch}`,
-    `- Source topic: ${summary.topic ?? "none"}`,
-    `- Completed tasks: ${summary.taskCount}`,
-    ...(summary.taskTitles.length > 0 ? summary.taskTitles.map((task: string) => `- Task: ${task}`) : ["- Task: none recorded"]),
-    ...(summary.recentCommits.length > 0
-      ? summary.recentCommits.slice(0, 3).map((commit) => `- Commit signal: ${commit}`)
-      : ["- Commit signal: none detected"])
-  ].join("\n");
-}
-
-function appendSection(existing: string, block: string): string {
-  const trimmed = existing.trimEnd();
-  return trimmed.length > 0 ? `${trimmed}\n\n${block}\n` : `${block}\n`;
-}
-
 async function writeIdentityDoc(contextRoot: string, name: string, explicitContent: string | undefined, fallback: string): Promise<string[]> {
   const filePath = path.join(contextRoot, `${name}.md`);
   if (explicitContent && explicitContent.trim().length > 0) {
@@ -567,24 +330,6 @@ async function readRecentCommits(root: string): Promise<string[]> {
   }
 }
 
-async function readGitSignals(root: string): Promise<{ changedFiles: string[]; recentCommits: string[] }> {
-  const recentCommits = await readRecentCommits(root);
-  try {
-    const { stdout } = await execFileAsync("git", ["status", "--short", "--untracked-files=all"], { cwd: root });
-    const changedFiles = stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const normalized = line.replace(/^..\s+/, "");
-        const renamed = normalized.split(" -> ").at(-1);
-        return renamed ?? normalized;
-      });
-    return { changedFiles, recentCommits };
-  } catch {
-    return { changedFiles: [], recentCommits };
-  }
-}
 
 async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
   if (!(await fileExists(filePath))) {

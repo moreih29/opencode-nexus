@@ -231,8 +231,6 @@ export const nxTaskClose = tool({
     await safeUnlink(paths.STOP_WARNED_FILE);
     await writeJsonFile(paths.REOPEN_TRACKER_FILE, { reopenCount: 0, blockedTransitions: 0 });
 
-    await writeMemoryCycleNote(paths.AUTO_ROOT, memoryHint);
-
     return JSON.stringify(
       {
         closed: true,
@@ -294,34 +292,6 @@ async function readCurrentBranch(projectRoot: string): Promise<string> {
   }
 }
 
-async function writeMemoryCycleNote(
-  autoRoot: string,
-  memoryHint: {
-    taskCount: number;
-    decisionCount: number;
-    hadLoopDetection: boolean;
-    reopenCount: number;
-    blockedTransitions: number;
-    cycleTopics: string[];
-  }
-): Promise<void> {
-  await fs.mkdir(autoRoot, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const filePath = path.join(autoRoot, `cycle-${stamp}.md`);
-  const content = [
-    "<!-- tags: memory, cycle -->",
-    `# Cycle Memory ${stamp}`,
-    "",
-    `- taskCount: ${memoryHint.taskCount}`,
-    `- decisionCount: ${memoryHint.decisionCount}`,
-    `- hadLoopDetection: ${memoryHint.hadLoopDetection}`,
-    `- reopenCount: ${memoryHint.reopenCount}`,
-    `- blockedTransitions: ${memoryHint.blockedTransitions}`,
-    `- cycleTopics: ${memoryHint.cycleTopics.join(", ") || "none"}`,
-    ""
-  ].join("\n");
-  await fs.writeFile(filePath, content, "utf8");
-}
 
 async function readTracker(filePath: string): Promise<{ reopenCount: number; blockedTransitions: number }> {
   const tracker = await readJsonFile<{ reopenCount?: number; blockedTransitions?: number }>(filePath, {
