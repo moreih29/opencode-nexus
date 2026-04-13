@@ -4250,6 +4250,205 @@
           "created_at": "2026-04-13T01:12:44.389Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-13T02:28:50.861Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 19,
+        "topic": "스모크 테스트 간단 안건 하나",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "Lead",
+            "joined_at": "2026-04-13T02:24:52.610Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": 1,
+            "title": "간단한 스모크 테스트 안건 등록 방식",
+            "status": "researching",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "## 스모크 테스트 현황 파악\n\n### 관련 파일\n- `.nexus/rules/smoke-test-category.md` — 스모크 테스트 규칙 (fast, minimal, happy path 중심)\n- `scripts/smoke-opencode-run.mjs` — end-to-end 스모크 harness (A/B/C/D 그룹 시나리오)\n- `scripts/e2e-smoke.mjs` — plan → task → close 전체 흐름 검증\n- `scripts/e2e-loader-smoke.mjs` — dist 번들 로드 스모크\n- `.nexus/core/memory/smoke-run-harness.md` — 최근 사이클 기록에 존재 (memory/에는 없음)\n\n### 현 규칙 요약\n1. 30초 내 실행 완료\n2. Happy path 중심, edge case 제외\n3. PASS/FAIL binary 결과만\n\n### 질문\n사용자의 \"간단 안건 하나\"가 구체적으로 무엇인지 명확히 필요:\n- 신규 스모크 테스트 추가?\n- 스모크 테스트 실행 방식 변경?\n- 스모크 테스트 카테고리 규칙 수정?\n- 다른 안건?",
+                "kind": "research",
+                "recorded_at": "2026-04-13T02:28:04.531Z"
+              }
+            ],
+            "task_refs": []
+          }
+        ],
+        "research_summary": "Smoke tests in scripts/smoke-opencode-run.mjs verify tag routing. This scenario tests [plan] tag dispatch to nx_plan_start with a topic parameter. Existing smoke-run-harness.md documents the smoke test harness for quick system validation.",
+        "created_at": "2026-04-13T02:24:52.610Z"
+      }
+    },
+    {
+      "completed_at": "2026-04-13T02:28:52.262Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 20,
+        "topic": "캐싱 전략 검토",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "Lead",
+            "joined_at": "2026-04-13T02:28:50.879Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": 1,
+            "title": "캐싱 대상 식별 및 우선순위",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 2,
+            "title": "캐싱 구현 전략 선택",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 3,
+            "title": "캐시 무효화 정책 결정",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          }
+        ],
+        "research_summary": "opencode-nexus 아키텍처 분석: 인메모리/파일 이중 상태 관리, nx_* 도구의 빈번한 파일 I/O, 시스템 프롬프트 빌드 오버헤드, 스킬/에이전트 프롬프트 조회 비용. 현재 명시적 캐싱 레이어 부재. 주요 캐싱 후보: (1) plan.json/tasks.json 파일 캐싱, (2) 에이전트/스킬 프롬프트 TTL 캐시, (3) 빌드된 시스템 프롬프트 메모라이제이션, (4) LSP/AST 검색 결과 캐싱.",
+        "created_at": "2026-04-13T02:28:50.879Z"
+      }
+    },
+    {
+      "completed_at": "2026-04-13T02:50:10.053Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 21,
+        "topic": "스모크 테스트용 가상 설계 주제: 캐싱 전략 검토",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "Lead",
+            "joined_at": "2026-04-13T02:28:52.348Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": 1,
+            "title": "캐시 대상 데이터 식별: 어떤 데이터가 캐싱 후보인가?",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 2,
+            "title": "캐시 저장소 선택: 인메모리 vs 파일 vs DB vs 하이브리드",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 3,
+            "title": "캐시 무효화 전략: 언제 어떻게 캐시를 갱신/삭제하는가?",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 4,
+            "title": "플랫폼 캐시 이슈 대응: #16608(auto-update) 등 플랫폼 제약 회피 방안",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          }
+        ],
+        "research_summary": "**기존 결정 (history.json #4):**\n- Canonical .nexus 파일 옆 sidecar metadata로 OpenCode 전용 상태 저장\n- 재생성 가능한 성능 데이터만 별도 cache/DB 계층 사용\n\n**OpenCode 플랫폼 캐시 특성 (opencode-reference.md):**\n- Skill 로드: on-demand (startup cache 아님)\n- 플러그인 캐시(#16608): `@latest` 플러그인 auto-update 미작동, 수동 삭제 필요\n- skill() 도구 fs 캐시 전략: 미명시(OS 레벨 fs 캐시 또는 내부 메모리화 가능성)\n- Anthropic prompt caching으로 지속 호출 비용 상쇄 가능\n\n**현재 아키텍처:**\n- 파일 기반 상태 (.nexus/ + .nexus/state/)\n- 인메모리 상태 (NexusPluginState)\n- Sidecar 파일 (*.opencode.json)\n- 선택적 캐시/DB 계층 (미구현)",
+        "created_at": "2026-04-13T02:28:52.348Z"
+      }
+    },
+    {
+      "completed_at": "2026-04-13T02:50:15.716Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 21,
+        "topic": "스모크 테스트용 가상 설계 주제: 캐싱 전략 검토",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "Lead",
+            "joined_at": "2026-04-13T02:28:52.348Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": 1,
+            "title": "캐시 대상 데이터 식별: 어떤 데이터가 캐싱 후보인가?",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 2,
+            "title": "캐시 저장소 선택: 인메모리 vs 파일 vs DB vs 하이브리드",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 3,
+            "title": "캐시 무효화 전략: 언제 어떻게 캐시를 갱신/삭제하는가?",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          },
+          {
+            "id": 4,
+            "title": "플랫폼 캐시 이슈 대응: #16608(auto-update) 등 플랫폼 제약 회피 방안",
+            "status": "pending",
+            "discussion": [],
+            "task_refs": []
+          }
+        ],
+        "research_summary": "**기존 결정 (history.json #4):**\n- Canonical .nexus 파일 옆 sidecar metadata로 OpenCode 전용 상태 저장\n- 재생성 가능한 성능 데이터만 별도 cache/DB 계층 사용\n\n**OpenCode 플랫폼 캐시 특성 (opencode-reference.md):**\n- Skill 로드: on-demand (startup cache 아님)\n- 플러그인 캐시(#16608): `@latest` 플러그인 auto-update 미작동, 수동 삭제 필요\n- skill() 도구 fs 캐시 전략: 미명시(OS 레벨 fs 캐시 또는 내부 메모리화 가능성)\n- Anthropic prompt caching으로 지속 호출 비용 상쇄 가능\n\n**현재 아키텍처:**\n- 파일 기반 상태 (.nexus/ + .nexus/state/)\n- 인메모리 상태 (NexusPluginState)\n- Sidecar 파일 (*.opencode.json)\n- 선택적 캐시/DB 계층 (미구현)",
+        "created_at": "2026-04-13T02:28:52.348Z"
+      }
+    },
+    {
+      "completed_at": "2026-04-13T03:07:07.423Z",
+      "branch": "feat/skill-delivery-option-d",
+      "plan": null,
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Smoke script — opencode CLI 자동 검증 (태그 기본 + 고급 skill 기능)",
+          "context": "이전 cycle에서 opencode run --format json 패턴으로 플러그인 end-to-end 작동 확인함. 이를 재사용 가능한 스크립트로 패키징. 기본 태그 시나리오(plan/run/sync/m/m-gc/rule)뿐 아니라 nx-plan 스킬 내부 고급 기능(HOW 서브에이전트 spawn, nx_plan_followup resume, multi-turn 플로우)도 커버</context>\n<parameter name=\"approach\">1. scripts/smoke-opencode-run.mjs 신규:\n   - Helper: runOpencode(prompt, opts) → opencode run --format json 실행 + JSON 이벤트 스트림 파싱. tool_use 이벤트 추출 (toolName + input + output)\n   - Helper: multi-turn 지원 — runOpencodeContinue(sessionId, prompt)로 -s/--session 사용\n   - Scenario 그룹화 — CLI 인자 또는 환경변수로 선택 가능. 기본은 전체 실행\n2. 시나리오 커버:\n   (a) 태그 기본 — [plan] / [run] / [sync] / [m] / [m:gc] / [rule] — 각 기대 tool 호출 패턴 (nx_plan_start, nx_task_add, nx_sync, nx_core_write 등) assertion\n   (b) Multi-turn plan flow — Turn1 [plan] X → nx_plan_start 호출. Turn2 continue → nx_plan_discuss. Turn3 [d] 결정 요약 → nx_plan_decide\n   (c) HOW 서브에이전트 resume — plan session 중 architect 호출 → task tool로 subagent spawn 이벤트 확인. followup 턴 → nx_plan_followup 호출 후 재spawn 시 resume_task_id/resume_session_id 인자 존재 확인\n   (d) Agent prompt 적용 증거 — 서브에이전트 응답 metadata의 agent 필드가 'architect' 등인지 확인 (응답 텍스트는 비결정적이므로 metadata만 검증)\n3. 실패 처리 — 각 시나리오 독립 try/catch + PASS/FAIL 집계 + exit 1 if any FAIL\n4. 비용 안내 — 실제 LLM 호출 발생. 각 scenario에 min prompt + max turns cap. README/docstring에 \"수동 실행 전용, CI 상시 X\" 명시\n5. 일시적 artifacts 정리 — .nexus/core/memory/smoke-*.md 같은 테스트 산출물 생성 시 finally에서 삭제",
+          "acceptance": "- scripts/smoke-opencode-run.mjs 단일 파일. bun scripts/smoke-opencode-run.mjs 직접 실행 가능\n- 최소 4개 시나리오 그룹: (a) basic tags, (b) plan multi-turn, (c) HOW resume, (d) subagent metadata\n- CLI 인자로 특정 그룹만 선택 가능 (예: bun scripts/smoke-opencode-run.mjs basic)\n- JSON event 파싱이 tool_use 이벤트의 toolName/input/output 추출 가능\n- 각 scenario 통과 시 PASS 출력, 실패 시 FAIL + 상세 이유\n- test artifacts 정리(try/finally)\n- file header나 top 주석에 사용법 + 비용 경고 + 전제조건(opencode 설치, provider 설정, plugin 로드 상태)",
+          "risk": "LLM 비결정성으로 tool 호출 순서/개수가 실행마다 다를 수 있음 — assertion은 \"해당 tool이 최소 1회 호출됨\" 같은 느슨한 조건 권장. HOW resume 시나리오는 multi-turn이라 실행 시간 긺(~1-2분). cost는 시나리오당 수십~수백원 내외 추정. opencode.json의 provider 설정 전제",
+          "status": "completed",
+          "deps": [],
+          "owner": "engineer",
+          "created_at": "2026-04-13T02:15:50.037Z"
+        },
+        {
+          "id": 2,
+          "title": "Smoke script 실제 실행 + 결과 리포트",
+          "context": "engineer가 작성한 smoke script를 실제 opencode run으로 돌려서 각 시나리오 PASS/FAIL 확인. 플러그인 end-to-end 동작 최종 검증",
+          "approach": "1. bun scripts/smoke-opencode-run.mjs 전체 실행\n2. 각 시나리오별 PASS/FAIL 집계\n3. 실패 시나리오 발견 시 근거(해당 JSON event log, 기대 vs 실제)와 함께 Lead에게 보고\n4. 생성된 테스트 artifacts(.nexus/core/memory/smoke-*.md 등) 정리 확인\n5. 예상 비용 추정치 기록",
+          "acceptance": "- 모든 시나리오 실행 완료 보고 (PASS/FAIL 카운트)\n- 실패 시나리오는 원인 분석 포함\n- 테스트 artifact 남지 않음 (script가 자동 정리하거나 tester가 수동 cleanup)\n- 토큰/비용 estimate 기록",
+          "risk": "multi-turn HOW resume 시나리오는 opencode 내부 resume 메커니즘 의존. CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 같은 flag가 opencode에도 있는지 불명확. resume이 지원 안 되면 해당 시나리오 skip 또는 fallback 확인만",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "owner": "tester",
+          "created_at": "2026-04-13T02:15:57.599Z"
+        }
+      ]
     }
   ]
 }
