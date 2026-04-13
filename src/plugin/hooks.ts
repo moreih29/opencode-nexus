@@ -627,13 +627,15 @@ async function injectPlanContinuityForTask(
     agentType
   );
   if (!continuity) {
-    console.error(`[plan-resume-inject] no continuity found for agent_type=${agentType}`);
+    if (process.env.NEXUS_DEBUG === "1") {
+      console.error(`[plan-resume-inject] no continuity found for agent_type=${agentType}`);
+    }
     return args;
   }
 
   const hints = buildPlanContinuityAdapterHints(continuity);
   const nextArgs = injectMissingPlanResumeArgs(args, { resume_task_id: hints.resume_task_id });
-  if (nextArgs !== args && nextArgs.task_id) {
+  if (process.env.NEXUS_DEBUG === "1" && nextArgs !== args && nextArgs.task_id) {
     console.error(`[plan-resume-inject] injected task_id=${nextArgs.task_id} for ${agentType}`);
   }
   return nextArgs;
