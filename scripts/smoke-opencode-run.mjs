@@ -440,10 +440,11 @@ async function runGroupHowResume() {
 
   // C1: Start plan with design topic
   {
-    console.log("  [how-resume/C1] Turn 1: [plan] architect 패널 필요한 설계 주제");
+    console.log("  [how-resume/C1] Turn 1: [plan] architect 패널 필요한 설계 주제 (600s timeout)");
     try {
       const { events, sessionId } = await runOpencode(
-        "[plan] 아키텍트 패널 분석이 필요한 설계 주제: 플러그인 상태 영속성 방식 결정"
+        "[plan] 리서치 생략. 설계 주제: 플러그인 상태 영속성 방식 결정. nx_plan_start 바로 호출.",
+        { timeoutMs: 600000 }
       );
       assertToolCalled(events, "nx_plan_start");
       r.pass("Turn 1: nx_plan_start called");
@@ -463,10 +464,11 @@ async function runGroupHowResume() {
 
   // C2: Ask to delegate to architect → expect task tool with subagent_type=architect
   {
-    console.log("  [how-resume/C2] Turn 2: architect에게 분석 의뢰");
+    console.log("  [how-resume/C2] Turn 2: architect에게 분석 의뢰 (600s timeout)");
     try {
       const { events } = await runOpencode("이 안건을 architect에게 분석 의뢰해줘", {
         sessionId: howSessionId ?? undefined,
+        timeoutMs: 600000,
       });
       const taskUses = filterToolUses(events, "task");
       if (taskUses.length === 0) {
@@ -499,10 +501,11 @@ async function runGroupHowResume() {
 
   // C3: Follow-up question → check for resume mechanism
   {
-    console.log("  [how-resume/C3] Turn 3: 아키텍트 후속 질문 (resume check)");
+    console.log("  [how-resume/C3] Turn 3: 아키텍트 후속 질문 (resume check, 600s timeout)");
     try {
       const { events } = await runOpencode("아키텍트에게 후속 질문: 더 구체적으로 설명해줘", {
         sessionId: howSessionId ?? undefined,
+        timeoutMs: 600000,
       });
       const taskUses = filterToolUses(events, "task");
 
@@ -584,10 +587,11 @@ async function runGroupAgentPrompt() {
 
   // D1: Start plan for subagent prompt verification
   {
-    console.log("  [agent-prompt/D1] Turn 1: [plan] 서브에이전트 프롬프트 검증");
+    console.log("  [agent-prompt/D1] Turn 1: [plan] 서브에이전트 프롬프트 검증 (600s timeout)");
     try {
       const { events, sessionId } = await runOpencode(
-        "[plan] 서브에이전트 프롬프트 검증 주제: 엔지니어 역할 명세 확인"
+        "[plan] 리서치 생략. 주제: 엔지니어 역할 명세 확인. nx_plan_start 바로 호출.",
+        { timeoutMs: 600000 }
       );
       assertToolCalled(events, "nx_plan_start");
       r.pass("Turn 1: nx_plan_start called");
@@ -607,11 +611,11 @@ async function runGroupAgentPrompt() {
 
   // D2: Delegate to engineer → expect task tool with subagent_type=engineer
   {
-    console.log("  [agent-prompt/D2] Turn 2: engineer 에이전트 의뢰");
+    console.log("  [agent-prompt/D2] Turn 2: engineer 에이전트 의뢰 (600s timeout)");
     try {
       const { events } = await runOpencode(
         "engineer 에이전트에게 이 주제의 구현 가능성 분석을 의뢰해줘",
-        { sessionId: agentSessionId ?? undefined }
+        { sessionId: agentSessionId ?? undefined, timeoutMs: 600000 }
       );
       const taskUses = filterToolUses(events, "task");
 
