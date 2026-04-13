@@ -106,6 +106,11 @@ async function runOpencode(prompt, { sessionId, extraArgs = [], timeoutMs } = {}
     child.on("close", (code) => {
       clearTimeout(timer);
       const rawStdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const rawStderr = Buffer.concat(stderrChunks).toString("utf8");
+
+      // Surface plugin trace lines (e.g., [plan-resume-inject]) for debugging.
+      const traceLines = rawStderr.split("\n").filter((l) => l.includes("[plan-resume-inject]"));
+      for (const line of traceLines) console.log(`    TRACE: ${line.trim()}`);
 
       const events = [];
       let extractedSessionId = null;
@@ -520,10 +525,14 @@ async function runGroupHowResume() {
           r.fail("Turn 3: no events received");
         }
       } else {
-        // Check for resume parameters
+        // Check for resume identifiers across known schemas.
+        // - opencode 1.3.13 native: `task_id` (single field, used by LLM and plugin auto-inject)
+        // - Claude Code-style: `resume_task_id` / `resume_session_id` / `resume_handles`
         const resumeCall = taskUses.find((e) => {
           const inp = e.part?.state?.input ?? {};
           return (
+            inp.task_id ||
+            inp.taskId ||
             inp.resume_task_id ||
             inp.resume_session_id ||
             inp.resumeTaskId ||
@@ -534,16 +543,25 @@ async function runGroupHowResume() {
         if (resumeCall) {
           const inp = resumeCall.part?.state?.input ?? {};
           const resumeId =
-            inp.resume_task_id ?? inp.resumeTaskId ?? inp.resume_session_id ?? inp.resumeSessionId;
-          r.pass(`Turn 3: task re-spawned with resume parameter (${resumeId?.slice(0, 16)}...)`);
+            inp.task_id ??
+            inp.taskId ??
+            inp.resume_task_id ??
+            inp.resumeTaskId ??
+            inp.resume_session_id ??
+            inp.resumeSessionId;
+          const field = inp.task_id || inp.taskId
+            ? "task_id (opencode native)"
+            : "resume_task_id (Claude Code naming)";
+          r.pass(`Turn 3: task re-spawned with resume identifier via ${field} (${String(resumeId).slice(0, 16)}...)`);
         } else {
           r.warn(
-            "Turn 3: task tool called but no resume_task_id / resume_session_id found in input. " +
-              "Resume mechanism may not be supported by this opencode build — treating as soft skip. " +
-              "See harness-docs/resume_invocation.md for details."
+            "Turn 3: task tool called but no task_id / resume_task_id found in input. " +
+              "Either the LLM didn't reference a prior session and plugin auto-inject did not " +
+              "trigger (no matching architect continuity), or the resume mechanism is unavailable. " +
+              "See harness-docs/resume_invocation.md."
           );
           r.pass(
-            "Turn 3: task tool called (resume not supported by this opencode build — soft pass)"
+            "Turn 3: task tool called (no resume identifier this turn — soft pass)"
           );
         }
       }

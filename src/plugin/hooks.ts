@@ -8,6 +8,11 @@ import {
   injectMissingRunResumeArgs,
   selectRunContinuityFromCore
 } from "../orchestration/run-continuity-adapter.js";
+import {
+  buildPlanContinuityAdapterHints,
+  injectMissingPlanResumeArgs,
+  readPlanParticipantContinuityFromCore
+} from "../orchestration/plan-continuity-adapter.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
 import { canJoinPlanWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
 import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
@@ -139,6 +144,7 @@ export function createHooks(ctx: PluginContext) {
     "tool.execute.before": async (input: ToolInput, output: ToolOutput) => {
       if (input.tool === "task") {
         output.args = await injectRunContinuityForTask(paths, output.args);
+        output.args = await injectPlanContinuityForTask(paths, output.args);
       }
 
       const sessionID = pickSessionID(input) ?? pickSessionID(output.args);
@@ -601,6 +607,36 @@ async function injectRunContinuityForTask(
 
   const hints = buildRunContinuityAdapterHints(continuity);
   return injectMissingRunResumeArgs(args, hints);
+}
+
+async function injectPlanContinuityForTask(
+  paths: ReturnType<typeof createNexusPaths>,
+  args: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (!(await fileExists(paths.PLAN_FILE))) {
+    return args;
+  }
+
+  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
+  if (!agentType) {
+    return args;
+  }
+
+  const continuity = await readPlanParticipantContinuityFromCore(
+    paths.ORCHESTRATION_CORE_FILE,
+    agentType
+  );
+  if (!continuity) {
+    console.error(`[plan-resume-inject] no continuity found for agent_type=${agentType}`);
+    return args;
+  }
+
+  const hints = buildPlanContinuityAdapterHints(continuity);
+  const nextArgs = injectMissingPlanResumeArgs(args, { resume_task_id: hints.resume_task_id });
+  if (nextArgs !== args && nextArgs.task_id) {
+    console.error(`[plan-resume-inject] injected task_id=${nextArgs.task_id} for ${agentType}`);
+  }
+  return nextArgs;
 }
 
 async function isRunMode(paths: ReturnType<typeof createNexusPaths>): Promise<boolean> {

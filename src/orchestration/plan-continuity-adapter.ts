@@ -1,5 +1,6 @@
 import { pickContinuityFromState } from "./core.js";
 import { readOrchestrationCoreState } from "./core-store.js";
+import type { RunContinuityAdapterHints } from "./run-continuity-adapter.js";
 
 export interface PlanParticipantContinuity {
   role: string;
@@ -8,6 +9,45 @@ export interface PlanParticipantContinuity {
   last_summary: string | null;
   updated_at: string | null;
   source: "orchestration-core" | "plan-sidecar";
+}
+
+/**
+ * Build adapter hints for plan-mode resume injection into task tool args.
+ * Mirrors buildRunContinuityAdapterHints but sourced from plan participant continuity.
+ */
+export function buildPlanContinuityAdapterHints(
+  continuity: PlanParticipantContinuity | null
+): RunContinuityAdapterHints {
+  return {
+    resume_task_id: continuity?.task_id ?? undefined,
+    resume_session_id: continuity?.session_id ?? undefined,
+    resume_handles: {}
+  };
+}
+
+/**
+ * Inject resume hint into opencode task tool args using opencode 1.3.13 native naming.
+ * The opencode task tool accepts a single `task_id` field that points to the prior
+ * subagent session to resume. This differs from the Claude Code-style
+ * `resume_task_id` / `resume_session_id` naming used by injectMissingRunResumeArgs.
+ *
+ * Verified via audit log inspection (2026-04-13) — the LLM naturally fills
+ * args.task_id when continuing a prior subagent session, but plugin-side injection
+ * is needed as a fallback when the LLM omits it (e.g., cross-turn delegation
+ * without explicit task_id reference).
+ */
+export function injectMissingPlanResumeArgs(
+  args: Record<string, unknown>,
+  hints: { resume_task_id?: string }
+): Record<string, unknown> {
+  if (
+    !hints.resume_task_id ||
+    Object.prototype.hasOwnProperty.call(args, "task_id") ||
+    Object.prototype.hasOwnProperty.call(args, "taskId")
+  ) {
+    return args;
+  }
+  return { ...args, task_id: hints.resume_task_id };
 }
 
 export async function readPlanParticipantContinuityFromCore(
