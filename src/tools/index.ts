@@ -2,7 +2,6 @@ import { nxArtifactWrite } from "./artifact.js";
 import { nxAstReplace, nxAstSearch } from "./ast.js";
 import { nxBriefing } from "./briefing.js";
 import { nxContext } from "./context.js";
-import { nxCoreRead, nxCoreWrite } from "./core-store.js";
 import { nxDelegateTemplate } from "./delegation.js";
 import {
   nxLspCodeActions,
@@ -39,8 +38,6 @@ export const nexusTools = {
   nx_sync: nxSync,
   nx_setup: nxSetup,
 
-  nx_core_read: nxCoreRead,
-  nx_core_write: nxCoreWrite,
   nx_rules_read: nxRulesRead,
   nx_rules_write: nxRulesWrite,
   nx_context: nxContext,

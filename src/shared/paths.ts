@@ -4,16 +4,20 @@ export type NexusPaths = ReturnType<typeof createNexusPaths>;
 
 export function createNexusPaths(projectRoot: string) {
   const NEXUS_ROOT = path.join(projectRoot, ".nexus");
-  const CORE_ROOT = path.join(NEXUS_ROOT, "core");
+  const CONTEXT_ROOT = path.join(NEXUS_ROOT, "context");
+  const MEMORY_ROOT = path.join(NEXUS_ROOT, "memory");
   const RULES_ROOT = path.join(NEXUS_ROOT, "rules");
   const STATE_ROOT = path.join(NEXUS_ROOT, "state");
+  const AUTO_ROOT = path.join(STATE_ROOT, "auto");
 
   return {
     PROJECT_ROOT: projectRoot,
     NEXUS_ROOT,
-    CORE_ROOT,
+    CONTEXT_ROOT,
+    MEMORY_ROOT,
     RULES_ROOT,
     STATE_ROOT,
+    AUTO_ROOT,
     HISTORY_FILE: path.join(NEXUS_ROOT, "history.json"),
     CONFIG_FILE: path.join(NEXUS_ROOT, "config.json"),
     PLAN_FILE: path.join(STATE_ROOT, "plan.json"),

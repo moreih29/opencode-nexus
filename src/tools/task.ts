@@ -231,7 +231,7 @@ export const nxTaskClose = tool({
     await safeUnlink(paths.STOP_WARNED_FILE);
     await writeJsonFile(paths.REOPEN_TRACKER_FILE, { reopenCount: 0, blockedTransitions: 0 });
 
-    await writeMemoryCycleNote(paths.CORE_ROOT, memoryHint);
+    await writeMemoryCycleNote(paths.AUTO_ROOT, memoryHint);
 
     return JSON.stringify(
       {
@@ -295,7 +295,7 @@ async function readCurrentBranch(projectRoot: string): Promise<string> {
 }
 
 async function writeMemoryCycleNote(
-  coreRoot: string,
+  autoRoot: string,
   memoryHint: {
     taskCount: number;
     decisionCount: number;
@@ -305,10 +305,9 @@ async function writeMemoryCycleNote(
     cycleTopics: string[];
   }
 ): Promise<void> {
-  const memoryDir = path.join(coreRoot, "memory");
-  await fs.mkdir(memoryDir, { recursive: true });
+  await fs.mkdir(autoRoot, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const filePath = path.join(memoryDir, `cycle-${stamp}.md`);
+  const filePath = path.join(autoRoot, `cycle-${stamp}.md`);
   const content = [
     "<!-- tags: memory, cycle -->",
     `# Cycle Memory ${stamp}`,

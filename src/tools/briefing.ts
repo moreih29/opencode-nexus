@@ -7,18 +7,6 @@ import { matchesHint } from "../shared/markdown.js";
 
 const z = tool.schema;
 
-const MATRIX: Record<string, Array<"identity" | "codebase" | "reference" | "memory">> = {
-  architect: ["identity", "codebase", "reference", "memory"],
-  designer: ["identity", "codebase", "reference", "memory"],
-  postdoc: ["identity", "reference", "memory"],
-  strategist: ["identity", "reference", "memory"],
-  engineer: ["codebase", "memory"],
-  researcher: ["identity", "reference", "memory"],
-  writer: ["identity", "reference", "memory"],
-  tester: ["codebase", "memory"],
-  reviewer: ["identity", "reference", "memory"]
-};
-
 export const nxBriefing = tool({
   description: "Build role-based briefing from Nexus knowledge",
   args: {
@@ -28,7 +16,6 @@ export const nxBriefing = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const role = args.role.trim().toLowerCase();
-    const layers = MATRIX[role] ?? ["identity", "codebase", "reference", "memory"];
 
     const sections: string[] = [];
 
@@ -42,12 +29,14 @@ export const nxBriefing = tool({
       sections.push("## Rules\n" + rules.join("\n\n"));
     }
 
-    for (const layer of layers) {
-      const layerPath = path.join(paths.CORE_ROOT, layer);
-      const docs = await readMarkdownDir(layerPath, args.hint);
-      if (docs.length > 0) {
-        sections.push(`## ${capitalize(layer)}\n` + docs.join("\n\n"));
-      }
+    const contextDocs = await readMarkdownDir(paths.CONTEXT_ROOT, args.hint);
+    if (contextDocs.length > 0) {
+      sections.push("## Context\n" + contextDocs.join("\n\n"));
+    }
+
+    const memoryDocs = await readMarkdownDir(paths.MEMORY_ROOT, args.hint);
+    if (memoryDocs.length > 0) {
+      sections.push("## Memory\n" + memoryDocs.join("\n\n"));
     }
 
     if (sections.length === 0) {
@@ -85,8 +74,4 @@ async function readLatestDecisions(historyFile: string): Promise<string[]> {
   const latest = cycles[cycles.length - 1];
   const issues = latest?.plan?.issues ?? [];
   return issues.map((i) => i.decision).filter((v): v is string => typeof v === "string" && v.length > 0);
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

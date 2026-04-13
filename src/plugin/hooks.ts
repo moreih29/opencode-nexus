@@ -345,24 +345,15 @@ export function createHooks(ctx: PluginContext) {
         }
       }
 
-      // Core file count
+      // Context file count
       try {
-        let coreFileCount = 0;
-        const coreLayers = ["identity", "codebase", "reference", "memory"] as const;
-        for (const layer of coreLayers) {
-          const layerDir = path.join(paths.CORE_ROOT, layer);
-          try {
-            const files = await fs.readdir(layerDir);
-            coreFileCount += files.filter((f) => f.endsWith(".md")).length;
-          } catch {
-            // layer dir may not exist
-          }
-        }
-        if (coreFileCount > 0) {
-          parts.push(`core: ${coreFileCount} files`);
+        const contextFiles = await fs.readdir(paths.CONTEXT_ROOT);
+        const contextFileCount = contextFiles.filter((f) => f.endsWith(".md")).length;
+        if (contextFileCount > 0) {
+          parts.push(`context: ${contextFileCount} files`);
         }
       } catch {
-        // skip core count on error
+        // skip context count on error
       }
 
       // Active agents

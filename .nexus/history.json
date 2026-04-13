@@ -4455,6 +4455,211 @@
       "branch": "feat/skill-delivery-option-d",
       "plan": null,
       "tasks": []
+    },
+    {
+      "completed_at": "2026-04-13T05:04:14.929Z",
+      "branch": "feat/skill-delivery-option-d",
+      "plan": {
+        "id": 22,
+        "topic": ".nexus/core/ 4-layer 도구 인프라 완전 폐지 (phase1-followup §4)",
+        "issues": [
+          {
+            "id": 1,
+            "title": "자동 생성물 새 위치 결정 (recent-cycle-summary, recent-changes, decision-log, roadmap synced update) + nx_core_read/write 도구 처리 방침",
+            "status": "decided",
+            "decision": "**자동 생성물 위치: `.nexus/state/auto/` + nx_core_read/write 도구 폐지.**\n\n새 위치 매핑:\n- `.nexus/state/auto/recent-cycle-summary.md`\n- `.nexus/state/auto/recent-changes.md`\n- `.nexus/state/auto/decision-log.md`\n- `.nexus/state/auto/roadmap-sync.md` (기존 identity/roadmap.md synced update)\n- writeMemoryCycleNote 출력도 `.nexus/state/auto/cycle-{N}.md`로\n\n`.gitignore`에 이미 `.nexus/*` 무시 + `!.nexus/state/` 예외 정의되어 있어 별도 작업 불필요.\n\n**nx_core_read/write 도구 폐지 근거**:\n- 4-layer enum에 의존 → 4-layer 폐지로 도구 의미 소멸\n- 사람 작성 문서(`.nexus/context/`, `.nexus/memory/`, `.nexus/rules/`)는 Read/Write/Glob로 직접 접근 가능 (LLM 자연스러운 패턴)\n- 자동 생성물은 nx_init/nx_sync 내부 로직이 직접 작성 (외부 도구 호출 불필요)\n\n**기각**:\n- (a) `.nexus/memory/auto-*` prefix: 사람 메모와 mix 위험. memory는 사람이 큐레이션, auto는 도구가 덮어씀 — 의미 분리 필요\n- (b) `.nexus/auto/` 신규 디렉토리: state와 의미 중복. state도 runtime 데이터이고 auto도 자동 생성. 새 root 추가는 인지 부담만 ↑\n- (c) nx_core_*에서 layer 제거하고 단일 경로 wrapper 유지: fs.readFile/writeFile wrapper는 부가가치 0. LLM이 직접 호출 가능"
+          },
+          {
+            "id": 2,
+            "title": "nx_briefing role-based access matrix 재설계 (4-layer MATRIX 제거 + .nexus/{context,memory,rules}/ 소스로 이행)",
+            "status": "decided",
+            "decision": "**nx_briefing 재설계: MATRIX 제거, `.nexus/{context,memory,rules}/` 통합 collect.**\n\n새 동작:\n- role 무관하게 `.nexus/context/`, `.nexus/memory/`, `.nexus/rules/` 3개 디렉토리에서 hint 매칭 문서 수집\n- role 파라미터는 `# Briefing for {role}` 헤더 표시 + decisions/rules 우선 표시용\n- 출력 구조: Decisions → Rules → Context → Memory 순\n- 도구 자체는 유지 (plan/run skill에서 호출됨, 가치 있음)\n\n**기각**:\n- (a) role-specific filtering 유지: 4-layer 의존성 남음, 폐지 목표 위반\n- (b) 도구 폐지: nx_briefing은 plan에서 분석 시작 시, run에서 위임 전 컨텍스트 패키징에 사용. 사람 문서 통합 collect 가치 유지\n- (c) role 별 가중치(예: engineer는 codebase 우선): YAGNI. 사람 문서 디렉토리에 이미 분류되어 있고 LLM이 자연스럽게 처리"
+          },
+          {
+            "id": 3,
+            "title": "도구/코드 일괄 정리 (workflow.ts, task.ts — nx_init/nx_sync/writeMemoryCycleNote, hooks.ts:347, state.ts mkdir, paths.ts CORE_ROOT)",
+            "status": "decided",
+            "decision": "**4-layer 코드/경로 일괄 제거.**\n\n수정 매트릭스:\n- **`src/tools/core-store.ts`**: 파일 삭제 (nxCoreRead/Write 도구 폐지)\n- **`src/tools/index.ts`**: core-store export 제거\n- **`src/tools/briefing.ts`**: MATRIX 제거 + 3개 디렉토리(context/memory/rules) collect로 재작성 (Issue #2 결정)\n- **`src/tools/workflow.ts`**: nx_init 4-layer mkdir 제거. nx_sync 자동 생성물 출력을 `.nexus/state/auto/`로. syncIdentityDocs는 `.nexus/state/auto/roadmap-sync.md`로 작성\n- **`src/tools/task.ts`**: writeMemoryCycleNote 출력 위치를 `.nexus/state/auto/cycle-{N}.md`로 변경\n- **`src/plugin/hooks.ts:347`**: 4-layer 순회 로직 제거\n- **`src/shared/state.ts`**: 4-layer mkdir 제거, `.nexus/state/auto/` mkdir 추가\n- **`src/shared/paths.ts`**: `CORE_ROOT` 제거, `AUTO_ROOT` (= `.nexus/state/auto/`) 추가. CORE 4-layer 경로 상수 제거\n- **`src/plugin/system-prompt.ts`**: 4-layer/core 언급 정리\n\n**기각**:\n- (a) CORE_ROOT를 deprecation alias로 유지: dead code 누적 위험. 즉시 제거 + grep 검증\n- (b) nx_init이 4-layer mkdir만 skip하고 도구 인터페이스 그대로: 사용자 혼란. 디렉토리도 안 만드는데 layer 개념 남는 게 misleading\n- (c) writeMemoryCycleNote 폐지: cycle note는 plan/run history와 별개 가치 있음 (사람이 후행 검색). 위치만 이동"
+          },
+          {
+            "id": 4,
+            "title": "e2e 테스트 경로 수정 (e2e-init-sync.mjs 등)",
+            "status": "decided",
+            "decision": "**e2e 테스트 4-layer 의존 검증을 새 위치로 수정.**\n\n대상:\n- `scripts/e2e-init-sync.mjs`: 4-layer 디렉토리 검증 → `.nexus/state/auto/` 검증으로 변경\n- `scripts/e2e-smoke.mjs:75` 근처 (phase1-followup 언급): 실제 라인 확인 후 4-layer 검증 제거 또는 새 위치 검증\n- 다른 e2e 스크립트에 `core/{layer}` 검증 있는지 grep 후 일괄 정리\n- 기존 nx_core_read/write 단위 테스트 있으면 폐지 (도구 자체 제거됨)\n\n**기각**:\n- (a) 검증 자체 제거: regression 방지 목적 — 새 위치 검증으로 대체가 옳음\n- (b) nx_core_*/briefing 단위 테스트 별도 신규 작성: briefing은 새 디렉토리 collect 검증 추가, core-store는 도구 폐지로 불필요"
+          },
+          {
+            "id": 5,
+            "title": "레거시 문서 업데이트 (architecture.md, tools.md, phase1-followup.md §4 deferred → 완료 승격)",
+            "status": "decided",
+            "decision": "**레거시 문서 일괄 업데이트.**\n\n대상:\n- `.nexus/context/architecture.md`: 4-layer 언급 제거 + 새 자동 생성물 구조(`.nexus/state/auto/`) 반영. core-store/briefing 도구 설명 현행화\n- `.nexus/context/tools.md`: nx_core_read/write 항목 제거. nx_briefing 새 동작 기술. 자동 생성물 위치 명시\n- `.nexus/memory/phase1-followup.md §4 \"core/ 4-layer 도구 인프라 redesign (deferred)\"`: \"deferred\" → \"완료\" 승격. plan #22 cycle 참조 + 결정 요약 + 변경된 파일 목록 추가. 작업 항목 체크리스트 모두 [x]로 마킹\n- `.nexus/context/build-and-release.md`, `.nexus/context/orchestration.md`, `.nexus/context/principles.md` 등에 4-layer 언급 있는지 grep 후 일괄 정리\n- AGENTS.md / templates/nexus-section.md에 4-layer 언급 있으면 제거\n\n**기각**:\n- (a) phase1-followup §4 섹션 자체 삭제: 역사적 기록 가치 있음. \"완료\" 표시로 보존\n- (b) 마이그레이션 가이드 신규 작성: 단일 사용자 dogfooding 환경 — 별도 문서 불필요. CONSUMING.md 같은 외부 사용자 가이드에 영향 있으면 그것만 update"
+          }
+        ],
+        "research_summary": "phase1-followup.md §4 \"core/ 4-layer 도구 인프라 redesign (deferred)\"에 정리된 작업 목록을 모두 실행. 영향 코드 식별 결과:\n\n**4-layer 의존 코드 (8개 파일)**:\n- src/tools/core-store.ts: `nxCoreRead`, `nxCoreWrite` 도구가 `LAYERS = [\"identity\",\"codebase\",\"reference\",\"memory\"]` enum + `CORE_ROOT/{layer}/topic.md` 경로 사용\n- src/tools/briefing.ts: `nxBriefing` 도구의 `MATRIX` 객체가 role별 4-layer 접근 권한 매핑\n- src/tools/workflow.ts: nx_init/nx_sync가 4-layer 디렉토리 생성 + syncIdentityDocs/recent-cycle-summary/recent-changes/decision-log 자동 생성물을 `core/{layer}/`에 작성\n- src/tools/task.ts:224 근처 writeMemoryCycleNote가 `.nexus/core/memory/`에 cycle note 작성\n- src/plugin/hooks.ts:347 4-layer 순회 로직\n- src/shared/state.ts: 4-layer mkdir\n- src/shared/paths.ts: CORE_ROOT 등 4-layer 경로 정의\n- src/plugin/system-prompt.ts: 일부 layer 언급 (확인 필요)\n\n**문서 잔재 (3개)**:\n- .nexus/context/architecture.md, tools.md\n- .nexus/memory/phase1-followup.md (§4 자체)\n\n**e2e 테스트 (1개)**: scripts/e2e-init-sync.mjs (phase1-followup가 e2e-smoke.mjs:75 언급했으나 실제는 init-sync일 가능성)\n\n**자동 생성물 4종**: recent-cycle-summary.md, recent-changes.md, decision-log.md, roadmap.md(synced update)\n\n**미결정 핵심 1개**: 자동 생성물을 어디로 옮길지. 후보: (a) .nexus/state/auto/ 신규 (자연스러움 — state는 runtime 데이터), (b) .nexus/memory/auto-* prefix (memory와 mix 위험), (c) .nexus/auto/ 신규 디렉토리 (state와 의미 충돌). nx_core_read/write 도구 자체 처리: (1) layer 제거하고 단일 경로 받기, (2) 폐지 (사람 문서는 Read/Write 직접, 자동 생성물은 별도 도구). nx_briefing 재설계: 4-layer MATRIX → .nexus/{context,memory,rules}/ 디렉토리 collect.\n\n**plan history 근거**: plan session #18 cycle 55 결정에 4-layer 도구 인프라 유지가 deferred로 명시. 본 cycle은 그 deferred 작업 실행.",
+        "created_at": "2026-04-13T04:48:01.981Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Foundation: paths.ts + state.ts (AUTO_ROOT 정의 + 4-layer mkdir 제거)",
+          "context": "Issue #1, #3 결정의 기반. AUTO_ROOT 경로 상수 신규 + CORE_ROOT 4-layer 경로 상수 제거. state.ts의 4-layer mkdir → AUTO_ROOT mkdir로 교체. 다른 모든 코드 task의 dep",
+          "approach": "1. src/shared/paths.ts:\n   - `CORE_ROOT` 정의 제거 (현재: STATE_ROOT 외 4-layer 경로 정의 있음 — grep으로 확인)\n   - `AUTO_ROOT = path.join(STATE_ROOT, 'auto')` 추가\n   - 4-layer 개별 경로 상수(IDENTITY_ROOT 등) 있으면 모두 제거\n2. src/shared/state.ts:\n   - ensureNexusStructure 함수에서 4-layer mkdir 라인 제거\n   - AUTO_ROOT mkdir 추가\n3. `bun run check` 통과",
+          "acceptance": "- src/shared/paths.ts에 `AUTO_ROOT` 정의 + `CORE_ROOT` 부재\n- src/shared/state.ts ensureNexusStructure가 .nexus/state/auto/만 mkdir, 4-layer 디렉토리 mkdir 안 함\n- `bun run check` 통과\n- 다른 파일이 CORE_ROOT 참조 시 type error 발생 (이후 task에서 fix)",
+          "risk": "CORE_ROOT 의존 코드가 8+ 파일에 있어 type error 일시적 cascade. T2-T4가 같은 cycle에서 fix하므로 OK",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-13T04:50:16.940Z"
+        },
+        {
+          "id": 2,
+          "title": "core-store.ts 삭제 + tools/index.ts export 정리 (nx_core_read/write 폐지)",
+          "context": "Issue #1 nx_core_*/write 폐지 결정. 4-layer enum에 묶인 도구이므로 layer 폐지 시 의미 소멸",
+          "approach": "1. src/tools/core-store.ts 파일 삭제 (rm)\n2. src/tools/index.ts에서 nxCoreRead, nxCoreWrite import + export 제거\n3. createTools() 반환 객체에서 nx_core_read, nx_core_write 키 제거\n4. `bun run check` 통과",
+          "acceptance": "- src/tools/core-store.ts 부재\n- src/tools/index.ts에 nxCoreRead/nxCoreWrite 참조 0건\n- createTools 반환에 nx_core_read/nx_core_write 부재\n- `bun run check` 통과",
+          "risk": "기존 사용자가 LLM에게 nx_core_read 호출 요청 시 도구 부재 — 대신 Read tool 직접 호출하면 됨. 호환성 깨지나 documented(문서 update 별도 task)",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-13T04:50:23.415Z"
+        },
+        {
+          "id": 3,
+          "title": "briefing.ts 재작성 (MATRIX 제거 + 3-디렉토리 collect)",
+          "context": "Issue #2 nx_briefing 재설계. 4-layer MATRIX 의존 제거. role 무관 동일 컨텍스트 collect",
+          "approach": "1. src/tools/briefing.ts:\n   - MATRIX 객체 제거\n   - layers 변수 제거\n   - layer 순회 루프 → context/memory/rules 3개 디렉토리 직접 collect\n   - 새 출력 구조: Decisions → Rules → Context → Memory\n   - paths.CORE_ROOT 참조 제거 → paths.CONTEXT_ROOT, MEMORY_ROOT, RULES_ROOT 사용\n   - role 파라미터는 헤더 표시용으로만\n2. paths.ts에 CONTEXT_ROOT/MEMORY_ROOT 정의 있는지 확인 (없으면 추가)\n3. `bun run check` 통과\n4. nx_briefing 단위 호출 smoke (`bun -e`로 빈 디렉토리 + 더미 파일 케이스)",
+          "acceptance": "- src/tools/briefing.ts에 MATRIX 부재\n- paths.CORE_ROOT 참조 부재\n- 출력 구조: # Briefing for {role} → Decisions → Rules → Context → Memory\n- `bun run check` 통과",
+          "risk": "role-specific filtering 폐지로 기존 사용자가 architect briefing에서 받던 codebase 우선이 사라짐. 다만 모든 디렉토리 통합 collect라 정보는 더 많아짐",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-13T04:50:32.393Z"
+        },
+        {
+          "id": 4,
+          "title": "workflow.ts + task.ts + hooks.ts + system-prompt.ts 일괄 4-layer 제거",
+          "context": "Issue #3 코드 일괄 정리의 메인 작업. 자동 생성물 출력 위치 변경 + 4-layer 순회 로직 제거",
+          "approach": "1. src/tools/workflow.ts:\n   - nx_init: 4-layer 디렉토리 생성 코드 제거\n   - nx_sync (syncIdentityDocs 등): recent-cycle-summary, recent-changes, decision-log, roadmap-sync 출력 위치를 paths.AUTO_ROOT (`.nexus/state/auto/`)로 변경\n2. src/tools/task.ts:\n   - writeMemoryCycleNote 출력 위치를 .nexus/state/auto/cycle-{N}.md로 변경\n3. src/plugin/hooks.ts:\n   - line 347 근처 4-layer 순회 로직 제거 (정확한 라인은 읽고 확인)\n4. src/plugin/system-prompt.ts:\n   - 4-layer 언급 또는 core/ 경로 텍스트 정리 (system prompt에 4-layer 설명 있는지 grep)\n5. `bun run check`, `bun run build` 통과",
+          "acceptance": "- workflow.ts/task.ts에서 .nexus/core/{layer}/ 경로 부재 (grep)\n- nx_init 호출 시 .nexus/state/auto/ mkdir만 (4-layer 디렉토리 생성 0)\n- nx_sync 자동 생성물이 .nexus/state/auto/에 작성됨 (수동 단위 smoke 권장)\n- hooks.ts와 system-prompt.ts에 4-layer/identity/codebase 등 텍스트 부재\n- `bun run check`, `bun run build` 통과",
+          "risk": "writeMemoryCycleNote가 다른 곳에서 import되면 호출자도 영향. nx_sync output이 nx_briefing의 collect 대상에 포함되는지 확인 필요 (auto는 사람 문서 아니므로 briefing에 노출하지 말 것)",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-13T04:50:43.583Z"
+        },
+        {
+          "id": 5,
+          "title": "e2e 테스트 4-layer 검증 → 새 위치 검증",
+          "context": "Issue #4 e2e 수정. 4-layer 디렉토리 검증 잔재를 .nexus/state/auto/ 검증으로 교체",
+          "approach": "1. scripts/ 전수 grep \"core/identity|core/codebase|core/memory|core/reference|nx_core_read|nx_core_write\" → 매치 파일 식별\n2. e2e-init-sync.mjs: 4-layer 디렉토리 검증 → .nexus/state/auto/ 검증 + recent-cycle-summary 등 자동 생성물 위치 확인\n3. e2e-smoke.mjs:75 근처 (phase1-followup 언급 — 실제 라인 확인)\n4. nx_core_read/write 단위 테스트가 있다면 폐지 (도구 자체 제거됨)\n5. e2e-loader-smoke 등 다른 e2e가 core/* 의존하는지 확인\n6. `bun run test:e2e` 전체 통과",
+          "acceptance": "- scripts/ 전수에서 .nexus/core/{layer} 검증 0건\n- e2e-init-sync.mjs가 .nexus/state/auto/ 위치 검증\n- nx_core_read/write 단위 테스트 부재 또는 삭제됨\n- `bun run test:e2e` 전체 PASS (기존 28 + 신규 변경 영향 없음)",
+          "risk": "e2e 가 ensureNexusStructure 호출 후 4-layer 디렉토리 존재 가정하는 경우 다수일 수 있음 — 모두 새 위치 또는 부재 검증으로",
+          "status": "completed",
+          "deps": [
+            2,
+            3,
+            4
+          ],
+          "plan_issue": 4,
+          "owner": "tester",
+          "created_at": "2026-04-13T04:50:52.700Z"
+        },
+        {
+          "id": 6,
+          "title": ".nexus/context/architecture.md + tools.md 4-layer 언급 제거 + 새 구조 반영",
+          "context": "Issue #5 레거시 문서 업데이트 핵심 2개 파일",
+          "approach": "1. .nexus/context/architecture.md:\n   - \"core/{layer}\", \"4-layer\", \"nx_core_read/write\" 언급 grep 후 제거 또는 새 구조로 대체\n   - 자동 생성물 위치 .nexus/state/auto/ 명시\n   - nx_briefing 새 동작(3-디렉토리 collect) 반영\n2. .nexus/context/tools.md:\n   - nx_core_read/nx_core_write 항목 제거\n   - nx_briefing 항목 갱신 (role-based MATRIX 폐지 + 3-디렉토리 collect)\n   - 자동 생성물 위치 표\n3. 두 파일 마크다운 구조 무결",
+          "acceptance": "- architecture.md, tools.md에서 \"core/identity\", \"core/codebase\" 등 4-layer 경로 언급 0건\n- nx_core_read/write 언급 0건\n- nx_briefing 설명이 새 동작과 일치\n- 자동 생성물 .nexus/state/auto/ 위치 명시",
+          "risk": "두 문서가 다른 섹션에서 4-layer 명시 가능 — grep으로 전수 확인 후 한 PR로 일관 정리",
+          "status": "completed",
+          "deps": [
+            2,
+            3,
+            4
+          ],
+          "plan_issue": 5,
+          "owner": "writer",
+          "created_at": "2026-04-13T04:51:00.138Z"
+        },
+        {
+          "id": 7,
+          "title": ".nexus/memory/phase1-followup.md §4 deferred → 완료 승격",
+          "context": "Issue #5의 follow-up 추적 메모 업데이트. plan #22 cycle 기록 + 작업 항목 [x] 마킹",
+          "approach": "1. §4 \"core/ 4-layer 도구 인프라 redesign (deferred)\" 섹션:\n   - 제목 \"(deferred)\" → \"(완료, plan #22)\"\n   - 작업 항목 8개 모두 [x] 처리 또는 \"✓ 완료\" 마킹\n   - 변경된 코드 파일 목록 추가 (paths.ts, state.ts, core-store.ts 삭제, briefing.ts 재작성, workflow.ts, task.ts, hooks.ts, system-prompt.ts)\n   - \"자동 생성물 새 위치\" 결정 결과: .nexus/state/auto/ 명시\n   - plan #22 cycle 번호 참조\n2. 마크다운 무결성",
+          "acceptance": "- §4 섹션 제목에 \"완료\" 표기 + plan #22 참조\n- 8개 작업 항목 모두 완료 표기\n- 새 자동 생성물 위치 명시\n- 수정한 코드 파일 8개 목록 정확",
+          "risk": "phase1-followup가 plan #16 결정도 보존 — §4만 수정하고 다른 섹션 건드리지 않을 것",
+          "status": "completed",
+          "deps": [
+            2,
+            3,
+            4
+          ],
+          "plan_issue": 5,
+          "owner": "writer",
+          "created_at": "2026-04-13T04:51:08.298Z"
+        },
+        {
+          "id": 8,
+          "title": "기타 문서 grep + 4-layer 잔재 정리 (build-and-release.md, orchestration.md, principles.md, AGENTS.md, templates/)",
+          "context": "Issue #5 보조. 핵심 2개 외 .nexus/context/ + 템플릿 + AGENTS.md에 잔재 있는지 확인 후 정리",
+          "approach": "1. `Grep(pattern=\"core/(identity|codebase|memory|reference)|nx_core_|4-layer\", path=\".nexus/context\")` + AGENTS.md + templates/\n2. 매치 발견 시 문맥 확인 후 제거 또는 update\n3. .nexus/memory/ 다른 메모 (anti-patterns.md, audit-*, ecosystem-primer.md, opencode-reference.md)도 grep\n4. 역사 문서(history.json)는 보존",
+          "acceptance": "- 위 대상 파일군에서 4-layer/nx_core_* 잔재 0건 (역사 보존 항목 제외)\n- 마크다운 무결성",
+          "risk": "grep 결과가 false-positive (예: orchestration core, plan core 단순 검색) 가능 — 문맥 확인 필수",
+          "status": "completed",
+          "deps": [
+            2,
+            3,
+            4
+          ],
+          "plan_issue": 5,
+          "owner": "writer",
+          "created_at": "2026-04-13T04:51:16.383Z"
+        },
+        {
+          "id": 9,
+          "title": "통합 build/test verification (tester)",
+          "context": "Task 1-4 + 5 engineer/tester 산출물의 회귀 검증",
+          "approach": "1. `bun run check` PASS\n2. `bun run build` PASS\n3. `bun run test:e2e` 전체 PASS (기존 + 새 e2e)\n4. nx_init 수동 호출 (`bun -e`) → .nexus/state/auto/ 디렉토리 생성, 4-layer 부재 확인\n5. nx_sync 수동 호출 → 자동 생성물 .nexus/state/auto/에 작성 확인\n6. nx_briefing 수동 호출 → 출력 구조 확인 (Decisions/Rules/Context/Memory)\n7. 발견된 regression 보고",
+          "acceptance": "- 3개 빌드 게이트 모두 PASS\n- nx_init/nx_sync/nx_briefing 수동 smoke 결과 보고 (성공/실패 + 출력 일부)\n- regression 발견 시 engineer에게 escalation",
+          "risk": "smoke 호출이 .nexus/ 상태에 영향 줌 — 사전/사후 cleanup 필요",
+          "status": "completed",
+          "deps": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "plan_issue": 3,
+          "owner": "tester",
+          "created_at": "2026-04-13T04:51:23.310Z"
+        },
+        {
+          "id": 10,
+          "title": "문서 업데이트 reviewer pair",
+          "context": "Task 6, 7, 8 writer 산출물의 사실 정합성/링크/톤 검증",
+          "approach": "1. architecture.md, tools.md에서 4-layer/nx_core_* grep → 0건 확인\n2. nx_briefing 새 동작 설명이 src/tools/briefing.ts 실제 코드와 일치\n3. 자동 생성물 .nexus/state/auto/ 위치가 src/shared/paths.ts AUTO_ROOT와 일치\n4. phase1-followup.md §4의 \"수정된 파일\" 목록이 실제 git 변경 파일과 일치\n5. 누락된 4-layer 잔재 grep (전수)",
+          "acceptance": "- 사실 오류 0건 또는 발견 시 writer에게 수정 권고\n- 코드/문서 정합성 verify\n- 잔재 0건 검증",
+          "risk": "reviewer는 보고만, 수정은 writer 책임",
+          "status": "completed",
+          "deps": [
+            6,
+            7,
+            8
+          ],
+          "plan_issue": 5,
+          "owner": "reviewer",
+          "created_at": "2026-04-13T04:51:29.056Z"
+        }
+      ]
     }
   ]
 }

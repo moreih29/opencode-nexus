@@ -47,7 +47,7 @@ const initResult = JSON.parse(
     ctx
   )
 );
-assert.equal(initResult.generatedFiles.includes(path.join("core", "codebase", "architecture.md")), true);
+assert.equal(initResult.generatedFiles.includes(path.join("context", "architecture.md")), true);
 assert.equal(initResult.generatedFiles.includes(path.join("rules", "dev-rules.md")), true);
 assert.equal(initResult.primaryDocs.includes("AGENTS.md"), true);
 assert.equal(initResult.legacyDocs.includes("CLAUDE.md"), true);
@@ -74,9 +74,9 @@ const syncResult = JSON.parse(await nxSync.execute({ scope: "all" }, ctx));
 assert.equal(syncResult.synced, true);
 assert.equal(syncResult.sources.includes("archived cycle history"), true);
 assert.equal(syncResult.scannedLayers.includes("codebase"), true);
-assert.equal(syncResult.generatedFiles.includes(path.join("core", "memory", "recent-cycle-summary.md")), true);
-assert.equal(syncResult.generatedFiles.includes(path.join("core", "codebase", "recent-changes.md")), true);
-assert.equal(syncResult.generatedFiles.includes(path.join("core", "reference", "decision-log.md")), true);
+assert.equal(syncResult.generatedFiles.includes(path.join("state", "auto", "recent-cycle-summary.md")), true);
+assert.equal(syncResult.generatedFiles.includes(path.join("state", "auto", "recent-changes.md")), true);
+assert.equal(syncResult.generatedFiles.includes(path.join("state", "auto", "decision-log.md")), true);
 assert.equal(Array.isArray(syncResult.summary.changedFiles), true);
 assert.equal(Array.isArray(syncResult.summary.recentCommits), true);
 

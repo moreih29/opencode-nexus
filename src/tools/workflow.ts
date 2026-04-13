@@ -37,20 +37,13 @@ export const nxInit = tool({
       return `Deleted backup ${args.cleanup_backup}`;
     }
 
-    const identityDir = path.join(paths.CORE_ROOT, "identity");
-    const codebaseDir = path.join(paths.CORE_ROOT, "codebase");
-    const identityExisting = await listMarkdownFiles(identityDir);
-    const codebaseExisting = await listMarkdownFiles(codebaseDir);
-    const hasCore = identityExisting.length > 0 || codebaseExisting.length > 0;
+    const contextExisting = await listMarkdownFiles(paths.CONTEXT_ROOT);
+    const hasCore = contextExisting.length > 0;
 
     let mode = hasCore ? "resume" : "first-run";
     let backupPath: string | null = null;
 
     if (args.reset && hasCore) {
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      backupPath = path.join(paths.NEXUS_ROOT, `core.bak.${stamp}`);
-      await fs.rename(paths.CORE_ROOT, backupPath);
-      await ensureNexusStructure(paths);
       mode = "reset";
     }
 
@@ -64,28 +57,28 @@ export const nxInit = tool({
 
     generatedFiles.push(
       ...(await writeIfChanged(
-        path.join(codebaseDir, "architecture.md"),
+        path.join(paths.CONTEXT_ROOT, "architecture.md"),
         buildArchitectureDoc(scan),
-        path.join("core", "codebase", "architecture.md")
+        path.join("context", "architecture.md")
       )),
       ...(await writeIfChanged(
-        path.join(codebaseDir, "development.md"),
+        path.join(paths.CONTEXT_ROOT, "development.md"),
         buildDevelopmentDoc(scan),
-        path.join("core", "codebase", "development.md")
+        path.join("context", "development.md")
       )),
       ...(await writeIfChanged(
-        path.join(codebaseDir, "tools.md"),
+        path.join(paths.CONTEXT_ROOT, "tools.md"),
         buildToolsDoc(scan),
-        path.join("core", "codebase", "tools.md")
+        path.join("context", "tools.md")
       ))
     );
 
     const proposedIdentity = buildIdentityDrafts(scan);
     const confirmationQuestions = buildIdentityConfirmationQuestions(proposedIdentity, identityInputs);
     generatedFiles.push(
-      ...(await writeIdentityDoc(identityDir, "mission", identityInputs.mission, proposedIdentity.mission)),
-      ...(await writeIdentityDoc(identityDir, "design", identityInputs.design, proposedIdentity.design)),
-      ...(await writeIdentityDoc(identityDir, "roadmap", identityInputs.roadmap, proposedIdentity.roadmap))
+      ...(await writeIdentityDoc(paths.CONTEXT_ROOT, "mission", identityInputs.mission, proposedIdentity.mission)),
+      ...(await writeIdentityDoc(paths.CONTEXT_ROOT, "design", identityInputs.design, proposedIdentity.design)),
+      ...(await writeIdentityDoc(paths.CONTEXT_ROOT, "roadmap", identityInputs.roadmap, proposedIdentity.roadmap))
     );
 
     if (args.setup_rules) {
@@ -168,34 +161,34 @@ export const nxSync = tool({
     ];
 
     if (args.scope === "all" || args.scope === "identity") {
-      const identitySync = await syncIdentityDocs(paths.CORE_ROOT, summary);
+      const identitySync = await syncIdentityDocs(paths.AUTO_ROOT, summary);
       generatedFiles.push(...identitySync.generatedFiles);
       needsVerification.push(...identitySync.needsVerification);
     }
     if (args.scope === "all" || args.scope === "memory") {
       generatedFiles.push(
         ...(await writeIfChanged(
-          path.join(paths.CORE_ROOT, "memory", "recent-cycle-summary.md"),
+          path.join(paths.AUTO_ROOT, "recent-cycle-summary.md"),
           buildRecentCycleMemoryDoc(summary),
-          path.join("core", "memory", "recent-cycle-summary.md")
+          path.join("state", "auto", "recent-cycle-summary.md")
         ))
       );
     }
     if (args.scope === "all" || args.scope === "codebase") {
       generatedFiles.push(
         ...(await writeIfChanged(
-          path.join(paths.CORE_ROOT, "codebase", "recent-changes.md"),
+          path.join(paths.AUTO_ROOT, "recent-changes.md"),
           buildRecentChangesDoc(summary),
-          path.join("core", "codebase", "recent-changes.md")
+          path.join("state", "auto", "recent-changes.md")
         ))
       );
     }
     if (args.scope === "all" || args.scope === "reference") {
       generatedFiles.push(
         ...(await writeIfChanged(
-          path.join(paths.CORE_ROOT, "reference", "decision-log.md"),
+          path.join(paths.AUTO_ROOT, "decision-log.md"),
           buildDecisionLogDoc(summary),
-          path.join("core", "reference", "decision-log.md")
+          path.join("state", "auto", "decision-log.md")
         ))
       );
     }
@@ -450,50 +443,42 @@ function buildDecisionLogDoc(summary: ReturnType<typeof summarizeCycle>): string
 }
 
 async function syncIdentityDocs(
-  coreRoot: string,
+  autoRoot: string,
   summary: ReturnType<typeof summarizeCycle>
 ): Promise<{ generatedFiles: string[]; needsVerification: string[] }> {
-  const identityDir = path.join(coreRoot, "identity");
-  const roadmapPath = path.join(identityDir, "roadmap.md");
+  const roadmapSyncPath = path.join(autoRoot, "roadmap-sync.md");
   const generatedFiles: string[] = [];
   const needsVerification: string[] = [];
 
   const syncBlock = buildRoadmapSyncBlock(summary);
-  const roadmapExists = await fileExists(roadmapPath);
+  const existing = await fileExists(roadmapSyncPath) ? await fs.readFile(roadmapSyncPath, "utf8") : null;
 
-  if (roadmapExists) {
-    const previous = await fs.readFile(roadmapPath, "utf8");
-    if (!previous.includes(syncBlock)) {
+  if (existing !== null) {
+    if (!existing.includes(syncBlock)) {
       generatedFiles.push(
         ...(await writeIfChanged(
-          roadmapPath,
-          appendSection(previous, syncBlock),
-          path.join("core", "identity", "roadmap.md")
+          roadmapSyncPath,
+          appendSection(existing, syncBlock),
+          path.join("state", "auto", "roadmap-sync.md")
         ))
       );
     }
   } else {
     generatedFiles.push(
       ...(await writeIfChanged(
-        roadmapPath,
+        roadmapSyncPath,
         [
           "<!-- tags: identity, roadmap -->",
-          "# Roadmap",
+          "# Roadmap Sync",
           "",
-          "This roadmap update was synchronized from archived cycle history and should be confirmed by the user.",
+          "This file is auto-generated by nx_sync from archived cycle history.",
           "",
           syncBlock
         ].join("\n"),
-        path.join("core", "identity", "roadmap.md")
+        path.join("state", "auto", "roadmap-sync.md")
       ))
     );
-    needsVerification.push("Identity roadmap was created from archived cycle evidence and still needs user confirmation.");
-  }
-
-  for (const file of ["mission", "design"] as const) {
-    if (!(await fileExists(path.join(identityDir, `${file}.md`)))) {
-      needsVerification.push(`Identity ${file} was not updated because archived cycle evidence was insufficient to confirm it.`);
-    }
+    needsVerification.push("Roadmap sync was created from archived cycle evidence and still needs user confirmation.");
   }
 
   return { generatedFiles, needsVerification };
@@ -519,10 +504,10 @@ function appendSection(existing: string, block: string): string {
   return trimmed.length > 0 ? `${trimmed}\n\n${block}\n` : `${block}\n`;
 }
 
-async function writeIdentityDoc(identityDir: string, name: string, explicitContent: string | undefined, fallback: string): Promise<string[]> {
-  const filePath = path.join(identityDir, `${name}.md`);
+async function writeIdentityDoc(contextRoot: string, name: string, explicitContent: string | undefined, fallback: string): Promise<string[]> {
+  const filePath = path.join(contextRoot, `${name}.md`);
   if (explicitContent && explicitContent.trim().length > 0) {
-    return writeIfChanged(filePath, `<!-- tags: identity, ${name} -->\n# ${capitalize(name)}\n\n${explicitContent.trim()}\n`, path.join("core", "identity", `${name}.md`));
+    return writeIfChanged(filePath, `<!-- tags: identity, ${name} -->\n# ${capitalize(name)}\n\n${explicitContent.trim()}\n`, path.join("context", `${name}.md`));
   }
   if (await fileExists(filePath)) {
     return [];
@@ -530,7 +515,7 @@ async function writeIdentityDoc(identityDir: string, name: string, explicitConte
   return writeIfChanged(
     filePath,
     `<!-- tags: identity, draft -->\n# ${capitalize(name)}\n\n${fallback}\n\n> Draft generated by nx_init. Replace with confirmed project-specific content.\n`,
-    path.join("core", "identity", `${name}.md`)
+    path.join("context", `${name}.md`)
   );
 }
 

@@ -39,12 +39,10 @@
 
 | 도구 | 역할 |
 |------|------|
-| `nx_core_read` | core 지식 조회 (layer/topic/태그 필터링) |
-| `nx_core_write` | core 지식 작성 |
 | `nx_rules_read` | rules 문서 조회 |
 | `nx_rules_write` | rules 문서 작성 |
 | `nx_context` | 현재 Nexus 상태 요약 조회 |
-| `nx_briefing` | 역할 기반 브리핑 생성 (layer 접근 매트릭스 적용) |
+| `nx_briefing` | 브리핑 생성 — `.nexus/{context,memory,rules}/` 3-디렉토리 수집. 출력 순서: Decisions → Rules → Context → Memory |
 | `nx_artifact_write` | 아티팩트 파일 저장 |
 
 ### 코드 인텔리전스 (Code Intelligence)
@@ -75,7 +73,7 @@
 | 카테고리 | 도구 수 | 주요 목적 |
 |----------|---------|-----------|
 | 워크플로 | 15 | Meet·태스크 사이클, 초기화·동기화, 설정 |
-| 지식 관리 | 7 | core/rules 저장소, 컨텍스트, 브리핑, 아티팩트 |
+| 지식 관리 | 5 | rules 저장소, 컨텍스트, 브리핑, 아티팩트 |
 | 코드 인텔리전스 | 10 | 휴리스틱 LSP, AST 검색·치환 |
 | 위임 | 1 | 위임 템플릿 |
-| **합계** | **33** | |
+| **합계** | **31** | |
