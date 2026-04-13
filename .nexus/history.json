@@ -4019,6 +4019,237 @@
           "created_at": "2026-04-12T15:06:20.944Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-13T01:51:04.095Z",
+      "branch": "feat/skill-delivery-option-d",
+      "plan": {
+        "id": 18,
+        "topic": "opencode-nexus 플러그인의 동작 방식 문제점 분석 - skill/agent prompt 주입 메커니즘 및 태그 핸들러 완성도",
+        "issues": [
+          {
+            "id": 1,
+            "title": "스킬 프롬프트 주입 메커니즘 부재 — [plan]/[run] 태그 시 SKILL_PROMPTS가 LLM에 도달하는 경로가 없음",
+            "status": "decided",
+            "decision": "**Option D (A-leg + B-leg 하이브리드) 채택.**\n\n## 결정 내용\n\nSkill 프롬프트가 LLM에 도달하는 경로를 두 개로 이중화:\n\n**A-leg (네이티브 스킬 배포)**\n- `templates/skills/nx-plan/SKILL.md`, `templates/skills/nx-run/SKILL.md`를 npm 패키지에 번들로 포함 (package.json `files: [\"dist\", \"templates\"]` 이미 설정됨)\n- 플러그인 런타임(`config` hook 또는 초기화 시점)에서 `import.meta.url` 기반으로 자기 패키지 내부 templates 디렉토리 읽어 사용자 프로젝트 `.opencode/skills/nx-plan/SKILL.md` 등으로 `fs.writeFile` 복사 (멱등성 유지, 해시 비교로 user edit 보호)\n- OpenCode 내장 스킬 시스템이 `.opencode/skills/`를 on-demand 스캔 → LLM이 `skill({name:\"nx-plan\"})` 호출 시 본문 전체가 컨텍스트에 로드됨 (Strong: `opencode.ai/docs/skills` 2026-04-13 재검증)\n\n**B-leg (runtime 주입 fallback)**\n- `src/plugin/hooks.ts:379` `experimental.chat.system.transform` 훅에서 `[plan]`/`[run]` 감지 시 `SKILL_PROMPTS[mode]` 전체(~2.2k/~1.2k tokens) 를 output.system에 push\n- 첫 턴(파일 쓰기 전 또는 discovery 이슈), readonly mount, 모델이 skill 도구 미사용 케이스에 대한 안전망\n- Anthropic prompt caching으로 지속 호출 비용 일부 상쇄\n\n**Issue #2 symmetric 해결**\n- 같은 `config` hook에서 서브에이전트 등록 시 `prompt: AGENT_PROMPTS[profile.id]` 추가 (`src/create-config.ts:29-34`). Issue #2는 Issue #1 결정에 흡수됨\n\n**단일 진실 소스 유지**\n- A-leg와 B-leg 모두 `src/skills/generated/` (nexus-core `@moreih29/nexus-core@^0.3.0`에서 빌드 타임 추출)의 `SKILL_PROMPTS`를 참조. 두 경로의 drift 방지\n- `scripts/generate-template.mjs`를 확장하여 `templates/skills/<id>/SKILL.md`를 `SKILL_PROMPTS` + `NEXUS_SKILL_CATALOG`에서 자동 생성 (frontmatter 자동 작성). 수동 유지 금지\n- e2e 테스트 추가: system.transform 출력이 `[plan]` 감지 시 nx-plan 본문을 포함하는지 검증 + templates의 SKILL.md가 SKILL_PROMPTS와 byte-level 일치 확인\n\n## 기각한 옵션과 이유\n\n- **B 단독**: 매 턴 ~2.2k 토큰 비용. claude-nexus의 Skill tool delegation과 sibling parity 철학 위반 (claude-nexus는 네이티브 skill 시스템에 위임, opencode-nexus만 raw bloat되면 divergent)\n- **C 단독 (custom tool + session.prompt noReply)**: 핵심 planning workflow를 \"LLM이 `nx_load_plan_skill` tool 호출해줄 것\"에 의존 → silent failure 리스크. 신뢰도 불충분\n- **A 단독**: 초기 조사에서 `.opencode/skills/` discovery timing을 high-impact unknown으로 플래그했으나 재조사 결과 on-demand 로드 확인됨 (§5.1 업데이트). 그럼에도 첫 턴 race condition, readonly mount, import.meta.url 경로 깨짐(issue #12222) 대비 B-leg 유지가 안전\n\n## 조건 (구현 단계 제약)\n\n1. A-leg와 B-leg의 SKILL_PROMPTS 소스 단일화 — 두 경로가 같은 nexus-core 리소스를 참조\n2. `config` hook의 파일 쓰기는 멱등성 + user edit 보호(해시 비교) + readonly mount 에러 핸들링 필수\n3. `import.meta.url` 기반 경로 접근만 사용 (issue #12222 회피)\n4. `templates/skills/*/SKILL.md` 자동 생성 파이프라인으로 드리프트 차단\n5. e2e 테스트로 B-leg 본문 도달 검증 + A-leg 복사 멱등성 검증\n\n## Dogfooding 전략\n\n`.opencode/plugins/opencode-nexus.js` shim이 이미 `../../dist/index.js`를 re-export하므로 `bun run build` 후 plugin이 자동 로드됨. 이 레포 자체가 최초 end-user가 됨. [plan]/[run] 실행 시 Option D 경로가 실제로 작동하는지 dogfood로 검증 가능\n\n## claude-nexus sibling parity\n\n- claude-nexus: Claude Code `Skill` 도구 → `skills/nx-plan/SKILL.md` 로드\n- opencode-nexus: OpenCode `skill({name})` 도구 → `.opencode/skills/nx-plan/SKILL.md` 로드 + `system.transform` fallback\n- 양쪽 모두 nexus-core `@moreih29/nexus-core` canonical body를 빌드 타임에 추출. 전달 mechanism은 platform별로 다르나 LLM이 보는 본문은 byte-level 동일. Parity는 \"LLM이 무엇을 보는가\"의 동등성으로 정의",
+            "how_agents": [
+              "architect",
+              "researcher"
+            ],
+            "how_summary": {
+              "architect": "4 옵션 비교표 생성 (A: 네이티브 skill 배포, B: system.transform 전문 push, C: custom tool + session.prompt noReply, D: A+B 하이브리드). Option D 추천 — A-leg의 auto-discovery 가정 리스크를 B-leg이 흡수, 토큰 비용은 Anthropic prompt caching으로 상쇄. 기각: B 단독(sibling parity 위반), C 단독(reliability risk), A 단독(discovery timing unknown). Critical finding: SKILL_PROMPTS와 AGENT_PROMPTS 모두 dead export이며 같은 shape의 문제 — config hook 확장으로 symmetric 해결 가능 (Issue #2 흡수). 구현 조건 4개 제시: SKILL_PROMPTS 소스 단일화, 파일 쓰기 멱등성/user-edit 보호, import.meta.url 경로 안정성, e2e 가드레일. Unresolved: .opencode/skills/ discovery timing — researcher에 위임 권고.",
+              "researcher": "초기 조사에서 PR #9010의 Hooks.skill 필드 추가 단서 발견했으나 이후 2회 세션에서 실질 웹 조사 미완성으로 Lead가 직접 검증. 공식 문서 재확인 결과: (1) Hooks.skill 필드 공식 문서에 없음 (2026-04-13 opencode.ai/docs/plugins) → PR #9010 주장 루머로 격하. (2) 스킬 로드는 on-demand (Strong, opencode.ai/docs/skills) — startup cache 아님, A-leg의 discovery timing 리스크 경감. (3) 스킬 검색 경로 6개 확인 (.opencode/skills/ + ~/.config/ + .claude/ 호환 + .agents/ 호환, git worktree 상행). (4) npm 플러그인 설치 경로 ~/.cache/opencode/node_modules/ (v21 이후, issue #12222로 이전 ~/.config/에서 변경). (5) opencode-skills는 skill 번들 제공 안 함 (사용자 수동 작성) — skill 번들 배포는 opencode-nexus가 새로 도입하는 패턴. (6) 플러그인 내부 리소스 자동 인식 공식 API 없음 → fs.writeFile 복사 관행 사용. 모두 .nexus/memory/opencode-reference.md §5.1, §5.1a, §7, §8, §9.5, §10으로 반영."
+            }
+          },
+          {
+            "id": 2,
+            "title": "서브에이전트 prompt 필드 미설정 — create-config.ts가 AGENT_PROMPTS[id]를 서브에이전트 prompt에 주입하지 않아 역할별 프롬프트 미적용",
+            "status": "decided",
+            "decision": "**Issue #1 (Option D)에 symmetric 흡수.** 독립 분석 없이 같은 결정 라인으로 해소.\n\n## 흡수 근거\n\nIssue #1과 Issue #2는 아키텍트 분석에서 명시된 대로 **same shape of problem**: nexus-core에서 빌드 타임에 추출한 canonical prompt constants가 런타임 delivery channel 없이 dead export로 방치됨.\n\n- Issue #1 (skills): `SKILL_PROMPTS` (`src/skills/generated/index.ts:10`) → 소비처 없음\n- Issue #2 (agents): `AGENT_PROMPTS` (`src/agents/generated/index.ts:15`) → `src/create-config.ts:29-34`가 `prompt` 필드 없이 서브에이전트 등록 → 소비처 없음\n\n## 결정 (Issue #1 결정의 agent-side 구현 세부)\n\n`src/create-config.ts:29-34`의 서브에이전트 등록 블록에 `prompt: AGENT_PROMPTS[profile.id]` 추가:\n\n```typescript\nnextAgent[profile.id] = {\n  description: profile.description,\n  mode: \"subagent\",\n  model: profile.model,\n  prompt: AGENT_PROMPTS[profile.id],  // ← Issue #2 해결 라인\n  tools: buildToolPolicy(profile.disallowedTools)\n};\n```\n\n- OpenCode의 `opencode.json` `agent` 정의에서 `prompt` 필드는 네이티브 지원 (opencode-reference §4.1, Strong) — Claude Code와 달리 파일 참조가 아닌 문자열 직접 할당 가능\n- 서브에이전트가 spawn될 때 이 prompt 문자열이 system prompt에 주입됨 — 별도 훅 경로 불필요\n\n## 단일 진실 소스\n\nIssue #1과 동일하게 `@moreih29/nexus-core@^0.3.0`에서 빌드 타임 추출된 `src/agents/generated/<agent>.ts`의 `PROMPT` 상수를 사용. nexus-core upgrade 시 `bun run generate:prompts`로 자동 재생성. drift 방지.\n\n## 구현 조건 (Issue #1과 동일 PR에서 처리)\n\n- `config` hook의 `prompt` 필드 할당은 기존 사용자 정의 agent가 있으면 보존 (`if (nextAgent[profile.id]) continue;` 기존 로직 유지)\n- e2e 테스트 추가: config hook 실행 후 9개 서브에이전트 모두 `prompt` 필드가 비어있지 않은지 검증\n- claude-nexus와의 sibling parity: claude-nexus는 `agents/<id>.md` 파일을 Claude Code 런타임이 자동 로드 → opencode-nexus는 `prompt` 문자열 직접 할당. 전달 mechanism은 platform별로 다르나 LLM이 보는 agent prompt body는 byte-level 동일.\n\n## Scope out\n\n- `opencode.json`의 기존 `qa` 에이전트 잔존(catalog는 tester로 이행 완료)은 Issue #4에서 별도 처리\n- 서브에이전트 별 `disallowedTools` 정책은 이미 `buildToolPolicy`로 작동 중 — 본 결정의 범위 아님",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "Issue #2를 Issue #1과 \"same shape of problem\"으로 명시. create-config.ts:29-34에 prompt: NEXUS_PROMPTS[profile.id] 추가로 symmetric 해결. Option D의 config hook이 두 책임(skill 파일 설치 + agent prompt 주입)을 함께 가지도로 권고. 같은 PR이나 직후 PR에서 처리하여 infrastructure 중복 방지."
+            }
+          },
+          {
+            "id": 3,
+            "title": "태그 핸들러 불완전 — HANDLED_TAG_IDS에 sync/m/m-gc 등록됐으나 detectNexusTag/buildTagNotice/buildModePlaybook 모두 누락",
+            "status": "decided",
+            "decision": "**Option A (claude-nexus parity 완전 복원) 채택.** `[sync]`, `[m]`, `[m:gc]` 3개 태그의 runtime handler를 완성하여 `HANDLED_TAG_IDS` 선언과 실제 동작을 일치시킴.\n\n## 결정 내용\n\n**[sync] — Issue #1 Option D로 자동 커버**\n- `SKILL_PROMPTS[\"nx-sync\"]`가 이미 `src/skills/generated/nx-sync.ts`에 생성되어 있고 `templates/skills/nx-sync/SKILL.md`도 이미 배포 대상\n- Option D 구현 시 [sync] 태그도 자동으로 A-leg(native skill 발견)와 B-leg(system.transform fallback) 혜택 동일하게 받음\n- 추가 작업: `NexusTagMode`에 `\"sync\"` 모드 추가 + `detectNexusTag()` 분기 + `buildTagNotice()` / `buildModePlaybook()` 모드 처리\n\n**[m] — inline memory save action**\n- claude-nexus gate.ts:411-435 패턴 포팅: `[m]` 감지 → system prompt에 \"다음 내용을 압축·정제하여 `.nexus/memory/{topic}.md`에 Write로 저장. 기존 관련 메모 파일이 있으면 업데이트, 없으면 새 파일 생성\" instruction 주입\n- Skill 아님 (nexus-core `skills/` 디렉토리에 없음) → `SKILL_PROMPTS` 경로 불필요, short instruction만 system-prompt.ts `buildModePlaybook()`에 추가\n\n**[m:gc] — inline memory garbage collection action**\n- claude-nexus gate.ts:415-423 포팅: `[m:gc]` 감지 → \"기존 `.nexus/memory/` 파일을 Glob으로 확인하고 관련 메모를 병합/삭제하여 정리하라. Write 도구로 저장\" instruction 주입\n- 위와 동일하게 skill 아님, short instruction만 추가\n\n## 구현 범위 (파일별)\n\n1. **`src/shared/tag-parser.ts`**:\n   - Line 36: `NexusTagMode`를 `\"plan\" | \"run\" | \"decide\" | \"rule\" | \"sync\" | \"memory\" | \"memory_gc\" | null`로 확장\n   - `detectNexusTag()`에 `[sync]`, `[m]`, `[m:gc]` regex 분기 추가. 우선순위: `[m:gc]` > `[m]` (`[m:gc]`가 `[m]` 패턴에도 매치되므로 선순위)\n   - `buildTagNotice()`에 3개 모드 분기 추가 (기본 notice 문자열)\n\n2. **`src/plugin/system-prompt.ts`**:\n   - `BuildSystemInput.mode` 타입 확장 (tag-parser와 동일)\n   - `buildModePlaybook()`에 `sync` / `memory` / `memory_gc` 3개 분기 추가:\n     - `sync`: \"MODE PLAYBOOK (sync): nexus-core CONSUMING.md 점검 → .nexus/context/ 설계 문서 업데이트 → upstream drift 체크\"\n     - `memory`: \"MODE PLAYBOOK (memory save): 사용자 원문 추출 → 토픽 추론 → .nexus/memory/{topic}.md에 Write, 기존 관련 파일 업데이트 우선\"\n     - `memory_gc`: \"MODE PLAYBOOK (memory gc): Glob으로 .nexus/memory/*.md 수집 → 유사/중복 메모 식별 → 병합 또는 삭제 후 Write\"\n\n3. **`src/plugin/hooks.ts:889` dispatch**:\n   - 현재 `mode === \"plan\" | \"run\" | \"decide\" | \"rule\"` 분기에 `\"sync\" | \"memory\" | \"memory_gc\"` 추가\n   - `[sync]` mode일 때 Issue #1 B-leg (`SKILL_PROMPTS[\"nx-sync\"]` 본문 주입) + A-leg 지시 메시지\n   - `[m]` / `[m:gc]` mode일 때는 `buildModePlaybook` instruction + 기본 notice만\n\n4. **e2e 테스트**: `scripts/e2e-tag-handlers.mjs` (또는 기존 `e2e-hook-notices.mjs` 확장)\n   - 각 태그를 prompt에 포함시켜 system.transform 출력이 해당 모드 playbook을 포함하는지 검증\n   - `[m:gc]`가 `[m]` 모드로 잘못 감지되지 않는지 우선순위 검증\n\n## 기각 근거\n\n- **B 기각** ([sync]만 해결, [m]/[m:gc] deferred): `HANDLED_TAG_IDS` 선언이 false promise. build-time `verifyTagDrift`가 통과하는데 runtime handler 부재는 consumer 계약 위반\n- **C 기각** (`HANDLED_TAG_IDS`에서 3개 제거): nexus-core `vocabulary/tags.yml`의 canonical 태그를 consumer가 unilaterally 축소 → Phase 1 adoption 원칙(§9.2 runtime 공유 배제 vs consumer가 canonical vocabulary를 존중) 위반. 축소하려면 upstream issue 제출 후 결정\n\n## Sibling parity\n\nclaude-nexus와 opencode-nexus가 동일 태그에 동일 결과를 보장:\n- `[sync]`: 양쪽 모두 nx-sync skill body가 LLM 컨텍스트에 로드 (canonical body는 nexus-core의 `src/skills/generated/nx-sync.ts`에서 공유)\n- `[m]` / `[m:gc]`: 양쪽 모두 `.nexus/memory/` 쓰기 instruction으로 system prompt 주입 (본문은 harness별 거의 동일 — claude-nexus gate.ts 포팅)\n\n## phase1-followup.md D8 resolution 승격\n\n`.nexus/memory/phase1-followup.md`의 D8 \"[m]/[m:gc]/[sync] 태그 (부분 해결)\" 항목을 이 결정으로 **완전 해결**로 승격. 다음 [sync] 세션에서 해당 memo를 업데이트할 것\n\n## 구현 조건\n\n- 멱등성: regex 우선순위 정확 (`[m:gc]` → `[m]` 순)\n- false positive 방지: 기존 `isFalsePositiveContext()` (line 116-118)가 `[m]`, `[m:gc]` 문자열에도 적용되는지 검증. 코드 블록, quote, error/question context 배제 확인\n- Case-insensitive 매칭 유지 (`/i` flag)"
+          },
+          {
+            "id": 4,
+            "title": "설정/문서 drift — opencode.json, orchestration.md 등에 qa 잔존 (catalog는 tester로 이행 완료)",
+            "status": "decided",
+            "decision": "**단순 cleanup + OpenCode 빌트인 `plan` agent disable.** 4개 파일 수정.\n\n## 수정 내역\n\n**1. `opencode.json`**\n- Line 43-46: `\"qa\": {...}` 블록 제거 (catalog는 tester로 이행 완료, plan history #14)\n- Line 9-11: `\"plan\": {\"mode\": \"primary\"}` → `\"plan\": {\"disable\": true}`\n  - 근거: opencode-nexus의 `[plan]` 태그 모드와 OpenCode 빌트인 `plan` primary agent가 이름 충돌 → 사용자 혼란 유발\n  - opencode-nexus가 제공하는 `nexus` primary agent가 default (line 4 `default_agent: \"nexus\"`)이므로 빌트인 plan agent는 불필요\n  - `build: {disable: true}` (line 7-9)와 동일 패턴으로 처리\n\n**2. `.nexus/context/orchestration.md:29`**\n- CHECK 테이블 행: `qa | QA | 검증, 테스트, 품질 검사 | nx_task_add` → `tester | Tester | 테스팅, 검증, 보안 리뷰 | write, edit, patch, multiedit, notebookedit, nx_task_add`\n- catalog.ts의 실제 tester 정의(`src/agents/catalog.ts:70-76`)와 정합\n\n**3. `.nexus/context/architecture.md:33`**\n- \"CHECK(qa, reviewer): 검증 역할. `nx_task_add` 차단.\" → \"CHECK(tester, reviewer): 검증 역할. `nx_task_add` 차단.\"\n\n**4. `AGENTS.md` (템플릿에 qa 잔존 가능성 확인 필요)**\n- `templates/nexus-section.md` 및 실제 `AGENTS.md`의 CHECK 에이전트 표기에 qa가 남아있으면 tester로 변경\n- nx_init / nx_sync가 재생성하는 구조이므로 템플릿 원본 수정이 canonical\n\n## 범위 제외\n\n- `opencode.example.json`은 사용자 참조용 예시 — 업데이트하되 canonical `opencode.json` 수정 이후\n- `build: {disable: true}`는 그대로 유지 (2026-04 빌트인 build agent disable 의도가 opencode-nexus의 nexus primary로 대체하려는 기존 결정으로 추정)\n\n## 검증\n\n- e2e 테스트: `scripts/e2e-setup-template.mjs` 등이 qa 문자열을 검증하고 있지 않은지 확인 후 tester로 교체 필요 시 같이 수정\n- `opencode.json` 변경 후 `bun run build` + 수동 스모크: OpenCode 시작 시 builtin plan/build agent가 에이전트 목록에 나타나지 않는지 확인\n\n## Sibling 참고\n\nclaude-nexus 쪽은 이미 qa→tester 이행 완료 (plan history #14 후속). opencode-nexus의 정리로 sibling parity 복원"
+          },
+          {
+            "id": 5,
+            "title": "SKILL_PROMPTS에 nx-setup 누락 — 카탈로그에는 있으나 generated에는 없음 (nexus-core 커버리지 문제 추정)",
+            "status": "decided",
+            "decision": "**Option D (Best-effort nudge) 채택.** OpenCode에는 Claude Code의 slash command `manual_only` 같은 런타임 enforce 수단이 없음을 수락하고, LLM 순응에 의존하는 soft contract로 대체.\n\n## 재프레이밍\n\n사용자 지적: Claude Code는 slash command 시스템에서 `manual_only: true`를 harness가 enforce하지만, OpenCode는 `skill({name})` 도구를 LLM이 임의 호출 가능 → runtime contract 강제 불가. 단순 주석(B)은 실효 없음, 전면 제거(C)는 조기 격상 과도.\n\n## 결정 내용\n\n**1. B-leg에서 제외 (자동 주입 억제)**\n- Issue #1 Option D 구현 시 `experimental.chat.system.transform`의 B-leg push 대상은 `[plan]` / `[run]` 두 태그만. `nx-setup`, `nx-init`, `nx-sync`는 B-leg 주입 대상에서 제외\n- 매 LLM 호출에 setup/maintenance skill body가 토큰으로 쌓이는 것 방지\n\n**2. A-leg는 유지 (명시 호출 경로 보존)**\n- `templates/skills/nx-setup/SKILL.md`, `templates/skills/nx-init/SKILL.md`, `templates/skills/nx-sync/SKILL.md`는 계속 npm 패키지 번들\n- `setup.ts:149` `installEntrypointSkills`가 사용자 `.opencode/skills/`에 복사 → LLM이 `skill({name:\"nx-setup\"})`으로 명시 호출 가능\n- claude-nexus `/nx-setup` 슬래시 커맨드 경로와 mechanism은 다르나 기능 parity 유지\n\n**3. System prompt nudge (soft contract)**\n- `src/plugin/system-prompt.ts`의 `buildNexusSystemPrompt()` base context 또는 `buildModePlaybook(\"idle\")` 블록에 다음 취지 1-2줄 추가:\n  > \"nx-setup / nx-init / nx-sync 같은 setup·maintenance skills는 사용자가 명시적으로 요청하거나 필요를 직접 언급했을 때만 skill() 도구로 호출한다. 사용자 요청 없이 선제적으로 실행하지 않는다.\"\n- LLM 순응에 의존하는 best-effort 수단. runtime enforce 아님\n\n## SKILL_PROMPTS 구조 유지\n\n- `src/skills/generated/index.ts`의 `SKILL_PROMPTS`는 **B-leg auto-inject 대상 skill만** 포함 (현재 nx-run, nx-plan, nx-init, nx-sync — nx-setup 없음)\n- 그러나 Option D 구현 시 B-leg dispatch 로직이 tag mode(plan/run)로만 주입하도록 제한되므로, `SKILL_PROMPTS`에 nx-init/nx-sync가 포함되어도 실제 주입되지는 않음. 즉 SKILL_PROMPTS는 \"B-leg 후보\" 컬렉션이지 \"B-leg 필수 주입 집합\"이 아님\n- nx-setup이 SKILL_PROMPTS에서 빠져있는 현 상태는 nexus-core의 `manual_only: true` 플래그를 generator가 존중한 결과로 해석 → **버그 아님, 의도된 제외**\n- `scripts/generate-from-nexus-core.mjs` / `.lib.mjs`의 skill skip 로직을 확인하여 manual_only 존중이 명시적인지, 단순히 nexus-core body.md 부재로 인한 결과인지 구분:\n  - 명시적이면 주석으로 근거 표기 유지\n  - body.md 부재 때문이면 Gap 2 upstream merge 후 generator에 `manual_only` 체크 로직 추가\n\n## 향후 승격 트리거 (C로 escalation)\n\nOption C (skill 전체 제거)로 격상할 조건 — `.nexus/memory/phase1-followup.md`에 기록:\n- Dogfooding 또는 end-user 보고에서 \"LLM이 사용자 요청 없이 nx-setup/nx-init/nx-sync를 자동 호출하여 혼란/피해\" 사례 1건 이상\n- 또는 nexus-core#3 Gap 2 머지 후 opencode 측 runtime enforce 구현이 기술적으로 여전히 불가판정\n\n## nexus-core Gap 2 연결\n\n- upstream `moreih29/nexus-core#3` Gap 2 (\"skill manual_only runtime semantic 명세 부재\") 진행 상황 추적 유지\n- Gap 2 머지 시 nexus-core `vocabulary/skills.yml` 같은 canonical source에 `manual_only` contract가 명시될 예정\n- opencode-nexus는 그 시점에 generator에서 `manual_only: true` skill을 감지하여 (a) SKILL_PROMPTS에서 제외, (b) system-prompt nudge에 해당 skill id를 자동 포함시키도록 확장 — 이 decision 내용이 Gap 2 closure의 일부로 흡수됨\n\n## 기각 근거\n\n- **A (자동 발동 수락)**: claude-nexus 사용자가 opencode-nexus로 넘어왔을 때 setup workflow가 매 세션 시스템 프롬프트에 자동 포함되어 토큰 낭비 + 행동 교란. 하네스 간 UX divergence 과도\n- **B (주석만 추가)**: 사용자 지적 — enforce 수단 없는 상태에서 주석 달기는 \"실효 없는 기록\". 최소한 B-leg 제외와 system prompt nudge 중 하나는 해야 실질 효과\n- **C (skill 전체 제거)**: `templates/skills/nx-setup/SKILL.md`, `installEntrypointSkills`, NEXUS_SKILL_CATALOG 일괄 수정 필요한 breaking change. 실제 harm 증거 없이 조기 격상 부적절. 승격 트리거 충족 시 재검토"
+          }
+        ],
+        "research_summary": "opencode-nexus(v0.3.0, nexus-core ^0.3.0 consumer) 조사 결과. 사용자가 지적한 \"[plan] 태그 시 plan 스킬 전체 프롬프트가 주입되지 않음\"이 확인되었고, 같은 뿌리의 연쇄 문제 4개를 추가 발견.\n\n**핵심 발견** (소스 레벨 증거):\n- src/skills/generated/nx-plan.ts에 nexus-core의 풀 plan SKILL body (~440줄)가 PROMPT 상수로 생성되고, src/skills/prompts.ts가 SKILL_PROMPTS를 re-export함\n- 그러나 SKILL_PROMPTS grep 결과 실제 소비처가 `src/skills/generated/index.ts`와 `src/skills/prompts.ts` 외에는 없음 — dead export\n- src/plugin/hooks.ts:379 `experimental.chat.system.transform` 훅이 buildNexusSystemPrompt로 만든 요약본(`MODE PLAYBOOK (plan)` 8줄 + 스킬 카탈로그 1줄 요약)만 output.system에 push\n- src/plugin/system-prompt.ts:55-89 buildNexusSystemPrompt는 skill body 전문을 가져오지 않고 `skillRows = skills.map(s => \"- ${s.id} (${s.trigger}): ${s.purpose}\")` 한 줄짜리만 포함\n- src/create-config.ts:25-35 createConfigHook이 서브에이전트 등록 시 `description/mode/model/tools`만 설정, `prompt` 필드 자체가 없음 → AGENT_PROMPTS[id] 소비 경로 없음\n- src/shared/tag-parser.ts:5 HANDLED_TAG_IDS는 ['plan','run','sync','d','m','m-gc','rule']이나 line 36 NexusTagMode는 'plan'|'run'|'decide'|'rule'|null만 — sync/m/m-gc 누락. detectNexusTag/buildTagNotice/buildModePlaybook 모두 plan/run/decide/rule만 분기\n- src/skills/generated/index.ts의 SKILL_PROMPTS는 nx-run/nx-plan/nx-init/nx-sync 4개만 포함, nx-setup 누락 (catalog에는 있음)\n- opencode.json에 `qa` 에이전트 잔존 (catalog.ts는 tester로 이행, plan history #14 결정). .nexus/context/orchestration.md에도 qa 표기 잔존\n\n**claude-nexus 비교** (/Users/kih/.claude/plugins/cache/nexus/claude-nexus/0.26.0/src/hooks/gate.ts:324-356):\n- claude-nexus도 system prompt에 SKILL body 전문 주입하지 않음\n- 대신 \"BLOCKING: Invoke Skill tool with skill='claude-nexus:nx-plan' BEFORE any other action\" 메시지로 Claude Code 네이티브 Skill 도구 호출을 강제 → Claude Code 런타임이 skills/nx-plan/SKILL.md 전문을 LLM 컨텍스트에 로드\n- claude-nexus의 skills/nx-plan/SKILL.md 파일 존재 확인\n- 또한 [sync], [m], [m:gc] 태그 명시적 handler 있음 (gate.ts:411-458)\n\n**OpenCode 네이티브 메커니즘** (.nexus/memory/opencode-reference.md):\n- §5.1 OpenCode 빌트인 스킬 시스템: `.opencode/skills/<name>/SKILL.md` + `.claude/skills/` 호환 (Claude Code 스킬과 유사)\n- §5.3 메시지 삽입 패턴: `ctx.client.session.prompt({noReply: true, parts: [{type:'text', text}]})` — opencode-skills 서드파티 플러그인이 사용\n- §2.1 `experimental.chat.system.transform`: 매 LLM 호출 전 system[] 배열 수정 가능\n- 현재 .opencode/skills/ 에 nx-init/nx-sync/nx-setup/deploy는 있으나 nx-plan/nx-run 없음. templates/skills/에도 동일\n- opencode-nexus는 session.prompt noReply 패턴 전혀 미사용\n\n**선행 plan history** (40 cycles):\n- #14 (2026-04-07): \"nexus-core Phase 1 adoption — qa→tester 이름 변경 결정\"\n- #16 (2026-04-11): \"Phase 1 cutover, 4-commit bisectable, v0.2.0 release, nexus-core#3에 Gap 1-4 제출\"\n- Gap 2 \"skill manual_only runtime semantic\" 부재는 별도 이슈 (부가 problem)\n- D8 ([m]/[m:gc]/[sync] 태그) — phase1-followup.md에 \"부분 해결\"로 기록됐으나 실제로는 HANDLED_TAG_IDS에만 추가되고 detect/playbook 미구현",
+        "created_at": "2026-04-13T00:09:13.156Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Option D A-leg — SKILL.md 번들 생성 + installEntrypointSkills 확장 + config hook 파일 복사",
+          "context": "Issue #1 결정의 네이티브 스킬 배포 경로. nexus-core SKILL_PROMPTS에서 templates/skills/<id>/SKILL.md 자동 생성 → npm 패키지에 번들 → 플러그인 활성 시 사용자 .opencode/skills/로 복사",
+          "approach": "1. scripts/generate-template.mjs 확장: SKILL_PROMPTS + NEXUS_SKILL_CATALOG에서 templates/skills/nx-plan/SKILL.md, nx-run/SKILL.md 자동 생성. YAML frontmatter(name, description) 자동 작성. 기존 수작성 nx-init/nx-sync/nx-setup도 같은 파이프라인으로 이전(수작성 유지도 가능하지만 drift 우려 명시). 2. src/tools/setup.ts:148-163 installEntrypointSkills 확장: nx-plan, nx-run 두 스킬 이름 목록에 추가. 3. src/plugin/hooks.ts config hook 또는 별도 초기화 경로에 import.meta.url 기반으로 자기 패키지 templates/skills/ 읽어 사용자 프로젝트 .opencode/skills/<id>/SKILL.md로 fs.writeFile. 멱등성: 기존 파일 해시가 템플릿 해시와 동일하면 skip, 다르면 .bak 백업 후 덮어쓰기(user-edit 보호). readonly mount 에러는 warn 로그로 swallow. 4. build 파이프라인에 generate-template.mjs 연결 확인(package.json scripts.prepack)",
+          "acceptance": "- templates/skills/nx-plan/SKILL.md, nx-run/SKILL.md가 generate-template.mjs로 자동 생성되어 SKILL_PROMPTS와 byte-level 일치 (frontmatter 제외 body)\n- installEntrypointSkills 호출 시 nx-plan, nx-run이 사용자 .opencode/skills/에 설치됨\n- 기존에 사용자가 편집한 .opencode/skills/<id>/SKILL.md는 .bak으로 백업됨\n- readonly 경로에서 에러가 플러그인 초기화를 중단시키지 않음\n- npm pack --dry-run으로 templates/skills/nx-plan/, nx-run/이 배포물에 포함 확인",
+          "risk": "issue #12222 — 플러그인 패키지 내부 경로가 v21 desktop 업데이트로 깨진 이력. import.meta.url 기반 경로 외 하드코딩 금지. bun build 출력에서 templates/가 dist/ 밖에 유지되는지 검증 필요. 또한 npm install 방식과 로컬 shim 방식에서 경로 해석이 다를 수 있음 — 두 방식 모두 실증 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-13T01:10:29.863Z"
+        },
+        {
+          "id": 2,
+          "title": "Option D B-leg — system-prompt.ts에서 SKILL_PROMPTS[mode] 주입 + idle nudge",
+          "context": "Issue #1 결정의 runtime fallback 경로. Issue #5 manual_only nudge도 같은 파일에서 처리하여 원자적 변경",
+          "approach": "1. src/plugin/system-prompt.ts의 BuildSystemInput 확장: activeSkillBody?: string 필드 추가(또는 SKILL_PROMPTS import해서 내부에서 조회). buildNexusSystemPrompt가 mode === \"plan\" | \"run\"일 때 SKILL_PROMPTS[mode === \"plan\" ? \"nx-plan\" : \"nx-run\"] 본문을 output에 포함(<nexus-skill-body>...</nexus-skill-body> 래핑). 2. mode === \"sync\" | \"memory\" | \"memory_gc\"에는 SKILL body push 하지 않음(차후 Task 4에서 추가). 3. idle/모든 모드 공통 base context에 nudge 1-2줄: \"nx-setup/nx-init/nx-sync는 사용자 명시 요청 시만 skill() 호출. 선제적 실행 금지.\" 4. src/plugin/hooks.ts:392-398의 buildNexusSystemPrompt 호출부는 유지. 필요 시 activeSkillBody 파라미터 추가",
+          "acceptance": "- [plan] 태그 감지 시 output.system[]에 nx-plan 전문(~2.2k tokens) 포함\n- [run] 태그 감지 시 nx-run 전문(~1.2k tokens) 포함\n- [sync]/[m]/[m:gc] 태그는 SKILL body push 없음\n- idle/어느 모드든 nudge 문구가 시스템 프롬프트에 1회 포함\n- 기존 plan/run 요약 playbook은 유지(B-leg 전문과 중복되더라도 consistency)",
+          "risk": "토큰 비용 ~2.2k per [plan] turn. Anthropic prompt caching으로 상쇄 기대하나 cache hit률 실증 필요. body 주입이 다른 system prompt 구성과 어떻게 섞이는지 OpenCode 내부 합성 순서(opencode-reference §2.2) 의존",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-13T01:10:43.577Z"
+        },
+        {
+          "id": 3,
+          "title": "create-config.ts 서브에이전트 prompt 주입",
+          "context": "Issue #2 symmetric 해결. AGENT_PROMPTS[id] canonical body를 서브에이전트 prompt 필드에 할당",
+          "approach": "src/create-config.ts:25-35 for 루프 내부의 nextAgent[profile.id] 객체에 prompt: AGENT_PROMPTS[profile.id] 추가. 기존 if (nextAgent[profile.id]) continue 보존 로직 유지(사용자 정의 agent override 가능). AGENT_PROMPTS import 경로는 ./agents/prompts.js (기존 re-export barrel)",
+          "acceptance": "- config hook 실행 후 config.agent[id].prompt가 9개 서브에이전트 모두 비어있지 않음\n- prompt 내용이 AGENT_PROMPTS[id]와 정확히 일치\n- 사용자가 opencode.json에 직접 정의한 agent는 덮어쓰이지 않음",
+          "risk": "OpenCode agent 정의의 prompt 필드가 문자열 직접 할당을 허용하는지 opencode-reference §4.1에서 확인됨(Strong). 단, 매우 긴 prompt(수백 줄)가 제대로 전달되는지 실증 필요 — 잘림 또는 인코딩 이슈 가능성",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-13T01:10:51.818Z"
+        },
+        {
+          "id": 4,
+          "title": "tag-parser + hooks.ts 확장 — sync/m/m-gc 핸들러 + playbook",
+          "context": "Issue #3 claude-nexus parity 복원. HANDLED_TAG_IDS 선언과 runtime 동작 일치",
+          "approach": "1. src/shared/tag-parser.ts: NexusTagMode = \"plan\" | \"run\" | \"decide\" | \"rule\" | \"sync\" | \"memory\" | \"memory_gc\" | null. detectNexusTag()에 분기 — [m:gc] 우선(→\"memory_gc\"), [m] (→\"memory\"), [sync] (→\"sync\"). isFalsePositiveContext 확장하여 [m]/[m:gc]/[sync]가 에러/질문/quote 맥락에서 false-positive 안 되게. buildTagNotice()에 3개 모드 분기. 2. src/plugin/system-prompt.ts buildModePlaybook()에 sync/memory/memory_gc 3개 블록 추가(claude-nexus gate.ts:411-458 패턴 포팅). BuildSystemInput.mode 타입 확장. 3. src/plugin/hooks.ts:889 mode dispatch에 3개 분기 추가. [sync]일 때 Issue #1 B-leg SKILL_PROMPTS[\"nx-sync\"] push + A-leg 지시. [m]/[m:gc]는 buildModePlaybook instruction + buildTagNotice만",
+          "acceptance": "- detectNexusTag(\"[m:gc] old memos\")가 \"memory_gc\"를 반환(우선순위)\n- detectNexusTag(\"[m] save this\")가 \"memory\"를 반환\n- detectNexusTag(\"[sync]\")가 \"sync\"를 반환\n- detectNexusTag(\"error: [m] not found\")가 null 반환(false-positive 배제)\n- [sync] 프롬프트 시 system prompt에 nx-sync SKILL body 포함\n- [m] 프롬프트 시 system prompt에 \".nexus/memory/{topic}.md Write\" 지시 포함\n- [m:gc] 프롬프트 시 \".nexus/memory/ Glob 후 병합/삭제\" 지시 포함",
+          "risk": "[m:gc]가 [m] 패턴에도 매치되므로 regex 순서 critical. case-insensitive 테스트 누락 시 mixed case 입력에서 실패. claude-nexus gate.ts 포팅 시 harness-specific 문구(Skill tool 호출 지시) 제거 필요",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-13T01:11:06.505Z"
+        },
+        {
+          "id": 5,
+          "title": "opencode.json cleanup — qa 제거, plan disable",
+          "context": "Issue #4 설정 drift 정리. qa는 catalog에서 이미 tester로 이행 완료. OpenCode 빌트인 plan agent는 opencode-nexus의 [plan] 태그 모드와 이름 충돌하여 disable",
+          "approach": "opencode.json 편집: (1) line 43-46 \"qa\": {...} 블록 제거. (2) line 9-11 \"plan\": {\"mode\": \"primary\"} → \"plan\": {\"disable\": true}. build agent도 이미 disable이므로 동일 패턴. opencode.example.json도 동일 편집 적용(사용자 참조용)",
+          "acceptance": "- opencode.json에 qa agent 블록 없음\n- opencode.json의 plan agent가 disable: true\n- bun run build 성공, 기존 e2e 테스트 모두 통과\n- OpenCode 시작 시 빌트인 plan/build agent가 agent 목록에 나타나지 않음(수동 스모크)",
+          "risk": "기존 e2e 테스트(e2e-setup-template, e2e-team-policy 등)가 qa 문자열을 검증하고 있을 가능성 — 필요 시 tester로 일괄 교체. OpenCode가 disable된 빌트인 plan agent 대신 어떤 fallback을 쓰는지 확인(default_agent: nexus로 지정됐으므로 문제없을 것이나 실증 필요)",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-13T01:11:15.805Z"
+        },
+        {
+          "id": 6,
+          "title": "문서 drift 정리 — orchestration.md / architecture.md / AGENTS.md 템플릿 qa→tester",
+          "context": "Issue #4 설정 drift 정리의 문서 side. 코드는 tester로 이행 완료, 문서만 qa 잔존",
+          "approach": "(1) .nexus/context/orchestration.md:29 CHECK 테이블 행 qa→tester (id, name, description, 금지 도구 모두 tester 실제 정의와 일치). (2) .nexus/context/architecture.md:33 \"CHECK(qa, reviewer)\" → \"CHECK(tester, reviewer)\". (3) templates/nexus-section.md 확인 후 qa 표기 있으면 tester로. (4) AGENTS.md 현재 파일 확인 후 CHECK 섹션 qa→tester (단 nx_init/nx_sync 재생성 대상이므로 템플릿 원본 수정이 canonical). 문서 톤/구조는 기존 유지",
+          "acceptance": "- orchestration.md에서 qa 문자열 0개(grep 검증)\n- architecture.md에서 qa 문자열 0개\n- templates/nexus-section.md에서 qa 문자열 0개\n- 모든 CHECK 에이전트 참조가 tester + reviewer로 통일\n- 기존 문서 구조(헤딩, 테이블 포맷) 유지",
+          "risk": "다른 .nexus/memory/* 또는 docs/*에 qa 잔존 가능성 — grep으로 전수 탐색 필요. 히스토리 문서(plan history 아카이브 등)의 qa는 보존(과거 기록)",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 4,
+          "owner": "writer",
+          "created_at": "2026-04-13T01:11:32.337Z"
+        },
+        {
+          "id": 7,
+          "title": "phase1-followup.md 업데이트 — D8 승격 + nx-setup 처리 방향 + Gap 2 연결",
+          "context": "Issue #3, #5 결정을 .nexus/memory/phase1-followup.md에 반영. 향후 plan 세션이 참조하는 follow-up 기록",
+          "approach": "(1) D8 섹션: \"부분 해결\" → \"완전 해결\"로 승격. sync/m/m-gc 태그 핸들러가 Issue #3 결정(Option A)으로 완성됨을 기록. plan.json cycle 번호 참조. (2) 신규 섹션 \"nx-setup manual_only 처리\": Issue #5 결정(Option D best-effort nudge) 요약. Option C(skill 전체 제거) 승격 트리거 조건 2개 기록: (a) dogfooding/end-user 보고에서 LLM 자동 호출 혼란 사례 1건+, (b) nexus-core#3 Gap 2 머지 후에도 runtime enforce 불가 판정. (3) \"1. moreih29/nexus-core#3 (Gap 1-4) 추적\" 테이블에 Gap 2 row의 \"upstream resolve 시 cleanup\" 컬럼에 \"manual_only skill 감지 시 B-leg 제외 로직을 generate-from-nexus-core에 명시적으로 추가 + opencode-nexus runtime의 isManualOnly(id) 체크 도입\" 추가",
+          "acceptance": "- D8 항목이 \"완전 해결\" 상태로 업데이트되고 Issue #3 결정 내용 요약 포함\n- nx-setup 처리 방향 섹션이 신설되어 Option D와 C 승격 트리거 명시\n- Gap 2 추적 테이블에 nexus-core#3 머지 후 opencode-nexus 작업이 구체 기술됨\n- 기존 파일 톤/포맷 유지(헤딩 레벨, 마크다운 테이블 스타일)",
+          "risk": "plan history 참조 번호가 cycle 17(이번 세션)로 맞게 기록되어야 함. nexus-core#3 이슈 URL이 여전히 유효한지 확인 권고",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 5,
+          "owner": "writer",
+          "created_at": "2026-04-13T01:11:48.680Z"
+        },
+        {
+          "id": 8,
+          "title": ".nexus/context/orchestration.md + architecture.md에 Option D 설계 반영",
+          "context": "Issue #1 Option D의 skill 이중 delivery(A-leg 네이티브 + B-leg runtime)와 config hook의 새 책임(skill 파일 설치 + agent prompt 주입)을 context 문서에 반영. 향후 엔지니어가 이 설계를 파악할 수 있어야 함",
+          "approach": "(1) .nexus/context/architecture.md § plugin 섹션 확장: \"hooks.ts: 6개 훅 — ... experimental.chat.system.transform(모드 감지·시스템 프롬프트 주입 — B-leg로 SKILL_PROMPTS[mode] 본문 주입)\". config hook에 \"서브에이전트 prompt 주입 + templates/skills/를 사용자 .opencode/skills/로 설치\" 책임 추가 서술. (2) .nexus/context/orchestration.md §2 스킬 카탈로그 확장: A-leg/B-leg 이중 delivery 설명 1-2 문단. claude-nexus sibling parity(양쪽이 nexus-core body를 하네스 방식에 맞게 전달하나 LLM이 보는 본문은 동일)를 명시. (3) 새 섹션 \"§5 skill 배포 경로\" 또는 기존 섹션 확장 방식으로 9.5(opencode-reference.md §9.5) 내용 요약 링크",
+          "acceptance": "- architecture.md의 hooks.ts / create-config.ts 설명이 Option D 책임을 반영\n- orchestration.md에 A-leg/B-leg 이중 delivery 설명 포함\n- sibling parity 보장 근거가 문서에 명시됨\n- 코드와 문서의 기술 서술이 일치(파일 라인 참조는 대략적 경로만)",
+          "risk": "architecture.md가 이미 nexus-core consumption 섹션이 길어서 추가 시 가독성 저하 가능 — 기존 섹션에 붙이지 말고 새 sub-section으로 분리 권장",
+          "status": "completed",
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "plan_issue": 1,
+          "owner": "writer",
+          "created_at": "2026-04-13T01:12:02.438Z"
+        },
+        {
+          "id": 9,
+          "title": "Option D E2E 테스트 — A-leg 설치 + B-leg body 도달 + config hook 멱등성/user-edit 보호",
+          "context": "Task 1, 2 verification pair. Issue #1 결정의 guardrail. 이 테스트 없이 SKILL_PROMPTS dead export 같은 silent regression이 재발할 수 있음",
+          "approach": "(1) scripts/e2e-system-transform-plan-skill.mjs 신규(또는 기존 e2e-system-transform.mjs 확장): [plan] 프롬프트로 system.transform 트리거 → output.system[]에 SKILL_PROMPTS[\"nx-plan\"] body substring 포함 검증. [run]에 대해서도 동일. [sync]/[m]/[m:gc]에는 SKILL body 포함되지 않음 검증. nudge 문구 포함 검증. (2) scripts/e2e-entrypoint-skills.mjs 확장: installEntrypointSkills 호출 후 .opencode/skills/nx-plan/SKILL.md, nx-run/SKILL.md 존재 검증 + byte-level 내용이 templates와 일치. 두 번째 호출 시 no-op(멱등성) 검증. 사용자가 파일을 사전 편집한 경우 .bak 백업 생성 검증. (3) scripts/e2e-loader-smoke.mjs는 기존 유지, dist/index.js에서 SKILL_PROMPTS가 실제 import되는지 확인 추가 가능",
+          "acceptance": "- e2e-system-transform-plan-skill 통과: [plan]/[run] SKILL body 주입 확인 + [sync]/[m]/[m:gc] 주입 없음\n- e2e-entrypoint-skills 통과: 신규 2개 스킬 설치 + 멱등성 + user-edit 백업\n- 기존 24개 e2e 테스트 모두 여전히 통과(regression 없음)\n- package.json test:e2e 스크립트에 신규 테스트 등록",
+          "risk": "OpenCode 실제 런타임 없이 hooks만 테스트하므로 실제 세션에서의 동작은 별도 dogfooding 필요. 시스템 프롬프트 토큰 수 검증은 assertion 범위 밖(필요 시 별도 smoke)",
+          "status": "completed",
+          "deps": [
+            1,
+            2
+          ],
+          "plan_issue": 1,
+          "owner": "tester",
+          "created_at": "2026-04-13T01:12:17.016Z"
+        },
+        {
+          "id": 10,
+          "title": "E2E — 서브에이전트 prompt 필드 주입 검증",
+          "context": "Task 3 verification pair. Issue #2가 재발하지 않도록 config hook 후 서브에이전트 prompt 비어있지 않음 guardrail",
+          "approach": "scripts/e2e-subagent-prompts.mjs 신규: createConfigHook() 호출 → 빈 config.agent 객체에 적용 → 결과 agent map에서 9개 서브에이전트(architect, designer, postdoc, strategist, engineer, researcher, writer, tester, reviewer) 각각 prompt 필드가 존재하고 비어있지 않으며 AGENT_PROMPTS[id]와 일치 검증. 사용자 정의 agent가 선존재하는 경우 보존되는지 별도 케이스",
+          "acceptance": "- 9개 서브에이전트 prompt 필드 비어있지 않음\n- prompt 내용이 AGENT_PROMPTS[id]와 정확히 일치\n- 사전 정의된 agent는 덮어쓰이지 않음(보존 검증)\n- package.json test:e2e에 등록",
+          "risk": "AGENT_PROMPTS 전체가 로드되는지 sanity check 포함. 테스트 자체가 runtime config 구성을 완전 모사하지 못할 수 있음(OpenCode 실제 agent spawn은 dogfooding에서 검증)",
+          "status": "completed",
+          "deps": [
+            3
+          ],
+          "plan_issue": 2,
+          "owner": "tester",
+          "created_at": "2026-04-13T01:12:25.805Z"
+        },
+        {
+          "id": 11,
+          "title": "E2E — 태그 핸들러 sync/m/m-gc + 우선순위 + false positive",
+          "context": "Task 4 verification pair. Issue #3의 regex 우선순위([m:gc] > [m])와 false-positive 배제가 회귀하지 않도록 guardrail",
+          "approach": "scripts/e2e-tag-handlers.mjs 신규 또는 기존 e2e-hook-notices.mjs 확장: (1) detectNexusTag 우선순위 케이스 — \"[m:gc] 정리\"→\"memory_gc\", \"[m] 저장\"→\"memory\". (2) detectNexusTag 각 태그 case-insensitive 검증. (3) false-positive 케이스 — \"error: [m] flag not found\"→null, \"what is [sync] mode\"→null. (4) buildModePlaybook 출력에 sync/memory/memory_gc 모드별 기대 문구 포함. (5) hooks.ts mode dispatch: [sync] 프롬프트 시 SKILL_PROMPTS[\"nx-sync\"] body substring 포함",
+          "acceptance": "- 6개 이상 케이스 통과 (우선순위 2, 각 모드 감지 3, false-positive 3, playbook 주입 3)\n- [m:gc]가 [m]으로 잘못 분류되지 않음\n- error/question 맥락에서 false-positive 없음\n- package.json test:e2e에 등록",
+          "risk": "기존 plan/run 태그 테스트 결과가 변경되지 않는지 확인. isFalsePositiveContext 확장이 기존 케이스를 깨지 않는지 regression 검증",
+          "status": "completed",
+          "deps": [
+            4
+          ],
+          "plan_issue": 3,
+          "owner": "tester",
+          "created_at": "2026-04-13T01:12:34.987Z"
+        },
+        {
+          "id": 12,
+          "title": "문서 업데이트 reviewer pair",
+          "context": "Task 6, 7, 8 writer 산출물의 사실 정합성, 링크 정확성, 기존 문서 톤과의 일관성 검증",
+          "approach": "(1) orchestration.md, architecture.md의 qa→tester 교체가 100% 완료 확인(grep). (2) phase1-followup.md의 D8 승격 상태, Gap 2 연결선, plan cycle 참조 번호가 실제 plan.json 이력과 일치. (3) Option D 설계 설명이 Issue #1 plan 결정 summary와 모순 없음. (4) claude-nexus sibling parity 설명이 .nexus/memory/opencode-reference.md §5.1a와 §9.5의 근거와 정합. (5) 링크/경로 참조(파일, 라인 번호)가 유효. 맞춤법/문법 검토",
+          "acceptance": "- 사실 오류 0건 또는 발견 시 reviewer가 명시적으로 수정 권고\n- 내부 참조(cycle 번호, 이슈 번호, 파일 경로) 유효성 검증 결과 보고\n- claude-nexus와의 parity 서술이 실제 sibling 구조와 정합\n- 기존 문서 톤/포맷과 어긋나는 부분 없음",
+          "risk": "reviewer는 코드 수정 없이 report만 제출. 수정이 필요한 항목은 writer에게 피드백 루프로 전달",
+          "status": "completed",
+          "deps": [
+            6,
+            7,
+            8
+          ],
+          "plan_issue": 1,
+          "owner": "reviewer",
+          "created_at": "2026-04-13T01:12:44.389Z"
+        }
+      ]
     }
   ]
 }

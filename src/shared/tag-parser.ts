@@ -4,9 +4,9 @@
 // See plan session #16 Issue #3 for the Q5 resolution (static constant + build-time drift check).
 export const HANDLED_TAG_IDS = ['plan', 'run', 'sync', 'd', 'm', 'm-gc', 'rule'] as const;
 
-const ERROR_CONTEXT = /(error|bug|exception|stack trace|traceback|fix\s+.*(plan|run|rule|\[d\])|에러|버그|오류|이슈)/i;
-const QUESTION_CONTEXT = /(what\s+is|what\s+does|explain|define|뭐야|뭔가요|설명해)\s*(plan|run|rule|\[d\])?/i;
-const QUOTE_CONTEXT = /[`"'](?:[^`"']*)(plan|run|rule|\[d\])(?:[^`"']*)[`"']/i;
+const ERROR_CONTEXT = /(error|bug|exception|stack trace|traceback|fix\s+.*(plan|run|rule|\[d\]|\[m\]|\[m:gc\]|\[sync\])|에러|버그|오류|이슈)/i;
+const QUESTION_CONTEXT = /(what\s+is|what\s+does|explain|define|뭐야|뭔가요|설명해)\s*(plan|run|rule|\[d\]|\[m\]|\[m:gc\]|\[sync\])?/i;
+const QUOTE_CONTEXT = /[`"'](?:[^`"']*)(plan|run|rule|\[d\]|\[m\]|\[m:gc\]|\[sync\])(?:[^`"']*)[`"']/i;
 const NATURAL_PLAN_PATTERNS = [
   /\bplan\b/i,
   /계획/,
@@ -33,13 +33,22 @@ const AGENT_ALIASES: Record<string, string[]> = {
   reviewer: ["reviewer", "리뷰어"]
 };
 
-export type NexusTagMode = "plan" | "run" | "decide" | "rule" | null;
+export type NexusTagMode = "plan" | "run" | "decide" | "rule" | "sync" | "memory" | "memory_gc" | null;
 
 export function detectNexusTag(prompt: string): NexusTagMode {
   if (isFalsePositiveContext(prompt)) {
     return null;
   }
 
+  if (/\[m:gc\]/i.test(prompt)) {
+    return "memory_gc";
+  }
+  if (/\[m\](?!:)/i.test(prompt)) {
+    return "memory";
+  }
+  if (/\[sync\]/i.test(prompt)) {
+    return "sync";
+  }
   if (/\[d\]/i.test(prompt)) {
     return "decide";
   }
@@ -63,7 +72,7 @@ export function detectNexusTag(prompt: string): NexusTagMode {
 }
 
 export function hasExplicitNexusTag(prompt: string): boolean {
-  return /\[(plan|run|d|rule(?::[^\]]+)?)\]/i.test(prompt);
+  return /\[(plan|run|d|rule(?::[^\]]+)?|sync|m(?::gc)?)\]/i.test(prompt);
 }
 
 export function detectRuleTags(prompt: string): string[] | null {
@@ -109,6 +118,15 @@ export function buildTagNotice(mode: NexusTagMode): string | null {
   }
   if (mode === "rule") {
     return "[nexus] Rule mode detected. Persist durable conventions in .nexus/rules via nx_rules_write.";
+  }
+  if (mode === "sync") {
+    return "[nexus] Sync mode detected. Invoke skill({name:'nx-sync'}) or follow the context synchronization workflow.";
+  }
+  if (mode === "memory") {
+    return "[nexus] Memory save mode detected. Compress and write to .nexus/memory/{topic}.md via Write tool. Update existing related files first; create new file if none exists.";
+  }
+  if (mode === "memory_gc") {
+    return "[nexus] Memory GC mode detected. Use Glob to list .nexus/memory/*.md, then merge or delete related/redundant files.";
   }
   return null;
 }

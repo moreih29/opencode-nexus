@@ -7,7 +7,7 @@
       "disable": true
     },
     "plan": {
-      "mode": "primary"
+      "disable": true
     },
     "nexus": {
       "mode": "primary"
@@ -37,10 +37,6 @@
       "model": "opencode-go/minimax-m2.7"
     },
     "writer": {
-      "mode": "subagent",
-      "model": "opencode-go/minimax-m2.7"
-    },
-    "qa": {
       "mode": "subagent",
       "model": "opencode-go/minimax-m2.7"
     },

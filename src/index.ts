@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin";
-import { createConfigHook } from "./create-config.js";
+import { createConfigHook, installSkillFiles } from "./create-config.js";
 import { createHooks } from "./create-hooks.js";
 import { createPluginState } from "./plugin-state.js";
 import { createTools } from "./create-tools.js";
@@ -19,6 +19,8 @@ const OpenCodeNexusPlugin: Plugin = async (ctx) => {
       message: "plugin initialized"
     }
   });
+
+  await installSkillFiles(ctx.directory, (args) => ctx.client.app.log(args));
 
   return {
     tool: createTools(),

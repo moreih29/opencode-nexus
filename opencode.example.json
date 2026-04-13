@@ -29,14 +29,6 @@
       "tools": {
         "nx_task_add": false
       }
-    },
-    "qa": {
-      "description": "Verification and test-focused review",
-      "mode": "subagent",
-      "model": "opencode-go/minimax-m2.7",
-      "tools": {
-        "nx_task_add": false
-      }
     }
   },
   "permission": {

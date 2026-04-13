@@ -956,6 +956,19 @@ async function buildStatefulNotice(
     return `[nexus] Rule mode detected. Save durable conventions to .nexus/rules with nx_rules_write.${suffix}`;
   }
 
+  if (mode === "sync") {
+    return "[nexus] Sync mode detected. Invoke skill({name:'nx-sync'}) to synchronize .nexus/context/ with current project state. Check for upstream drift after updating.";
+  }
+
+  if (mode === "memory") {
+    const userContent = prompt.replace(/\[m\]/gi, "").trim();
+    return `[nexus] Memory save mode. Compress and write to .nexus/memory/{appropriate_topic}.md. Update existing related files first; create new if none exists. Content: ${userContent}`;
+  }
+
+  if (mode === "memory_gc") {
+    return "[nexus] Memory GC mode. Use Glob to list .nexus/memory/*.md, then merge related entries and delete redundant files using Write tool.";
+  }
+
   return fallback;
 }
 

@@ -122,7 +122,7 @@ async function readTemplate(): Promise<string> {
   return fs.readFile(templatePath, "utf8");
 }
 
-async function readEntrypointSkillTemplate(name: "nx-init" | "nx-sync" | "nx-setup"): Promise<string> {
+async function readEntrypointSkillTemplate(name: "nx-init" | "nx-sync" | "nx-setup" | "nx-plan" | "nx-run"): Promise<string> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const templatePath = path.resolve(currentDir, `../../templates/skills/${name}/SKILL.md`);
   return fs.readFile(templatePath, "utf8");
@@ -146,7 +146,7 @@ function resolveTargets(scope: "project" | "user", projectRoot: string, instruct
 }
 
 async function installEntrypointSkills(skillsRoot: string): Promise<string[]> {
-  const skillNames = ["nx-init", "nx-sync", "nx-setup"] as const;
+  const skillNames = ["nx-init", "nx-sync", "nx-setup", "nx-plan", "nx-run"] as const;
   const generatedFiles: string[] = [];
   await fs.mkdir(skillsRoot, { recursive: true });
 

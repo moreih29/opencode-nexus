@@ -7,12 +7,12 @@
 
 ## 조사 메타데이터
 
-- 조사일: 2026-04-12
+- 조사일: 2026-04-12 (초판), 2026-04-13 (플러그인 배포 관점 보완 — §5.1, §5.1a, §7, §8, §9.5, §10 업데이트)
 - `@opencode-ai/plugin` 버전: 1.3.13
 - `@opencode-ai/sdk` 버전: 1.3.13
-- 증거 출처: 패키지 타입 정의, context7 문서 (`opencode.ai/docs/plugins`, `anomalyco/opencode`), `opencode-skills` 플러그인 소스, `opencode-nexus` `src/` 실증 코드, OpenCode GitHub 소스 분석 (`packages/opencode/src/session/prompt.ts`), npm 생태계 조사
+- 증거 출처: 패키지 타입 정의, context7 문서 (`opencode.ai/docs/plugins`, `anomalyco/opencode`), `opencode-skills` 플러그인 소스, `opencode-nexus` `src/` 실증 코드, OpenCode GitHub 소스 분석 (`packages/opencode/src/session/prompt.ts`), npm 생태계 조사, 공식 문서 재검증 (2026-04-13 `opencode.ai/docs/plugins` · `opencode.ai/docs/skills`), GitHub 이슈 조회 (#12222, #16608)
 - 생태계 규모: @opencode-ai/plugin에 736개 프로젝트 의존 (2026-04 기준)
-- 최신 패키지 버전: @opencode-ai/plugin@1.4.13 (이 문서는 1.3.13 기준, 차이점 미확인)
+- 최신 패키지 버전: @opencode-ai/plugin@1.4.13 (이 문서는 1.3.13 기준, 차이점 미확인 — 특히 `Hooks.skill` 추가 주장 미검증, §5.1a 참조)
 
 ---
 
@@ -475,14 +475,37 @@ export default MyPlugin;
 
 ### 5.1 OpenCode 내장 스킬 시스템 (2026-04 기준)
 
-OpenCode는 빌트인 스킬 시스템을 가지고 있다. (출처: 웹 조사, Strong — `opencode.ai/docs/skills`)
+OpenCode는 빌트인 스킬 시스템을 가지고 있다. (출처: 공식 문서 `opencode.ai/docs/skills`, 재검증 2026-04-13, Strong)
 
-- 스킬 경로: `.opencode/skills/<name>/SKILL.md`
-- Claude Code 호환 경로도 지원: `.claude/skills/` (의도적 호환)
-- `skill({ name })` 빌트인 도구로 on-demand 로드
-- 서브에이전트 디스패치: `@agent` 멘션 또는 primary agent가 task tool로 자동 호출
+**스킬 검색 경로 (6개, 상승 검색):**
+
+| 범위 | 경로 |
+|---|---|
+| 프로젝트 로컬 | `.opencode/skills/<name>/SKILL.md` |
+| 글로벌 | `~/.config/opencode/skills/<name>/SKILL.md` |
+| Claude Code 호환 (로컬) | `.claude/skills/<name>/SKILL.md` |
+| Claude Code 호환 (글로벌) | `~/.claude/skills/<name>/SKILL.md` |
+| Agent 스킬 (로컬) | `.agents/skills/<name>/SKILL.md` |
+| Agent 스킬 (글로벌) | `~/.agents/skills/<name>/SKILL.md` |
+
+현재 작업 디렉토리(cwd)에서 git worktree 루트까지 상승하며 검색한다.
+
+**로드 타이밍 (중요):**
+- **on-demand 로드** — `skill({ name })` 빌트인 도구가 호출될 때만 해당 `SKILL.md` 전문을 LLM 컨텍스트에 로드 (Strong, `opencode.ai/docs/skills`)
+- 서버 시작 시점 캐시나 매 turn 스캔이 아님. 도구 호출 시점에 파일시스템에서 읽는 것으로 추정 (Moderate — 공식 문서가 "loaded on-demand via the native skill tool"로만 표현하여 캐시 전략 세부사항은 미명시)
+- 의미: **플러그인이 런타임에 SKILL.md를 사용자 프로젝트에 쓰더라도 같은 세션의 다음 `skill()` 도구 호출에서 발견될 가능성이 높다**
+
+**SKILL.md YAML frontmatter:**
+- 필수: `name` (1–64자, 소문자 영숫자, 단일 하이픈 구분자), `description` (1–1024자)
+- 선택: `license`, `compatibility`, `metadata`
+
+**서브에이전트 디스패치:** `@agent` 멘션 또는 primary agent가 task tool로 자동 호출.
 
 **참고:** 초기 OpenCode에는 이 기능이 없었으나, 이후 추가되었다. 서드파티 `opencode-skills` 플러그인은 이 내장 기능의 확장 구현이다.
+
+### 5.1a Hooks 인터페이스에 skill 필드가 있는가?
+
+**결론: 없다 (2026-04-13 공식 문서 기준).** `opencode.ai/docs/plugins`의 Hooks 인터페이스 예시·설명 어디에서도 `skill` 필드를 언급하지 않는다. 이전 조사 세션에서 "PR #9010이 `skill` 필드를 Hooks에 추가"라는 언급이 있었으나, 해당 PR 번호·repo·포함 버전 모두 1차 근거로 확인되지 않았으며 공식 문서에서 뒷받침되지 않는다 → **루머 수준으로 격하**. 플러그인이 skill을 제공하려면 §9.5의 "리소스 파일 복사" 관행이나 §5.3의 "메시지 삽입 패턴"을 사용해야 한다.
 
 ### 5.2 opencode-skills 플러그인 (서드파티 확장)
 
@@ -584,6 +607,8 @@ const MyPlugin: Plugin = async (ctx) => {
 |---|---|---|---|
 | #5894 | `tool.execute.before` | 훅이 서브에이전트 컨텍스트로 의도치 않게 전파됨 | 이 훅에 중요 로직을 추가하지 않는다. issue 해결 전까지 보류. |
 | #7006 | `permission.ask` | 훅 등록은 성공하지만 권한 요청 시 핸들러가 호출되지 않음 | HTTP/SSE 경로(`/events` SSE + `POST /permission/:id/reply`) 사용 |
+| #12222 (anomalyco/opencode) | — (플러그인 로딩) | Desktop v21 이후 플러그인 로드 경로가 `~/.config/` → `~/.cache/`로 변경되어 **자기 패키지 내부 데이터 파일에 의존하는 플러그인이 깨짐** | 경로 의존은 `import.meta.url` 기반으로만 작성하고 실행 디렉토리 가정 금지. 리소스 파일은 초기화 시 사용자 프로젝트로 복사하여 사용 (§9.5 패턴) |
+| #16608 (anomalyco/opencode) | — (플러그인 캐시) | `@latest` 또는 버전 미지정 플러그인은 이후 OpenCode 시작에서 auto-update되지 않음 (bun registry cache + stale isOutdated check) | 개발 중 최신 플러그인 필요 시 `~/.cache/opencode/node_modules/<pkg>/` 수동 삭제 |
 
 ---
 
@@ -597,6 +622,9 @@ const MyPlugin: Plugin = async (ctx) => {
 | `experimental.chat.system.transform` 호출 빈도 | 미확인 | 매 LLM 호출 전으로 추정 |
 | 여러 플러그인의 훅 실행 순서 | 미확인 | 플러그인 등록 순서(`plugin` 배열 순서)로 추정 |
 | 훅에서 `throw` 발생 시 OpenCode 동작 | 미확인 | 에러 로깅 후 계속으로 추정 |
+| `skill()` 도구가 스킬 파일을 읽을 때 파일시스템 캐시 전략 | 미확인 | 매 호출 시 read로 추정 (Strong 근거: 공식 문서의 "on-demand" 표현). 단, OS 레벨 fs 캐시 또는 내부 메모리화 가능성 미확인 — 플러그인이 런타임에 SKILL.md를 쓰면 **같은 세션**에서 발견되는지 실증 검증 권고 |
+| 플러그인 내부 리소스의 OpenCode 측 자동 인식 공식 API | 확인됨 (없음) | `Hooks` 인터페이스에 `skill/skills/instructions/resources/assets` 필드 없음. 플러그인이 자기 패키지 내부 파일을 사용자 `.opencode/skills/` 등으로 전달하려면 `fs.writeFile` 관행 사용 (§9.5) |
+| PR #9010의 `Hooks.skill` 필드 주장 | 미확인 → 근거 없음 | 이전 세션에서 언급되었으나 공식 문서(`opencode.ai/docs/plugins`, 2026-04-13 기준)에 해당 필드 없음. PR 번호 자체의 진위 불명 — 루머로 처리 |
 | `ctx.client` API 전체 범위 | 부분 확인 | `@opencode-ai/sdk` 타입 정의에서 추가 조사 필요 |
 
 ---
@@ -775,18 +803,139 @@ export default MyPlugin;
 
 ---
 
+### 9.5 플러그인 배포 경로와 리소스 전달 (배포 관점)
+
+플러그인 배포 경로, 사용자 프로젝트에서의 위치, 내부 리소스 파일(SKILL.md 같은 비코드 파일)이 사용자에게 전달되는 방식.
+
+#### 9.5.1 배포 경로와 로드 순서
+
+**등록 형식 (`opencode.json`):**
+
+```json
+{
+  "plugin": [
+    "opencode-helicone-session",            // npm 패키지 (이름만)
+    "@my-org/custom-plugin",                // 스코프 npm 패키지
+    ["./path/to/local-plugin/dist/index.js", { "debug": true }]  // 로컬 경로 + options
+  ]
+}
+```
+`opencode.json` 기준 상대 경로로 로컬 파일 지정 가능. 스코프/비스코프 npm 패키지 모두 지원.
+
+**플러그인 로드 순서** (출처: 웹 조사, Strong):
+
+1. global config의 plugin 배열
+2. project config의 plugin 배열 (`opencode.json`)
+3. global plugins 디렉토리 — `~/.config/opencode/plugins/`
+4. project plugins 디렉토리 — `.opencode/plugins/`
+
+4번(project plugins 디렉토리)의 파일은 `opencode.json`에 명시하지 않아도 자동 로드되는 것으로 추정 (opencode-nexus 실증: `.opencode/plugins/opencode-nexus.js`가 재-export shim만 담고 opencode.json `plugin` 배열에 등록되지 않아도 dogfooding 작동). 공식 문서에 "자동 로드" 명시는 확인 실패 — 실증 기반 Moderate.
+
+#### 9.5.2 npm 설치 경로 (중요)
+
+OpenCode는 플러그인을 시작 시 Bun으로 자동 설치한다. 설치 위치:
+
+- **Desktop v21 이후 (2026-04 현재)**: `~/.cache/opencode/node_modules/<plugin-name>/` (Strong, issue #12222)
+- **이전 버전**: `~/.config/opencode/node_modules/<plugin-name>/`
+
+**경로 변경 이슈** (issue #12222): v21 desktop 업데이트로 로드 경로가 `~/.config/` → `~/.cache/`로 이동. 이로 인해 자기 패키지 내부 데이터 파일 경로에 의존하는 플러그인이 깨진 사례가 있음. 영향 회피는 §9.5.4 참고.
+
+**캐시 stale 이슈** (issue #16608): `@latest` 또는 버전 미지정 플러그인은 OpenCode 재시작에서도 auto-update되지 않음. 개발 중 수동으로 `~/.cache/opencode/node_modules/<pkg>/` 삭제 필요.
+
+#### 9.5.3 플러그인 내부 리소스 전달 (핵심 — 공식 API 없음)
+
+**플러그인 npm 패키지가 비코드 리소스 파일(SKILL.md, 템플릿, 프롬프트 원문 등)을 사용자에게 자동 전달하는 공식 메커니즘은 현재 존재하지 않는다.** (2026-04-13 공식 문서 확인)
+
+- `Hooks` 인터페이스에 `skills/instructions/resources/assets` 필드 없음
+- OpenCode가 플러그인 `node_modules/<pkg>/` 내부 디렉토리를 skill/instruction 경로로 자동 스캔한다는 근거 없음
+- OpenCode는 `.opencode/skills/`, `~/.config/opencode/skills/`, `.claude/skills/` 등 **사용자 프로젝트/글로벌 경로**만 스캔
+
+**실제 관행 (실증 기반):**
+
+| 패턴 | 설명 | 실증 |
+|---|---|---|
+| **A. 복사 관행** | 플러그인이 자기 패키지의 `templates/`, `skills/` 같은 디렉토리에 리소스를 포함 → 초기화/`config` 훅/커스텀 tool에서 `fs.writeFile`로 사용자 `.opencode/skills/` 등에 복사 | opencode-nexus `src/tools/setup.ts:148-163` `installEntrypointSkills` |
+| **B. 메모리 주입 관행** | 플러그인이 런타임에 자기 패키지 내 파일을 읽어 `experimental.chat.system.transform` 또는 `session.prompt({noReply:true})`로 주입 (§5.3) | opencode-skills의 메시지 삽입 패턴 |
+| **C. 사용자 수동 작성** | 플러그인은 `.opencode/skills/`를 스캔만, 사용자가 직접 SKILL.md 작성 | opencode-skills 기본 동작 |
+
+A와 B는 조합 가능 (하이브리드). 둘 다 SKILL.md 본문의 canonical source는 플러그인 패키지 안에 유지하되 전달 채널만 다르다.
+
+#### 9.5.4 플러그인 내부 파일 접근 패턴
+
+`package.json`의 `files` 필드로 리소스 디렉토리를 npm 패키지에 포함:
+
+```json
+{
+  "main": "dist/index.js",
+  "files": ["dist", "templates", "skills"]
+}
+```
+
+플러그인 코드에서 자기 패키지 내부 파일에 접근:
+
+```typescript
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const templatePath = join(__dirname, "..", "templates", "skills", "nx-plan", "SKILL.md");
+const body = await readFile(templatePath, "utf8");
+```
+
+**주의 (issue #12222):** 실행 디렉토리(`process.cwd()`)나 하드코딩된 절대 경로 금지. `import.meta.url` 기반 상대 경로만 안전. 번들링(`bun build`, `tsc`) 결과물에서 원본 디렉토리 구조가 유지되는지 빌드 설정 검증 필요.
+
+#### 9.5.5 Dogfooding 패턴
+
+플러그인 개발 시 자기 플러그인을 실제 사용자처럼 쓰는 방법:
+
+**방법 A (권장) — 로컬 shim 재-export:**
+
+```javascript
+// .opencode/plugins/<plugin-name>.js
+export { default, default as PluginExport } from "../../dist/index.js";
+```
+
+장점: `opencode.json`의 `plugin` 배열에 등록하지 않아도 자동 로드 (§9.5.1의 4번 경로). `bun run build` 후 바로 테스트 가능. npm publish 없이 실사용자 경로 시뮬레이션.
+
+실증: opencode-nexus `.opencode/plugins/opencode-nexus.js` (1줄 shim) + 빌드된 `dist/index.js`.
+
+**방법 B — opencode.json에 상대 경로 직접 등록:**
+
+```json
+{ "plugin": ["./dist/index.js"] }
+```
+
+**주의:** 로컬 shim(방법 A)과 npm 기반 배포(`"plugin": ["my-plugin"]`)를 동시에 쓰면 동일 플러그인이 중복 로드될 수 있음. 테스트 시 `opencode.json`에서 npm 엔트리 제거하거나 `.opencode/plugins/`를 비활성화.
+
+---
+
 ## 10. 주요 OpenCode 플러그인 사례
 
-| 플러그인 | 핵심 패턴 | 참고 |
-|---|---|---|
-| `opencode-skills` | 스킬 자동 발견 + `session.prompt({ noReply })` 패턴 | Anthropic Skills Spec 구현 |
-| `opencode-agent-identity` | `experimental.chat.system.transform`으로 에이전트 정체성 주입 | 시스템 프롬프트 확장 패턴 |
-| `opencode-agent-memory` | system transform + session 이벤트로 메모리 블록 유지 | 상태 지속 패턴 |
-| `oh-my-opencode` | 전문 서브에이전트 + LSP/AST/MCP 도구 내장 | 대형 플러그인 참고 |
-| `micode` | 서브에이전트 오케스트레이션 + git worktree 격리 | 오케스트레이션 패턴 |
-| `opencode-froggy` | Claude Code 스타일 hooks 구현 | 크로스 플랫폼 패턴 |
-| `opencode-pty` | 대화형 pseudo-terminal 관리 | 백그라운드 프로세스 |
-| `opencode-cmux` | cmux 터미널 멀티플렉서 통합 | 서브에이전트 세션 분리 |
+| 플러그인 | 핵심 패턴 | 리소스 배포 방식 | 참고 |
+|---|---|---|---|
+| `opencode-skills` | 사용자 `.opencode/skills/` 스캔 → `session.prompt({ noReply })`로 스킬 본문 주입. 메시지 3개 삽입 패턴: (1) "Loading skill X" (2) SKILL.md 본문 (3) `Base directory for this skill: /path/to/.opencode/skills/<name>/` | **번들 미제공.** 사용자 수동 SKILL.md 작성 (§9.5.3 C) | Anthropic Skills Spec 구현. `malhashemi/opencode-skills` |
+| `opencode-agent-identity` | `experimental.chat.system.transform`으로 에이전트 정체성 주입 | 미확인 | 시스템 프롬프트 확장 패턴 |
+| `opencode-agent-memory` | system transform + session 이벤트로 메모리 블록 유지 | 미확인 | 상태 지속 패턴 |
+| `oh-my-opencode` | 전문 서브에이전트 + LSP/AST/MCP 도구 내장. OMO 번들 MCP를 `~/.cache/opencode/` 하위에 저장 | **번들 리소스 있음** (MCPs) — 상세 미확인 | 대형 플러그인 참고. `code-yeongyu/oh-my-openagent` |
+| `micode` | 서브에이전트 오케스트레이션 + git worktree 격리 | 미확인 | 오케스트레이션 패턴 |
+| `opencode-froggy` | Claude Code 스타일 hooks 구현 | 미확인 | 크로스 플랫폼 패턴 |
+| `opencode-pty` | 대화형 pseudo-terminal 관리 | 미확인 | 백그라운드 프로세스 |
+| `opencode-cmux` | cmux 터미널 멀티플렉서 통합 | 미확인 | 서브에이전트 세션 분리 |
+
+**opencode-skills 메시지 삽입 패턴 상세 (§9.5.3 B 실증):**
+
+```typescript
+// Pseudocode 기반 (malhashemi/opencode-skills 동작 설명)
+// 1. 스킬 로딩 안내 메시지 (noReply)
+await client.session.prompt({ ..., body: { noReply: true, parts: [{ text: `Loading skill: ${name}` }] }});
+// 2. SKILL.md 본문 주입 (noReply)
+await client.session.prompt({ ..., body: { noReply: true, parts: [{ text: skillBody }] }});
+// 3. Base directory 컨텍스트 제공
+//    "Base directory for this skill: /path/to/.opencode/skills/<name>/"
+```
+
+`noReply: true` 플래그 두 개 다 필수. 컨텍스트 압축 시 도구 응답은 제거되어도 `noReply` 메시지는 살아남는 것으로 관찰됨 (상세 메커니즘 미확인).
 
 ---
 
@@ -796,8 +945,9 @@ export default MyPlugin;
 - OpenCode 소스: `https://github.com/opencode-ai/opencode` (미러: `anomalyco/opencode`)
 - SDK 타입 정의: `@opencode-ai/plugin`, `@opencode-ai/sdk` (npm)
 - opencode-skills 소스: `malhashemi/opencode-skills` (GitHub)
+- oh-my-opencode: `code-yeongyu/oh-my-openagent` (GitHub)
 - 실증 구현: `opencode-nexus/src/` (이 레포지토리)
-- 알려진 버그: GitHub issue #5894, #7006, #17412, #17637
+- 알려진 버그: GitHub issue #5894, #7006, #12222, #16608, #17412, #17637
 
 ---
 

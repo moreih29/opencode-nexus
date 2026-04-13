@@ -24,21 +24,41 @@ opencode-nexus 통합 이슈로 4개 Gap을 제출. upstream 결정에 따라 cl
 | Gap | Priority | 현재 workaround | upstream resolve 시 cleanup |
 |---|---|---|---|
 | 1. `no_shell_exec` reconsideration | Should | `scripts/generate-from-nexus-core.lib.mjs`의 `CATALOG_CONSISTENCY_EXEMPT`에 postdoc skip | exempt 제거, postdoc capabilities에 `no_shell_exec` 추가 |
-| 2. skill `manual_only` runtime semantic | Must | 미구현 (`src/plugin/hooks.ts` `experimental.chat.system.transform` deferred) | upstream spec 확정 후 hooks에 차단 로직 추가 |
+| 2. skill `manual_only` runtime semantic | Must | Plan #18 Issue #5 Option D: B-leg 자동 주입에서 nx-setup/nx-init/nx-sync 제외 + system prompt nudge (`src/plugin/system-prompt.ts`) | generate-from-nexus-core에 manual_only skill skip 로직 명시 + opencode-nexus runtime에 isManualOnly(id) 체크 도입 |
 | 3. generate-from-nexus-core lib shared | Should | `scripts/generate-from-nexus-core.{mjs,lib.mjs}` 복사 포팅 (claude-nexus 94997d1) | upstream lib import로 교체, scripts/ 삭제 |
 | 4. natural language tag detection 경계 | Should | `src/shared/tag-parser.ts:4-15` 로컬 하드코딩 | upstream opinion에 따라 유지 또는 vocabulary 편입 |
 
 **상류 이슈**: https://github.com/moreih29/nexus-core/issues/3
 
-### 2. NPM_TOKEN secret 삭제 (사용자 수동)
+### 2. nx-setup manual_only 처리
+
+**Plan session #18 Issue #5 결정: Option D (best-effort nudge)**
+
+opencode runtime은 skill 호출을 강제 차단하는 API를 제공하지 않으므로 `manual_only` 속성을 runtime enforce할 수 없다. 따라서 B-leg 자동 주입에서 해당 skill을 제외하고 system prompt nudge로 대체한다.
+
+**구현 내용:**
+
+- B-leg 자동 주입 대상에서 `nx-setup`, `nx-init`, `nx-sync` 제외
+- `src/plugin/system-prompt.ts`에 nudge 1-2줄 추가: "nx-setup/nx-init/nx-sync는 사용자가 명시적으로 호출하는 skill임, 자동 트리거 금지"
+
+**Option C(skill 전체 제거) 승격 트리거:**
+
+다음 중 하나 발생 시 Option D에서 Option C로 승격:
+
+1. dogfooding 또는 end-user 보고에서 LLM이 nx-setup/nx-init/nx-sync를 자동 호출해 혼란을 야기한 사례 1건 이상
+2. nexus-core#3 Gap 2 머지 후에도 `isManualOnly(id)` 체크를 runtime에 도입하는 것이 기술적으로 불가 판정
+
+**관련**: nexus-core#3 Gap 2 — `manual_only` runtime semantic 명세 미확정 (아래 추적 테이블 참조).
+
+### 3. NPM_TOKEN secret 삭제 (사용자 수동)
 
 OIDC Trusted Publishing으로 전환 완료. GitHub repo `moreih29/opencode-nexus`의 Settings → Secrets and variables → Actions에서 `NPM_TOKEN` secret을 **수동 삭제** 필요. 미삭제 시 legacy token 경로가 잔존한다.
 
-### 3. claude-nexus postdoc Bash 차단 PR (별도 트랙)
+### 4. claude-nexus postdoc Bash 차단 PR (별도 트랙)
 
 `docs/bridge/nexus-core-bootstrap.md` §10.1의 required action: claude-nexus의 `agents/postdoc.md` frontmatter에 `Bash`를 `disallowedTools`로 추가. 이는 nexus-core#3의 결과와 별개로 진행 가능. opencode-nexus 작업 아니지만 작성자 동일 인물이므로 추적 대상.
 
-### 4. `core/` 4-layer 도구 인프라 redesign (deferred)
+### 5. `core/` 4-layer 도구 인프라 redesign (deferred)
 
 2026-04-12 `refactor/flatten-nexus-structure`에서 사람 작성 문서를 `.nexus/context/`로 flat화했으나 **도구 인프라**(`nx_init`, `nx_sync`, `nx_core_read`, `nx_core_write`, `nx_briefing`)가 사용하는 `core/{identity,codebase,memory,reference}` 4-layer는 코드 차원에서 유지된다. 자동 생성물(`recent-cycle-summary.md`, `recent-changes.md`, `decision-log.md`)이 이 4-layer에 작성되며 `mkdir(recursive: true)`로 호출 시 자동 재생성된다.
 
@@ -132,9 +152,17 @@ nexus-core upgrade 시 항상 다음 5개 파일 확인:
 
 Phase 1 항목(state file pattern, task pipeline guardrails, 4-layer knowledge)은 모두 Complete. Phase 2 항목 중 How/Do/Check 카탈로그, nexus primary orchestration lead, structured delegation은 Complete; MATRIX briefing, init/setup/sync workflows, CLAUDE.md migration handling은 Partial; Claude-native slash skill runtime은 Missing. Phase 3+ 항목은 대부분 Partial 또는 Missing — team_name semantics는 coordination label로만 지원되고, Claude-native team messaging(TeamCreate/SendMessage)은 대체 없이 Missing. Phase 4 LSP/AST 도구는 등록됐으나 heuristic/lightweight 수준으로 Partial.
 
-### D8: `[m]` / `[m:gc]` / `[sync]` 태그 (부분 해결)
+### D8: `[m]` / `[m:gc]` / `[sync]` 태그 (완전 해결)
 
-`[m]`, `[m:gc]`, `[sync]` 태그가 `HANDLED_TAG_IDS`에 등록되었고 대응 도구(`nx_init`, `nx_sync`)도 구현됨. 단, claude-nexus와 완전히 동등한 동작 여부는 미확인. 원래 기록: `src/shared/tag-parser.ts` / `src/shared/tags.ts`에 트리거 미정의, 대응 워크플로 미구현.
+**Plan session #18 Issue #3 결정: Option A (claude-nexus parity 복원)**
+
+`[m]`, `[m:gc]`, `[sync]` 태그의 runtime handler를 claude-nexus와 동등한 수준으로 완성. 수정 파일:
+
+- `src/shared/tag-parser.ts` — 태그 파싱 및 dispatch 로직
+- `src/plugin/system-prompt.ts` — system prompt 내 태그 안내 문구
+- `src/plugin/hooks.ts` — `experimental.chat.system.transform` handler에서 [m]/[m:gc]/[sync] 분기 처리
+
+원래 미구현 상태(`HANDLED_TAG_IDS` 등록만 있고 워크플로 미연결)에서 claude-nexus parity 달성. 추가 deferred 없음.
 
 ### D9: `resume_tier` 스킴 미구현 (from docs/deferred-from-claude-nexus.md)
 

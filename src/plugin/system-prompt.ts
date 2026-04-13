@@ -1,8 +1,9 @@
 import type { NexusAgentProfile } from "../agents/catalog.js";
 import type { NexusSkillProfile } from "../skills/catalog.js";
+import { SKILL_PROMPTS } from "../skills/prompts.js";
 
 interface BuildSystemInput {
-  mode: "plan" | "run" | "decide" | "rule" | "idle";
+  mode: "plan" | "run" | "decide" | "rule" | "sync" | "memory" | "memory_gc" | "idle";
   agents: NexusAgentProfile[];
   skills: NexusSkillProfile[];
 }
@@ -18,6 +19,8 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const modelRows = agents.map((a) => `- ${a.id}: ${a.model}`).join("\n");
 
   const modePlaybook = buildModePlaybook(mode);
+  const skillKey = mode === "plan" ? "nx-plan" : mode === "run" ? "nx-run" : mode === "sync" ? "nx-sync" : null;
+  const skillBody = skillKey !== null ? (SKILL_PROMPTS[skillKey] ?? null) : null;
   const taskPipeline = [
     "TASK PIPELINE (mandatory for file modifications):",
     "1. Check active plan decisions first and preserve issue linkage when tasks come from a plan.",
@@ -52,7 +55,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- team_name is a coordination label, not a platform-native team object."
   ].join("\n");
 
-  return [
+  const nexusBlock = [
     "<nexus>",
     "Role: You are operating under Nexus orchestration.",
     "Constraints:",
@@ -74,6 +77,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- team_name is only a lead-managed coordination label, not a platform-native team object.",
     "- All grouped execution is lead-mediated; subagents do not directly coordinate each other.",
     "- Use nx_delegate_template for subagent delegation payloads.",
+    "- Setup/maintenance skills (nx-setup, nx-init, nx-sync) are called via skill() only when the user explicitly requests them or directly mentions the need. Do not invoke them proactively without user instruction.",
     modePlaybook,
     taskPipeline,
     delegationPlaybook,
@@ -86,6 +90,17 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "Agent Models:",
     modelRows,
     "</nexus>"
+  ].join("\n");
+
+  if (skillBody === null) {
+    return nexusBlock;
+  }
+
+  return [
+    nexusBlock,
+    `<nexus-skill id="${skillKey}">`,
+    skillBody,
+    `</nexus-skill>`
   ].join("\n");
 }
 
@@ -132,6 +147,33 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
       "- Capture durable conventions only.",
       "- Prefer concise, reusable rules tagged for future filtering.",
       "- Save rules through dedicated Nexus rule tooling rather than burying them in free text."
+    ].join("\n");
+  }
+
+  if (mode === "sync") {
+    return [
+      "MODE PLAYBOOK (sync):",
+      "- Invoke skill({name:'nx-sync'}) to run the full context synchronization workflow.",
+      "- Scan current project state (codebase, config, decisions) and update .nexus/context/ design documents.",
+      "- Check for upstream drift: compare .nexus/context/ with actual code and flag stale entries."
+    ].join("\n");
+  }
+
+  if (mode === "memory") {
+    return [
+      "MODE PLAYBOOK (memory save):",
+      "- Compress and refine the content, then write to .nexus/memory/{appropriate_topic}.md using Write tool.",
+      "- If a related file already exists in .nexus/memory/, update it instead of creating a new one.",
+      "- Keep entries concise; prefer structured lists or short paragraphs over verbatim transcription."
+    ].join("\n");
+  }
+
+  if (mode === "memory_gc") {
+    return [
+      "MODE PLAYBOOK (memory gc):",
+      "- Use Glob to collect all .nexus/memory/*.md files.",
+      "- Identify related, duplicate, or outdated entries across files.",
+      "- Merge related content into consolidated files and delete superseded ones using Write and Bash tools."
     ].join("\n");
   }
 

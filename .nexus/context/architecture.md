@@ -31,7 +31,7 @@ OpenCode 런타임
 - `catalog.ts`: `NexusAgentProfile` 배열. 각 에이전트는 `id`, `category`(`how`/`do`/`check`), `model`, `disallowedTools`를 가진다.
   - HOW(architect, designer, postdoc, strategist): 분석·설계 역할. 파일 편집 도구 전체 차단.
   - DO(engineer, researcher, writer): 실행 역할. `nx_task_add` 차단.
-  - CHECK(qa, reviewer): 검증 역할. `nx_task_add` 차단.
+  - CHECK(tester, reviewer): 검증 역할. `nx_task_add` 차단.
 - `primary.ts`: Lead 에이전트의 ID, 설명, 프롬프트 정의.
 - `prompts.ts`: 역할별 프롬프트 보관.
 
@@ -50,13 +50,13 @@ OpenCode 런타임
 파일 편집 작업 전 태스크 사이클 상태를 평가하는 가드 레이어.
 
 - `evaluator.ts`: `PipelineSnapshot` → `PipelineEvaluation` 반환. 핵심 판단: `editsAllowed`, `canCloseCycle`, `shouldTriggerQa`, `nextGuidanceKey`.
-- `qa-trigger.ts`: QA 자동 트리거 조건 평가.
+- `qa-trigger.ts`: Tester 자동 트리거 조건 평가.
 
 ### plugin
 
 훅 구현체와 시스템 프롬프트 빌더.
 
-- `hooks.ts`: 6개 훅 — `event`(세션 초기화), `tool.execute.before`(가드레일), `tool.execute.after`(완료 처리), `chat.message`(프롬프트 저장), `command.execute.before`(종료 경고), `experimental.chat.system.transform`(모드 감지·시스템 프롬프트 주입).
+- `hooks.ts`: 6개 훅 — `event`(세션 초기화), `tool.execute.before`(가드레일), `tool.execute.after`(완료 처리), `chat.message`(프롬프트 저장), `command.execute.before`(종료 경고), `experimental.chat.system.transform`(모드 감지·시스템 프롬프트 주입). `system.transform` 훅은 Option D B-leg 역할을 담당: `[plan]`/`[run]`/`[sync]` 태그 감지 시 해당 모드의 `SKILL_PROMPTS[mode]` 본문을 `<nexus-skill id="...">` 블록으로 시스템 프롬프트에 삽입한다. `manual_only` 스킬은 B-leg 주입 대상에서 제외되며, 모든 모드에서 수동 실행 안내(manual_only nudge)가 별도로 포함된다.
 - `system-prompt.ts`: `buildNexusSystemPrompt()`가 현재 모드, 에이전트 목록, 스킬 목록을 조합하여 `<nexus>` 블록 형태 시스템 프롬프트 생성.
 
 ### shared
@@ -97,6 +97,10 @@ OpenCode 런타임
 ## nexus-core Consumption (Phase 1 adoption — 2026-04-11 완료)
 
 opencode-nexus는 Nexus 생태계의 Authoring layer(`@moreih29/nexus-core`)를 **빌드 타임 read-only consumer**로 소비한다. Phase 1 adoption은 `phase1-nexus-core-adoption` feature branch에서 4-commit bisectable sequence(`a9cb773` → `4df4451` → `ff813e6` → `ee52ed5`)로 완료되었다.
+
+### Option D — 스킬 이중 delivery (A-leg + B-leg)
+
+nexus-core에서 생성된 스킬 본문(`SKILL_PROMPTS`)은 두 경로로 LLM에 도달한다. **A-leg**: `installSkillFiles()`가 플러그인 초기화 시 `templates/skills/<id>/SKILL.md`를 사용자 프로젝트 `.opencode/skills/<id>/SKILL.md`로 복사한다. OpenCode 런타임이 이 파일을 네이티브 skill 디스커버리 경로로 인식하여 필요 시 로드한다. **B-leg**: `experimental.chat.system.transform` 훅이 `[plan]`/`[run]`/`[sync]` 태그를 감지하면 해당 `SKILL_PROMPTS[mode]` 본문을 `<nexus-skill id="...">` 블록으로 시스템 프롬프트에 직접 삽입한다. 양 경로가 전달하는 스킬 canonical body는 동일하며(`@moreih29/nexus-core` 단일 소스), delivery mechanism만 다르다. 배포 경로 및 플러그인 내부 리소스 패턴 상세는 `.nexus/memory/opencode-reference.md` §5.1, §5.1a, §9.5 참조.
 
 ### 구조
 
@@ -155,6 +159,11 @@ OpenCodeNexusPlugin(ctx) 호출  [index.ts]
             │     · default_agent를 primary로 지정
             └── ...hooks (6개)
 ```
+
+> **`createConfigHook` 세 가지 책임 (Option D A-leg):**
+> 1. 서브에이전트 등록 시 `prompt: AGENT_PROMPTS[id]`를 각 에이전트의 설정 객체에 주입한다.
+> 2. 플러그인 초기화 시 `installSkillFiles(ctx.directory, logger)`를 호출하여 `templates/skills/` 내 스킬 파일을 사용자 프로젝트의 `.opencode/skills/`로 설치한다(멱등 연산, 기존 파일은 `.bak` 백업).
+> 3. 카탈로그 에이전트를 subagent로 등록하고 disallowedTools 정책을 OpenCode 설정 형식으로 변환한다.
 
 **세션 생성 이후:**
 

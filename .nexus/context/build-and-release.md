@@ -52,7 +52,7 @@ bun run test:e2e
 | `e2e-init-sync.mjs` | init/sync 흐름 |
 | `e2e-setup-template.mjs` | setup 템플릿 |
 | `e2e-lifecycle.mjs` | 전체 라이프사이클 |
-| `e2e-qa-trigger.mjs` | QA 트리거 |
+| `e2e-qa-trigger.mjs` | Tester 자동 트리거 |
 | `e2e-pipeline-evaluator.mjs` | 파이프라인 평가 |
 | `e2e-stop-guard.mjs` | stop 가드 |
 | `e2e-team-policy.mjs` | 팀 정책 |

@@ -26,7 +26,7 @@
 
 | ID | 이름 | 설명 | 금지 도구 |
 |---|---|---|---|
-| `qa` | QA | 검증, 테스트, 품질 검사 | nx_task_add |
+| `tester` | Tester | 테스팅, 검증, 보안 리뷰 | write, edit, patch, multiedit, notebookedit, nx_task_add |
 | `reviewer` | Reviewer | 팩트체크 및 콘텐츠 검증 | nx_task_add |
 
 ### 프라이머리 에이전트 (Nexus)
@@ -53,6 +53,10 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 | `nx-sync` | `nx-sync` | 태스크 사이클 완료 후 코어 지식 동기화 |
 | `nx-setup` | `nx-setup` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
 
+### 스킬 이중 delivery — Option D (A-leg + B-leg)
+
+스킬 본문은 두 경로로 LLM에 도달한다. **A-leg**: 플러그인 초기화 시 `installSkillFiles()`가 `templates/skills/<id>/SKILL.md`를 사용자 프로젝트 `.opencode/skills/<id>/SKILL.md`로 설치한다. OpenCode 런타임이 이 경로를 네이티브 skill 디스커버리로 인식한다. **B-leg**: `experimental.chat.system.transform` 훅이 `[plan]`/`[run]`/`[sync]` 태그 감지 시 해당 스킬 본문을 `<nexus-skill id="...">` 블록으로 시스템 프롬프트에 직접 삽입한다. 양 하네스(opencode-nexus, claude-nexus)가 `@moreih29/nexus-core`에서 동일한 canonical body를 소비하며, delivery mechanism만 다르다. `manual_only`로 표시된 스킬(nx-init, nx-setup 등)은 B-leg 주입 대상에서 제외되고, 대신 모든 모드의 시스템 프롬프트에 수동 실행 안내(manual_only nudge)가 포함된다.
+
 ### nx-plan 절차
 
 1. 의도 파악 → 2. 리서치 → 3. 팀 구성 → 4. 이슈별 토론(`nx_plan_discuss`) → 5. 후속 연속성(`nx_plan_followup`) → 6. 옵션 제시 → 7. 결정 기록(`nx_plan_decide`) → 8. 갭 확인 → 9. `[run]` 전환 제안
@@ -62,7 +66,7 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 1. **Intake** — 방향 확인, plan 결정 검토, 브랜치 가드
 2. **Design** — 필요 시 HOW 에이전트 투입
 3. **Execute** — 태스크 분해, `nx_task_add` 등록, 구조화된 페이로드로 위임
-4. **Verify** — 빌드·커맨드 확인, QA/Reviewer 트리거
+4. **Verify** — 빌드·커맨드 확인, Tester/Reviewer 트리거
 5. **Complete** — `nx_sync`, `nx_task_close`로 사이클 종료
 
 위임 페이로드: `TASK / CONTEXT / CONSTRAINTS / ACCEPTANCE`
@@ -105,10 +109,10 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 |------|------|
 | `editsAllowed` | empty 또는 active일 때만 true |
 | `canCloseCycle` | completed-open일 때만 true |
-| `shouldTriggerQa` | canCloseCycle이고 QA 신호 존재 |
+| `shouldTriggerQa` | canCloseCycle이고 Tester 트리거 신호 존재 |
 | `nextGuidanceKey` | 다음 행동 지침 키 |
 
-### QA 자동 트리거
+### Tester 자동 트리거
 
 `git diff --name-only`로 변경 파일 조회. 트리거 조건: 변경 파일 3개 이상, 테스트 파일 변경, API/DB 영역 변경, 과거 실패 신호.
 

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { NEXUS_AGENT_CATALOG } from "../dist/agents/catalog.js";
 import { NEXUS_SKILL_CATALOG } from "../dist/skills/catalog.js";
+import { SKILL_PROMPTS } from "../dist/skills/generated/index.js";
 import { NEXUS_TAGS } from "../dist/shared/tags.js";
 
 const root = process.cwd();
@@ -77,3 +78,34 @@ const content = [
 
 await fs.writeFile(outFile, content, "utf8");
 console.log(`generated ${path.relative(root, outFile)}`);
+
+// Generate SKILL.md files for skills that have prompts in SKILL_PROMPTS.
+// Handwritten skills (nx-init, nx-sync, nx-setup) are preserved — only
+// nx-plan and nx-run (which have authoritative prompt bodies) are auto-generated.
+// NOTE: drift risk for handwritten skills is accepted (Option A decision).
+const GENERATED_SKILL_IDS = Object.keys(SKILL_PROMPTS).filter(
+  (id) => !["nx-init", "nx-sync", "nx-setup"].includes(id)
+);
+
+for (const skillId of GENERATED_SKILL_IDS) {
+  const catalog = NEXUS_SKILL_CATALOG.find((s) => s.id === skillId);
+  if (!catalog) {
+    console.warn(`  [warn] SKILL_PROMPTS has "${skillId}" but no catalog entry — skipping`);
+    continue;
+  }
+  const skillOutDir = path.join(outDir, "skills", skillId);
+  const skillOutFile = path.join(skillOutDir, "SKILL.md");
+  await fs.mkdir(skillOutDir, { recursive: true });
+  const frontmatter = [
+    "---",
+    `name: ${catalog.id}`,
+    `description: ${catalog.purpose}`,
+    "license: MIT",
+    "compatibility: opencode",
+    "---",
+    ""
+  ].join("\n");
+  const skillContent = frontmatter + SKILL_PROMPTS[skillId];
+  await fs.writeFile(skillOutFile, skillContent, "utf8");
+  console.log(`generated ${path.relative(root, skillOutFile)}`);
+}
