@@ -13,13 +13,19 @@ export interface PlanParticipantContinuity {
 
 /**
  * Build adapter hints for plan-mode resume injection into task tool args.
- * Mirrors buildRunContinuityAdapterHints but sourced from plan participant continuity.
+ *
+ * NOTE on opencode 1.3.13 semantics: the task tool's `task_id` parameter
+ * actually points to the *child session id* of the prior subagent invocation
+ * (verified via task tool output messages: "task_id: ses_xxx (for resuming...)"
+ * where ses_xxx is the child session id). Therefore we fall back to
+ * continuity.session_id when explicit task_id is absent — both refer to the
+ * same opencode-level resume target.
  */
 export function buildPlanContinuityAdapterHints(
   continuity: PlanParticipantContinuity | null
 ): RunContinuityAdapterHints {
   return {
-    resume_task_id: continuity?.task_id ?? undefined,
+    resume_task_id: continuity?.task_id ?? continuity?.session_id ?? undefined,
     resume_session_id: continuity?.session_id ?? undefined,
     resume_handles: {}
   };
