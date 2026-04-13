@@ -20,8 +20,9 @@ import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
 import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, toAuditRecord } from "../shared/audit-log.js";
 import { loadCanonicalPlan, syncPlanSidecar } from "../shared/plan-sidecar.js";
-import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
+import { createNexusPaths, isNexusInternalPath, HARNESS_ID } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
+import { writeRuntimeFile } from "../shared/runtime.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
 import { buildNexusSystemPrompt } from "./system-prompt.js";
 import type { NexusPluginState } from "../plugin-state.js";
@@ -133,6 +134,7 @@ export function createHooks(ctx: PluginContext) {
       if (event.type === "session.created") {
         await ensureNexusStructure(paths);
         await resetAgentTracker(paths.AGENT_TRACKER_FILE);
+        await writeRuntimeFile(paths.RUNTIME_FILE);
         try {
           await syncAgentsMdTemplate(paths.PROJECT_ROOT);
         } catch {
@@ -359,10 +361,10 @@ export function createHooks(ctx: PluginContext) {
       // Active agents
       try {
         const raw = await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8");
-        const tracker = JSON.parse(raw) as Array<{ agent_type?: string; status?: string }>;
+        const tracker = JSON.parse(raw) as Array<{ agent_name?: string; status?: string }>;
         const active = tracker
-          .filter((a) => a.status === "running" || a.status === "team-spawning")
-          .map((a) => a.agent_type ?? "unknown");
+          .filter((a) => a.status === "running")
+          .map((a) => a.agent_name ?? "unknown");
         if (active.length > 0) {
           parts.push(`active agents: ${active.join(", ")}`);
         }
@@ -469,8 +471,11 @@ async function trackSubagentStart(args: Record<string, unknown>, trackerFile: st
 
   const teamName = pickCoordinationLabel(args);
   await appendAgentTracker(trackerFile, {
-    agent_type: agentType,
-    status: teamName ? "team-spawning" : "running",
+    harness_id: HARNESS_ID,
+    agent_name: agentType,
+    agent_id: `${agentType}-${Date.now()}`,
+    resume_count: 0,
+    status: "running",
     team_name: teamName ?? undefined,
     coordination_label: teamName ?? undefined,
     lead_agent: "lead",

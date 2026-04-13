@@ -22,6 +22,7 @@ export function createNexusPaths(projectRoot: string) {
     HARNESS_NAMESPACE_ROOT,
     HISTORY_FILE: path.join(NEXUS_ROOT, "history.json"),
     CONFIG_FILE: path.join(NEXUS_ROOT, "config.json"),
+    RUNTIME_FILE: path.join(STATE_ROOT, "runtime.json"),
     PLAN_FILE: path.join(STATE_ROOT, "plan.json"),
     PLAN_SIDECAR_FILE: path.join(HARNESS_NAMESPACE_ROOT, "plan.extension.json"),
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),

@@ -345,7 +345,6 @@ export const nxPlanDecide = tool({
   args: {
     issue_id: z.number(),
     decision: z.string(),
-    summary: z.string().optional(),
     how_agents: z.array(z.string()).optional(),
     how_summary: z.record(z.string(), z.string()).optional(),
     how_agent_ids: z.record(z.string(), z.string()).optional()
@@ -364,7 +363,6 @@ export const nxPlanDecide = tool({
 
     issue.status = issue.task_refs.length > 0 ? "tasked" : "decided";
     issue.decision = args.decision;
-    issue.summary = args.summary;
     if (args.how_agents !== undefined) issue.how_agents = args.how_agents;
     if (args.how_summary !== undefined) issue.how_summary = args.how_summary;
     if (args.how_agent_ids !== undefined) issue.how_agent_ids = args.how_agent_ids;
@@ -376,7 +374,7 @@ export const nxPlanDecide = tool({
     });
 
     await writeJsonFile(paths.PLAN_FILE, plan);
-    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker: "lead", message: args.summary ?? args.decision });
+    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker: "lead", message: args.decision });
 
     const allDecided = plan.issues.every((item) => item.status === "decided" || item.status === "tasked");
     return JSON.stringify({

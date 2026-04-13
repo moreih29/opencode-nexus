@@ -1,6 +1,9 @@
 import { readJsonFile, writeJsonFile } from "./json-store.js";
 
+export const HISTORY_SCHEMA_VERSION = "0.5";
+
 export interface HistoryCycle {
+  schema_version?: string;
   completed_at: string;
   branch: string;
   plan?: unknown;
@@ -9,12 +12,14 @@ export interface HistoryCycle {
 }
 
 interface HistoryFile {
+  schema_version?: string;
   cycles: HistoryCycle[];
 }
 
 export async function appendHistory(historyFile: string, cycle: HistoryCycle): Promise<void> {
   const history = await readJsonFile<HistoryFile>(historyFile, { cycles: [] });
-  history.cycles.push(cycle);
+  history.schema_version = HISTORY_SCHEMA_VERSION;
+  history.cycles.push({ schema_version: HISTORY_SCHEMA_VERSION, ...cycle });
   await writeJsonFile(historyFile, history);
 }
 

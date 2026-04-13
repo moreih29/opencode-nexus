@@ -22,13 +22,13 @@ export async function appendAgentTracker(filePath: string, item: AgentTrackerIte
 
 export async function markLatestTeamCompleted(
   filePath: string,
-  agentType: string,
+  agentName: string,
   lastMessage: string
 ): Promise<void> {
   const items = await readAgentTracker(filePath);
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const item = items[i];
-    if (item.agent_type === agentType && (item.status === "team-spawning" || item.status === "running")) {
+    if (item.agent_name === agentName && item.status === "running") {
       item.status = "completed";
       item.stopped_at = new Date().toISOString();
       item.last_message = lastMessage;
@@ -40,7 +40,7 @@ export async function markLatestTeamCompleted(
 
 export async function hasRunningTeam(filePath: string): Promise<boolean> {
   const items = await readAgentTracker(filePath);
-  return items.some((item) => (item.status === "team-spawning" || item.status === "running") && !!item.team_name);
+  return items.some((item) => item.status === "running" && !!item.team_name);
 }
 
 // team_name is a coordination label in OpenCode, not a platform-native team object.
@@ -63,7 +63,7 @@ export async function summarizeCoordinationGroups(filePath: string): Promise<
       latestPurpose: null
     };
     current.states.add(item.status);
-    current.agentTypes.add(item.agent_type);
+    current.agentTypes.add(item.agent_name);
     current.leadAgent = item.lead_agent ?? current.leadAgent;
     current.latestPurpose = item.purpose ?? current.latestPurpose;
     grouped.set(label, current);

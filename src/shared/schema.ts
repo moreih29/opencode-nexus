@@ -116,16 +116,20 @@ export const PlanSidecarSchema = z.object({
 });
 
 export const AgentTrackerItemSchema = z.object({
-  agent_type: z.string(),
-  status: z.enum(["team-spawning", "running", "completed"]),
+  harness_id: z.string(),
+  agent_name: z.string(),
+  agent_id: z.string(),
+  started_at: z.string(),
+  resume_count: z.number(),
+  status: z.enum(["running", "completed"]),
+  last_resumed_at: z.string().optional(),
+  files_touched: z.array(z.string()).optional(),
+  stopped_at: z.string().optional(),
+  last_message: z.string().optional(),
   team_name: z.string().optional(),
   coordination_label: z.string().optional(),
   lead_agent: z.string().optional(),
-  purpose: z.string().optional(),
-  agent_id: z.string().optional(),
-  started_at: z.string(),
-  stopped_at: z.string().optional(),
-  last_message: z.string().optional()
+  purpose: z.string().optional()
 });
 
 export const AgentTrackerSchema = z.array(AgentTrackerItemSchema);

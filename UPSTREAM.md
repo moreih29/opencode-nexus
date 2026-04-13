@@ -38,6 +38,18 @@ Phase 1이 2026-04-11에 완료되었다. opencode-nexus는 `@moreih29/nexus-cor
 - 루트에 `state-schemas/` 디렉토리 신설: `plan.extension.schema.json`, `orchestration.schema.json`, `audit-log.schema.json`
 - `package.json`에 `validate:conformance` 스크립트 추가, `test:e2e` 앞단에 편입. 다만 nexus-core v0.4.0 npm tarball에 `scripts/conformance-coverage.ts`가 누락되어 `scripts/validate-conformance.mjs` shim이 graceful skip 처리 중 (upstream fix 대기)
 
+#### v0.5.0 Upgrade (2026-04-13, `chore/nexus-core-consuming-sync`)
+
+`@moreih29/nexus-core ^0.4.0` → `^0.5.0` 업그레이드. v0.5.0이 도입한 4개의 breaking change에 모두 대응했다.
+
+주요 변경:
+
+- **runtime.json writer 신설** — `src/shared/runtime.ts` 추가, `session.created` hook이 v0.5.0 schema(`harness_id="opencode-nexus"`, `harness_version`, `teams_enabled`, `session_started_at`)로 `runtime.json`을 (over)write. opencode 플랫폼이 자동 작성하던 `plugin_version` 필드는 더 이상 사용되지 않음.
+- **agent-tracker.json 분해** — `AgentTrackerItemSchema`에서 `agent_type` 제거 후 `harness_id` + `agent_name`을 required 분리 필드로 도입. `status` enum에서 `team-spawning` 제거 (모두 `running`으로 통일). `agent_id`/`resume_count` required 승격. opencode-nexus 자체 필드(`team_name`, `coordination_label`, `lead_agent`, `purpose`)는 optional로 유지하여 운영 의미 보존.
+- **plan_decide 파라미터 정리** — `nxPlanDecide`에서 `summary` input 제거 (`decision`만 사용). state field 명칭과 input 명칭이 align됨.
+- **history.json schema_version 도입** — `appendHistory`가 매 cycle에 `schema_version: "0.5"`를 자동 주입하고 파일 최상위에도 동일 값 기록. `HISTORY_SCHEMA_VERSION` 상수를 `src/shared/history.ts`로 export.
+- **conformance bin 직접 호출** — v0.4.0 `scripts/validate-conformance.mjs` graceful skip shim 제거. `bunx nexus-validate-conformance`를 spawn하는 단순 wrapper로 교체. v0.5.0이 `package.json#bin`과 `files` whitelist에 `scripts/`를 포함시킨 결과로 npm tarball에서 직접 실행 가능.
+
 claude-nexus는 Phase 2에서 동일 패키지를 consume하는 방향으로 전환한다. 두 프로젝트는 여전히 sibling 관계이며, `@moreih29/nexus-core`가 canonical source다.
 
 ---
