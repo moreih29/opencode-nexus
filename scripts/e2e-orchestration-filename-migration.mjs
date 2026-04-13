@@ -10,9 +10,9 @@ import { readPlanParticipantContinuityFromCore } from "../dist/orchestration/pla
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-orch-filename-migrate-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });
 await fs.writeFile(path.join(root, ".git", "HEAD"), "ref: refs/heads/test\n", "utf8");
-await fs.mkdir(path.join(root, ".nexus", "state"), { recursive: true });
+await fs.mkdir(path.join(root, ".nexus", "state", "opencode-nexus"), { recursive: true });
 
-const canonicalPath = path.join(root, ".nexus", "state", "orchestration.opencode.json");
+const canonicalPath = path.join(root, ".nexus", "state", "opencode-nexus", "orchestration.json");
 const legacyPath = path.join(root, ".nexus", "state", "orchestration-core.v1.json");
 
 let state = createEmptyOrchestrationCoreState("2026-04-02T00:00:00.000Z");

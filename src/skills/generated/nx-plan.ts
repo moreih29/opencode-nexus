@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.3.0 (c5953c739cd5e24be7dd9eb2bb2940e96f611039)
+// Source: @moreih29/nexus-core@0.4.0 (2cc2402301c1f9b95ef0e9896c30e561357a7c35)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -358,13 +358,15 @@ When transitioning to \`[run]\`, Plan's role ends. Execution is handled by the r
 
 ## State Files
 
-**\`.nexus/state/orchestration.opencode.json\`** — tracks all subagent invocations.
+**\`.nexus/state/opencode-nexus/orchestration.json\`** — tracks all subagent invocations.
 Each entry records: \`agent_type\`, \`coordination_label\`, \`purpose\`, \`status\`,
 \`continuity\` (with \`child_session_id\`, optional \`child_task_id\`, \`resume_handles\`),
-timestamps.
+timestamps. 파일은 nexus-core v0.4.0 \`rule:harness-state-namespace\`에 따라
+harness 네임스페이스 디렉토리(\`.nexus/state/opencode-nexus/\`) 아래에 위치한다.
 
-**\`.nexus/state/plan.opencode.json\`** — tracks HOW-agent participants in plan sessions.
-Stores session and task IDs per role for continuity across plan interactions.
+**\`.nexus/state/opencode-nexus/plan.extension.json\`** — tracks HOW-agent participants
+in plan sessions. Stores session and task IDs per role for continuity across plan
+interactions. 공통 \`plan.json\`의 extension 파일로, \`{base}.extension.json\` 네이밍 규칙을 따른다.
 
 ## Resume Parameter on the \`task\` Tool (opencode 1.3.13)
 
@@ -394,7 +396,7 @@ injected, opencode drops them silently. Plugin code targeting opencode must use
 3. The opencode-nexus hook system auto-injects \`task_id\` when:
    - \`tool.execute.before\` fires for the \`task\` tool
    - Plan mode is active (\`plan.json\` exists) **OR** Run mode is active (\`tasks.json\` exists, no \`plan.json\`)
-   - A matching invocation is found in \`orchestration.opencode.json\` for \`agent_type\`
+   - A matching invocation is found in \`opencode-nexus/orchestration.json\` for \`agent_type\`
      (and optional \`coordination_label\`)
    - Args don't already contain \`task_id\` / \`taskId\` (LLM may set this naturally
      from prior task output's \`"task_id: ses_xxx"\` hint — auto-inject preserves user value)
@@ -420,7 +422,7 @@ Turn 1: spawn architect via task tool
 Turn 2 (follow-up): user says "ask the architect to elaborate"
   Either:
   (a) LLM sets args.task_id = "ses_27af2600..." from referenced prior output, OR
-  (b) LLM omits task_id — plugin auto-inject reads orchestration.opencode.json,
+  (b) LLM omits task_id — plugin auto-inject reads opencode-nexus/orchestration.json,
       finds architect continuity (child_session_id = "ses_27af2600..."), and
       sets args.task_id via injectMissingPlanResumeArgs.
 
@@ -437,11 +439,11 @@ Either way, opencode routes the prompt to the existing architect subagent sessio
 ## Verification
 
 - Unit regression: \`bun scripts/e2e-plan-resume-inject.mjs\` covers the chain
-  (orchestration.opencode.json → continuity → hints → injection) with on-disk fixture
+  (opencode-nexus/orchestration.json → continuity → hints → injection) with on-disk fixture
 - End-to-end smoke (LLM nondeterministic): \`bun scripts/smoke-opencode-run.mjs how-resume\`
   Group C — exercises opencode session side; C2 task spawn occasionally skipped due to
   LLM choice
-- Audit log evidence: \`.nexus/state/audit/sessions/<sid>/session.jsonl\` shows
+- Audit log evidence: \`.nexus/state/opencode-nexus/audit/sessions/<sid>/session.jsonl\` shows
   \`tool.execute.before\` args for \`task\` tool — resume identifier appears in \`args.task_id\`
 
 ## See also

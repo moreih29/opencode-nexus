@@ -36,6 +36,8 @@ export const nxTaskAdd = tool({
   args: {
     title: z.string(),
     owner: z.string().optional(),
+    owner_agent_id: z.string().optional(),
+    owner_reuse_policy: z.string().optional(),
     plan_issue: z.number().optional(),
     deps: z.array(z.number()).optional(),
     context: z.string().optional(),
@@ -56,6 +58,8 @@ export const nxTaskAdd = tool({
       title: args.title,
       status: "pending",
       owner: args.owner,
+      owner_agent_id: args.owner_agent_id,
+      owner_reuse_policy: args.owner_reuse_policy,
       plan_issue: args.plan_issue,
       deps: args.deps,
       created_at: now,
@@ -87,6 +91,9 @@ export const nxTaskAdd = tool({
           id,
           title: args.title,
           status: task.status,
+          owner: task.owner ?? null,
+          owner_agent_id: task.owner_agent_id ?? null,
+          owner_reuse_policy: task.owner_reuse_policy ?? null,
           deps: task.deps ?? [],
           plan_issue: task.plan_issue ?? null,
           created_at: task.created_at

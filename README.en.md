@@ -97,7 +97,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 | --- | --- | --- |
 | `nx-setup` | `nx_setup` | Configure `AGENTS.md`, `opencode.json`, and thin Nexus entrypoint skills |
 | `nx-init` | `nx_init` | Project onboarding and initial knowledge generation |
-| `nx-sync` | `nx_sync` | Sync archived execution knowledge back into `.nexus/core/` |
+| `nx-sync` | `nx_sync` | Synchronize `.nexus/context/` design documents with current project state |
 
 ## Tags
 
@@ -141,11 +141,11 @@ This entrypoint routes to the canonical `nx_init` tool.
 - 9-agent Nexus catalog mapped to HOW / DO / CHECK roles
 - Default `nexus` primary paired with specialist subagents
 - Stateful plan and task workflow stored in `.nexus/state/`
-- HOW-panel continuity through OpenCode sidecar state (`plan.opencode.json`) separate from canonical `.nexus`
+- HOW-panel continuity through OpenCode sidecar state (`.nexus/state/opencode-nexus/plan.extension.json`) separate from canonical `.nexus`
 - Resume hints per HOW participant via stored `task_id` / `session_id` handles when OpenCode provides them
 - `nx_plan_resume` to inspect a HOW participant's current resume handle before follow-up delegation
 - `nx_plan_followup` to produce delegation-ready HOW participant follow-up input
-- `.nexus/core/` knowledge layers for identity, codebase, reference, and memory
+- Flat knowledge layout under `.nexus/context/` (design docs) and `.nexus/memory/` (lessons, references)
 - Task pipeline guardrails for edit tools
 - Meeting reminders, run notices, and stronger cycle-close discipline
 - Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, and `nx_setup`
@@ -155,7 +155,8 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 `opencode-nexus` stores project knowledge and workflow state in `.nexus/`.
 
-- `core/` — durable project knowledge
+- `context/` — static design documents (architecture, orchestration, principles, etc.)
+- `memory/` — lessons learned, references, anti-patterns
 - `rules/` — team conventions
 - `config.json` — Nexus config
 - `history.json` — archived cycles

@@ -685,11 +685,11 @@ async function runGroupAgentPrompt() {
 // ---------------------------------------------------------------------------
 
 async function cleanupArtifacts() {
-  // Always clean up plan state leftover from smoke runs (plan.json / plan.opencode.json)
+  // Always clean up plan state leftover from smoke runs (plan.json / plan.extension.json)
   // even if artifactPaths is empty.
   const planSideEffects = [
     path.join(PROJECT_DIR, ".nexus", "state", "plan.json"),
-    path.join(PROJECT_DIR, ".nexus", "state", "plan.opencode.json"),
+    path.join(PROJECT_DIR, ".nexus", "state", "opencode-nexus", "plan.extension.json"),
   ];
   for (const p of planSideEffects) {
     try {

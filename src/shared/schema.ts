@@ -12,6 +12,8 @@ export const TaskItemSchema = z.object({
   title: z.string(),
   status: TaskStatusSchema,
   owner: z.string().optional(),
+  owner_agent_id: z.string().optional(),
+  owner_reuse_policy: z.string().optional(),
   plan_issue: z.number().optional(),
   deps: z.array(z.number()).optional(),
   created_at: z.string().optional(),
@@ -70,7 +72,10 @@ export const PlanIssueSchema = z
     discussion: z.array(PlanDiscussionRecordSchema).default([]),
     decision: z.string().optional(),
     summary: z.string().optional(),
-    task_refs: z.array(z.number()).default([])
+    task_refs: z.array(z.number()).default([]),
+    how_agents: z.array(z.string()).optional(),
+    how_summary: z.record(z.string(), z.string()).optional(),
+    how_agent_ids: z.record(z.string(), z.string()).optional()
   })
   .transform((issue) => ({
     ...issue,

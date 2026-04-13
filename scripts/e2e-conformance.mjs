@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanStart, nxPlanDecide } from "../dist/tools/plan.js";
+import { nxPlanStart, nxPlanDecide, nxPlanStatus, nxPlanUpdate } from "../dist/tools/plan.js";
 import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "../dist/tools/task.js";
+import { nxHistorySearch } from "../dist/tools/history-search.js";
+import { nxArtifactWrite } from "../dist/tools/artifact.js";
+import { nxContext } from "../dist/tools/context.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFORMANCE_DIR = path.join(
@@ -21,10 +24,15 @@ const CONFORMANCE_DIR = path.join(
 const TOOL_MAP = {
   plan_start: nxPlanStart,
   plan_decide: nxPlanDecide,
+  plan_status: nxPlanStatus,
+  plan_update: nxPlanUpdate,
   task_add: nxTaskAdd,
   task_close: nxTaskClose,
   task_list: nxTaskList,
   task_update: nxTaskUpdate,
+  history_search: nxHistorySearch,
+  artifact_write: nxArtifactWrite,
+  context: nxContext,
 };
 
 // ---------------------------------------------------------------------------
@@ -246,6 +254,17 @@ async function assertPostconditionStateFiles(label, tempDir, stateFiles) {
       } catch (err) {
         if (err instanceof AssertionError) throw err;
         // ENOENT is expected — file doesn't exist, good
+      }
+      continue;
+    }
+
+    // Empty object means existence-only check (e.g., non-JSON artifact files)
+    const hasAssertions = typeof assertions === "object" && Object.keys(assertions).length > 0;
+    if (!hasAssertions) {
+      try {
+        await fs.access(absPath);
+      } catch {
+        throw new AssertionError(`${label}: expected state file to exist: ${relPath}`);
       }
       continue;
     }

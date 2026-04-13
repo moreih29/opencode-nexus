@@ -3,6 +3,7 @@ import { nxAstReplace, nxAstSearch } from "./ast.js";
 import { nxBriefing } from "./briefing.js";
 import { nxContext } from "./context.js";
 import { nxDelegateTemplate } from "./delegation.js";
+import { nxHistorySearch } from "./history-search.js";
 import {
   nxLspCodeActions,
   nxLspDiagnostics,
@@ -37,6 +38,8 @@ export const nexusTools = {
   nx_init: nxInit,
   nx_sync: nxSync,
   nx_setup: nxSetup,
+  nx_history_search: nxHistorySearch,
+  history_search: nxHistorySearch,
 
   nx_rules_read: nxRulesRead,
   nx_rules_write: nxRulesWrite,

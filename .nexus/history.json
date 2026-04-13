@@ -4973,6 +4973,246 @@
           ".nexus 하위 임시 디렉토리에 React 개발 환경 구성"
         ]
       }
+    },
+    {
+      "completed_at": "2026-04-13T12:46:28.431Z",
+      "branch": "chore/nexus-core-0.4.0-upgrade",
+      "plan": {
+        "id": 16,
+        "topic": "nexus-core v0.3.0 → v0.4.0 upgrade",
+        "issues": [
+          {
+            "id": 1,
+            "title": "nexus-core devDependency 버전 핀을 ^0.4.0으로 업데이트",
+            "status": "decided",
+            "decision": "선택: devDependencies의 `@moreih29/nexus-core`를 `^0.4.0`으로 업데이트 후 `bun install`. 거부 대안 1) 정확 핀 `0.4.0` — 패치 자동 수용 불가, 기존 `^0.3.0` 일관성 어긋남. 거부 대안 2) Dual-version 호환 레이어 — nexus-core는 consuming protocol상 버전 당 단일 API 제공이 원칙, 불필요. 이유: 기존 pin 정책과 일관성, CHANGELOG의 nx-car 마커로 breaking change 추적 가능."
+          },
+          {
+            "id": 2,
+            "title": ".nexus/state/ 네임스페이스 마이그레이션 (harness-state-namespace 규칙 준수)",
+            "status": "decided",
+            "decision": "선택: `.nexus/state/opencode-nexus/` 네임스페이스 디렉토리로 Big-Bang 이동. rename 매핑: `plan.opencode.json` → `opencode-nexus/plan.extension.json` (common plan.json의 extension이므로 규칙 필수), `orchestration.opencode.json` → `opencode-nexus/orchestration.json` (독립 파일이므로 중복 접미사 제거), `audit/all.jsonl` → `opencode-nexus/audit/all.jsonl`, `audit/sessions/` → `opencode-nexus/audit/sessions/`, `tool-log.jsonl` → 삭제(미사용). 거부 대안 1) Dual-path 호환 레이어 유지 — 복잡도/회귀 리스크 증가, state 파일은 세션 로컬이라 마이그레이션 불필요. 거부 대안 2) `.opencode.json` suffix 유지 — 네임스페이스 디렉토리명(opencode-nexus)과 접미사 중복, 규칙 정신과 불일치. 이유: state는 세션 스코프라 레거시 유지 비용 없음, 규칙 준수 우선."
+          },
+          {
+            "id": 3,
+            "title": "Extension JSON Schema 신설 (state-schemas/plan.extension.schema.json)",
+            "status": "decided",
+            "decision": "선택: 리포지토리 루트에 `state-schemas/` 디렉토리 신설 후 `plan.extension.schema.json` 작성 (JSON Schema draft 2020-12, additionalProperties: false, plan-sidecar.ts의 실제 구조 반영: schema_version, canonical_file, platform, handoff, panel). 독립 파일(orchestration.json, audit/*)은 extension이 아니므로 별도 스키마 파일(`orchestration.schema.json` 등)을 같은 디렉토리에 작성. 거부 대안 1) 스키마 작성 생략 — validate:conformance 커버리지 불가, 향후 convergence 경로 막힘. 거부 대안 2) zod 런타임 스키마로만 유지 — canonical JSON Schema가 consumer CI·cross-harness 검증의 표준. 이유: Harness-local state extension convention의 명시적 요구사항이며 향후 공통 스키마 수렴 경로 확보."
+          },
+          {
+            "id": 4,
+            "title": "validate:conformance CI 통합",
+            "status": "decided",
+            "decision": "선택: `package.json` scripts에 `validate:conformance` 추가 (예: `\"validate:conformance\": \"cd node_modules/@moreih29/nexus-core && bun run validate:conformance\"`) 후 `test:e2e` 앞단에 포함. 기존 `.github/workflows/publish-npm.yml`의 `test:e2e` gate가 자연스럽게 승계한다. 거부 대안 1) e2e-conformance.mjs에 covers/uncovered_params 검증 로직 직접 이식 — nexus-core의 canonical validator 중복, 유지비용 상승. 거부 대안 2) 별도 GitHub Actions job 신설 — test:e2e 이미 CI 블로커라 중복. 이유: consumer 의무는 canonical validator 호출뿐이며 최소 변경으로 규칙 충족."
+          },
+          {
+            "id": 5,
+            "title": "문서 업데이트 (README, UPSTREAM, .nexus/context, .nexus/memory, harness-docs)",
+            "status": "decided",
+            "decision": "선택: 경로 변경이 반영된 모든 소비 문서를 일괄 업데이트. 대상: README.md/README.en.md (경로 예시), UPSTREAM.md (v0.2.0 기록 포맷 따라 v0.4.0 upgrade 섹션 추가), .nexus/context/{orchestration,architecture}.md (state 레이아웃), .nexus/memory/audit-log-schema.md (audit 경로), harness-docs/resume_invocation.md (state 참조), .opencode/skills/*/SKILL.md + templates/skills/*/SKILL.md + src/skills/generated/*.ts는 generate:prompts로 재생성되면 상위 nexus-core 스킬 본문이 업데이트될 때 따라가므로 직접 편집 불필요(확인). .nexus/history.json은 과거 기록이므로 편집 제외. 거부 대안 1) 문서 업데이트 생략 — 경로 불일치로 향후 혼동. 거부 대안 2) 자동 재생성 파일까지 수동 수정 — generate pipeline과 drift 위험. 이유: human-authored 문서만 수정하고 generated 산출물은 build 경유로 유지."
+          },
+          {
+            "id": 6,
+            "title": "v0.4.0 conformance fixture gap 해소 (nxHistorySearch 구현, nxPlanDecide how_agents 저장, TOOL_MAP 확장)",
+            "status": "decided",
+            "decision": "선택: (1) `src/tools/workflow.ts`에 `nxHistorySearch` 구현 — args: { query?, last_n? }, history.json 읽어 topic/research_summary/decisions에 query match하는 cycle 반환. (2) `src/tools/plan.ts`의 `nxPlanDecide`에 `how_agents`, `how_summary`, `how_agent_ids` 파라미터 추가하고 plan.json issues[idx]에 저장. `src/shared/schema.ts`의 PlanIssue schema 확장. (3) `scripts/e2e-conformance.mjs`의 TOOL_MAP에 artifact_write, context, history_search, plan_status, plan_update 5개 추가. (4) bun run test:e2e 전체 통과 확인. 거부 대안 1) SKIP 로직 — conformance 의무 약화. 거부 대안 2) follow-up branch 분리 — 사용자가 A안 명시. 이유: v0.4.0 consuming obligation 완전 충족 + fixture 기반 regression 방지."
+          }
+        ],
+        "research_summary": "nexus-core v0.4.0 CONSUMING.md / MIGRATIONS/v0_3_to_v0_4.md / docs/nexus-outputs-contract.md 확인.\n\n핵심 변경:\n(1) fixture.schema.json에 `covers` 필드 required — consumer fixtures에 적용 의무, consumer가 자체 fixtures를 가지지 않으면 의무 없음\n(2) validate:conformance (scripts/conformance-coverage.ts) CI gate 요구\n(3) `rule:harness-state-namespace` 신규 규칙: .nexus/state/ 루트에 harness-specific 파일 금지, `.nexus/state/{harness-id}/` 네임스페이스 강제, common-schema 확장은 `{base}.extension.json` 네이밍\n\nExplore subagent 조사 결과 (opencode-nexus 현황):\n- `plan.opencode.json` — plan.json의 사이드카 (canonical_file 필드로 명시), plan.json extension 성격 → v0.4.0에서 `plan.extension.json` 규칙 대상\n- `orchestration.opencode.json` — 독립 파일, common schema와 무관 → 네임스페이스 이동만 필요 (이름 유연)\n- `audit/all.jsonl`, `audit/sessions/` — 독립 파일 → 네임스페이스 이동\n- `tool-log.jsonl` — 소스에서 생성 코드 없음, 미사용 → 제거 후보\n- opencode-nexus는 자체 consumer fixtures를 가지지 않음 (nexus-core fixtures만 사용) — covers 필드 추가 의무 없음\n- package.json에 validate:conformance 스크립트 없음, CI는 .github/workflows/publish-npm.yml 하나만 있고 test:e2e 경유\n- 경로 참조 영향 파일 18개 (src, scripts, templates, .opencode/skills, .nexus, docs 전반)",
+        "created_at": "2026-04-13T12:12:50.992Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "nexus-core devDependency 버전 핀을 ^0.4.0으로 업데이트",
+          "context": "package.json의 devDependencies에 있는 @moreih29/nexus-core의 버전 제약 `^0.3.0`을 `^0.4.0`으로 변경하고 `bun install`로 node_modules를 재동기화한다.",
+          "approach": "1) /Users/kih/workspaces/areas/opencode-nexus/package.json의 line 50 `\"@moreih29/nexus-core\": \"^0.3.0\"`를 `\"^0.4.0\"`으로 Edit. 2) `bun install` 실행. 3) bun.lock 갱신 확인.",
+          "acceptance": "- package.json에 `\"@moreih29/nexus-core\": \"^0.4.0\"` 반영\n- `bun install` 성공, bun.lock 갱신\n- `node_modules/@moreih29/nexus-core/package.json`의 version 필드가 0.4.0",
+          "risk": "bun.lock이 갱신되지 않으면 CI 재현 실패. install 이후 lock 파일 상태 확인 필수.",
+          "status": "pending",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:14:09.816Z"
+        },
+        {
+          "id": 2,
+          "title": "소스 경로 상수 및 참조를 opencode-nexus 네임스페이스로 리팩터",
+          "context": "src/shared/paths.ts의 경로 상수를 `.nexus/state/opencode-nexus/` 네임스페이스 기준으로 재정의하고, 이를 소비하는 src/shared/state.ts, src/shared/plan-sidecar.ts, src/shared/audit-log.ts, src/orchestration/core.ts의 경로 참조를 전파한다. 이후 scripts/smoke-opencode-run.mjs, scripts/e2e-plan-resume-inject.mjs, scripts/e2e-orchestration-core-persistence.mjs의 하드코딩된 경로도 갱신. e2e-orchestration-filename-migration.mjs는 구(舊) `.opencode` suffix ↔ 신 네임스페이스 간 마이그레이션 검증이 필요 없으면 재작성 또는 삭제.",
+          "approach": "1) src/shared/paths.ts에서 PLAN_SIDECAR_FILE / ORCHESTRATION_FILE / AUDIT_* 상수를 다음과 같이 수정: plan.extension.json, orchestration.json, audit/all.jsonl, audit/sessions/{id}/... — 모두 `.nexus/state/opencode-nexus/` 하위. tool-log.jsonl 상수 제거. 2) state.ts의 ensureNexusStructure에서 `.nexus/state/opencode-nexus/` 디렉토리 생성, tool-log.jsonl 생성 로직 제거. 3) plan-sidecar.ts가 새 파일명 사용하도록 수정. 4) audit-log.ts의 appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog 경로 전파. 5) scripts의 하드코딩 경로 grep으로 찾아 일괄 수정. 6) `.nexus/state/` 루트의 기존 파일(`orchestration.opencode.json`, `plan.opencode.json`, `audit/`, `tool-log.jsonl`) 처리: 현 세션 state는 Lead의 nexus skill tools에 의해 생성되므로 실제 파일 이동은 불필요(다음 run에서 새 경로로 자동 생성). 이동 대신 기존 파일은 .gitignore로 관리되는 runtime state이므로 제거하고 새 경로만 사용하도록 한다.",
+          "acceptance": "- src/shared/paths.ts의 모든 harness-specific 경로 상수가 `.nexus/state/opencode-nexus/` 하위를 가리킴\n- tool-log.jsonl 관련 코드 완전 제거\n- plan.extension.json, orchestration.json 파일명 사용 확인 (Grep)\n- bun run check 통과 (타입 오류 없음)\n- bun run build 성공\n- 기존 `.nexus/state/` 루트의 orchestration.opencode.json/plan.opencode.json/audit/tool-log.jsonl 제거 (다음 세션에서 새 경로로 재생성)",
+          "risk": "- `.nexus/state/` 루트 파일 제거 시 실행 중인 세션의 state 유실 가능 — 현재 세션 외 다른 세션 사용 여부 사용자 확인 필요하지만 auto 모드이므로 진행. 2) scripts/e2e-orchestration-filename-migration.mjs는 과거 마이그레이션(.opencode suffix 도입) 검증이라면 이번 네임스페이스 이전으로 obsolete. 3) generated/ 산출물(src/skills/generated/)과 templates/는 generate:prompts가 nexus-core v0.4.0 skills/*/body.md를 소스로 재생성 — 경로 리터럴이 nexus-core skill 본문에 박혀 있지 않으면 영향 없음.",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:14:30.670Z"
+        },
+        {
+          "id": 3,
+          "title": "state-schemas/ 디렉토리 신설 및 extension/harness schema 작성",
+          "context": "v0.4.0 규칙에 따라 harness-local state 파일에 대한 JSON Schema를 consumer 리포지토리에 둔다. plan.extension.json은 common plan.json 확장이므로 draft 2020-12 + additionalProperties: false 필수. 독립 파일인 orchestration.json, audit/* 도 cross-harness interop을 위해 스키마 작성.",
+          "approach": "1) 루트에 `state-schemas/` 디렉토리 생성. 2) `state-schemas/plan.extension.schema.json` — plan-sidecar.ts의 실제 구조(schema_version, canonical_file, platform, handoff(mode, owner), panel(agents[])) 반영. 3) `state-schemas/orchestration.schema.json` — orchestration/core.ts의 invocations 배열과 필드 반영. 4) `state-schemas/audit.schema.json` — audit-log.ts의 JSONL 레코드 구조(ts, kind, event_type, session_id, payload) 반영 (JSONL이므로 per-line object schema). 5) 각 스키마에 `$schema: \"https://json-schema.org/draft/2020-12/schema\"`, `$id`, `additionalProperties: false` 명시.",
+          "acceptance": "- state-schemas/ 디렉토리 존재, 3개 스키마 파일 작성\n- 모든 스키마가 draft 2020-12, additionalProperties: false 준수\n- 각 스키마가 실제 런타임 파일 구조와 정합 (plan-sidecar.ts/orchestration/core.ts/audit-log.ts 필드와 일치)",
+          "risk": "런타임 코드와 스키마 drift 가능성 — 스키마 작성 시 실제 zod 런타임 검증과 교차 확인.",
+          "status": "pending",
+          "deps": [
+            2
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:14:41.502Z"
+        },
+        {
+          "id": 4,
+          "title": "package.json에 validate:conformance 스크립트 추가 및 test:e2e 편입",
+          "context": "nexus-core의 canonical validator를 consumer 측에서 호출하도록 package.json scripts를 확장한다. CI는 기존 test:e2e 경유이므로 test:e2e 체인 앞단에 conformance validator 실행을 삽입한다.",
+          "approach": "1) scripts에 `\"validate:conformance\": \"cd node_modules/@moreih29/nexus-core && bun run validate:conformance\"` 추가. 2) `test:e2e` 명령어의 맨 앞에 `bun run validate:conformance && ` 삽입 (build 뒤, e2e 스크립트들 앞). 3) bun run validate:conformance를 로컬에서 실행해 종료 코드 0 확인.",
+          "acceptance": "- package.json scripts에 validate:conformance 추가\n- test:e2e가 validate:conformance를 build 뒤, e2e 스크립트들 앞에서 실행\n- 로컬 `bun run validate:conformance` 종료 코드 0",
+          "risk": "nexus-core v0.4.0 package.json에 `validate:conformance` 스크립트가 존재하는지 먼저 확인 필요. 없으면 `bun run scripts/conformance-coverage.ts`로 대체.",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 4,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:14:49.290Z"
+        },
+        {
+          "id": 5,
+          "title": "nexus-core 버전 핀 업데이트 + validate:conformance 스크립트 추가",
+          "context": "package.json의 `@moreih29/nexus-core` devDependency 핀을 `^0.3.0` → `^0.4.0`으로 갱신하고, v0.4.0의 의무 스크립트 `validate:conformance`를 추가한 뒤 `bun install`을 실행한다.",
+          "approach": "1) `/Users/kih/workspaces/areas/opencode-nexus/package.json`의 devDependencies에서 `@moreih29/nexus-core` 값을 `^0.4.0`으로 변경. 2) scripts에 `\"validate:conformance\": \"cd node_modules/@moreih29/nexus-core && bun run validate:conformance\"` 추가. 3) `test:e2e` 스크립트의 첫 단계로 `bun run validate:conformance`를 체이닝(실패 즉시 block되도록). 4) `bun install` 실행 후 `node_modules/@moreih29/nexus-core/package.json` 버전이 0.4.0인지 확인.",
+          "acceptance": "- package.json devDependencies.@moreih29/nexus-core가 `^0.4.0`\n- package.json scripts.validate:conformance가 존재\n- package.json scripts.test:e2e가 validate:conformance로 시작\n- `bun install` 성공\n- 설치된 nexus-core 실제 버전이 0.4.x",
+          "risk": "node_modules 접근 권한 제한으로 설치 결과를 직접 verify하기 어려울 수 있음 — 대체로 `bun pm ls` 또는 lockfile로 확인",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:15:54.290Z"
+        },
+        {
+          "id": 6,
+          "title": ".nexus/state/opencode-nexus/ 네임스페이스 마이그레이션 (src + scripts + 파일 이동)",
+          "context": "v0.4.0 `rule:harness-state-namespace`에 따라 .nexus/state/ 루트의 harness-specific 파일들을 .nexus/state/opencode-nexus/ 네임스페이스로 이동하고, plan.opencode.json은 plan.extension.json으로 rename하며, 미사용 tool-log.jsonl 초기화 코드를 제거한다.",
+          "approach": "src 변경:\n1) `src/shared/paths.ts` — 경로 상수 재정의: STATE_NAMESPACE_DIR = `.nexus/state/opencode-nexus`, PLAN_SIDECAR_PATH = `{ns}/plan.extension.json`, ORCHESTRATION_PATH = `{ns}/orchestration.json`, AUDIT_ROOT = `{ns}/audit/`. 구 경로 상수 제거.\n2) `src/shared/state.ts:ensureNexusStructure` — mkdir 대상을 네임스페이스 디렉토리로, tool-log.jsonl 초기화 로직 삭제.\n3) `src/shared/plan-sidecar.ts` — 파일명 참조 업데이트.\n4) `src/shared/audit-log.ts` — audit 경로 빌더 업데이트 (appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog).\n5) `src/orchestration/core.ts`, `src/orchestration/core-store.ts` — orchestration.json 경로 참조 업데이트.\n\nscripts 변경 (grep으로 `orchestration.opencode` / `plan.opencode` / `tool-log.jsonl` 이 나온 파일들):\n6) `scripts/e2e-orchestration-filename-migration.mjs`\n7) `scripts/e2e-orchestration-core-persistence.mjs`\n8) `scripts/e2e-plan-resume-inject.mjs`\n9) `scripts/smoke-opencode-run.mjs`\n\n파일 이동:\n10) 실제 `.nexus/state/` 하위 기존 파일들을 새 경로로 `git mv` (audit/all.jsonl, audit/sessions/, orchestration.opencode.json, plan.opencode.json → 각 새 위치), tool-log.jsonl 삭제.\n\n11) `bun run check` 성공 확인 (타입체크).",
+          "acceptance": "- `.nexus/state/` 루트에 agent-tracker.json, artifacts/, runtime.json, opencode-nexus/ 4개만 존재\n- `.nexus/state/opencode-nexus/` 아래 plan.extension.json, orchestration.json, audit/ 존재\n- `.nexus/state/` 루트에 tool-log.jsonl 부재\n- `Grep -r \"plan.opencode.json|orchestration.opencode.json|tool-log.jsonl\"` 결과가 src/, scripts/에서 0건 (문서 파일 제외)\n- `bun run check` 성공",
+          "risk": "- .opencode/skills/ 또는 src/skills/generated/ 재생성 파일에 구 경로가 남아 있을 경우 `bun run build`가 덮어쓸 수 있음 → 빌드 후 재확인 필요\n- audit/sessions/{sessionID}/ 경로를 참조하는 런타임 로직에서 절대/상대 경로 혼용 가능성 있음, path 빌더로 통일\n- 기존 세션의 상태 파일이 사라져도 문제되지 않음 (세션 로컬)",
+          "status": "completed",
+          "deps": [
+            1
+          ],
+          "plan_issue": 2,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:16:11.604Z"
+        },
+        {
+          "id": 7,
+          "title": "state-schemas/ 디렉토리 신설 및 Extension JSON Schema 작성",
+          "context": "v0.4.0 Harness-local State Extension convention에 따라 harness-local state 파일(특히 plan.extension.json)에 대한 JSON Schema(draft 2020-12)를 작성해 리포지토리 루트 `state-schemas/` 디렉토리에 배치한다.",
+          "approach": "1) `/Users/kih/workspaces/areas/opencode-nexus/state-schemas/` 디렉토리 생성.\n2) `plan.extension.schema.json` — draft 2020-12, `additionalProperties: false`, src/shared/plan-sidecar.ts의 실제 구조(schema_version, canonical_file, platform, handoff, panel) 반영. panel의 각 agent 엔트리 구조(sessionId, taskId, 요약 등)도 그대로 스키마화.\n3) `orchestration.schema.json` — orchestration.opencode.json (rename 후 orchestration.json)의 top-level 구조(schema_version, updated_at, invocations) 스키마화.\n4) `audit-log.schema.json` — audit JSONL 라인 구조(ts, kind, event_type, session_id, payload).\n5) 각 스키마에 `$id`, `$schema`, `title`, `description` 메타데이터 포함.\n6) 스키마가 현재 코드가 생성하는 파일 인스턴스와 실제로 일치하는지 ajv 등으로 로컬 검증(선택).",
+          "acceptance": "- `state-schemas/` 디렉토리 존재\n- `state-schemas/plan.extension.schema.json` 존재, draft 2020-12, additionalProperties false\n- `state-schemas/orchestration.schema.json` 존재\n- `state-schemas/audit-log.schema.json` 존재 (JSONL line schema)\n- 각 스키마가 src의 실제 데이터 모델과 일치(필드 누락/오탈자 없음)",
+          "risk": "스키마와 실제 생성 코드가 drift될 수 있음 — zod 런타임 타입과 대조하여 사람이 교차 검증 필요",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "plan_issue": 3,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:16:23.222Z"
+        },
+        {
+          "id": 8,
+          "title": "문서 업데이트 (README, UPSTREAM, .nexus/context, .nexus/memory, harness-docs)",
+          "context": "경로 마이그레이션과 v0.4.0 upgrade 사실을 human-authored 문서에 반영한다. generated 산출물(.opencode/skills/*, src/skills/generated/*, templates/skills/*)은 build pipeline이 재생성하므로 건드리지 않는다.",
+          "approach": "1) `README.md`, `README.en.md` — .nexus/state 경로 예시나 설명 중 구 경로(`plan.opencode.json`, `orchestration.opencode.json`, `audit/`, `tool-log.jsonl`) 참조를 새 네임스페이스 경로로 갱신.\n2) `UPSTREAM.md` — v0.2.0 기록 포맷을 따라 `### 현재 상태 (Phase 1 완료 + v0.4.0 Upgrade)` 섹션 추가 또는 기존 섹션 하단에 v0.4.0 upgrade 요약 추가(branch `chore/nexus-core-0.4.0-upgrade`, harness-state-namespace 규칙 적용, plan.extension.json rename, state-schemas/ 신설, validate:conformance 통합).\n3) `.nexus/context/orchestration.md`, `.nexus/context/architecture.md` — state 레이아웃과 orchestration 파일 경로 참조 갱신.\n4) `.nexus/memory/audit-log-schema.md` — audit 경로를 `.nexus/state/opencode-nexus/audit/`로 갱신.\n5) `harness-docs/resume_invocation.md` — state 파일 참조 있으면 갱신.\n6) `.nexus/history.json` — 과거 기록이므로 편집 제외(무시).\n7) 변경 없이 build pipeline으로 재생성될 파일(.opencode/skills/*, src/skills/generated/*, templates/skills/*)은 직접 수정하지 않음 — 다만 build 후 drift 없는지 reviewer가 검증.",
+          "acceptance": "- README.md/README.en.md 내 구 state 경로 참조가 없음 (grep으로 확인)\n- UPSTREAM.md에 v0.4.0 upgrade 기록 존재 (날짜, 브랜치명, 주요 변경 요약 포함)\n- .nexus/context/{orchestration,architecture}.md 경로 참조 갱신\n- .nexus/memory/audit-log-schema.md 경로 갱신\n- harness-docs/resume_invocation.md 경로 갱신(필요 시)\n- 사실 오류/문법 오류 없음",
+          "risk": "README가 영문/국문 이원화되어 있어 누락 가능 — 두 파일을 함께 diff",
+          "status": "completed",
+          "deps": [
+            2
+          ],
+          "plan_issue": 5,
+          "owner": "writer",
+          "created_at": "2026-04-13T12:16:38.448Z"
+        },
+        {
+          "id": 9,
+          "title": "테스터 검증: bun run check + test:e2e + acceptance pass 확인",
+          "context": "engineer task 1~3의 acceptance criteria를 검증하고, `bun run check`(typecheck)와 `bun run test:e2e`(27개 e2e 스크립트 + validate:conformance) 전체 통과를 확인한다.",
+          "approach": "1) Task 1~3 tasks.json의 acceptance 각 항목을 PASS/FAIL로 판정. 2) `bun run check` 실행 → 타입 에러 없어야 함. 3) `bun run test:e2e` 실행 → 모든 스크립트 통과. 4) 특히 `e2e-orchestration-filename-migration.mjs`, `e2e-orchestration-core-persistence.mjs`, `e2e-plan-resume-inject.mjs`가 새 경로에서 성공하는지 집중 점검. 5) 새로 추가된 `validate:conformance`가 통과하는지 확인. 6) `.nexus/state/` 루트에 harness-specific 파일이 없는지 ls로 재확인. 7) 실패 항목은 상세 diagnostic과 함께 보고.",
+          "acceptance": "- Task 1~3 acceptance 전 항목 PASS\n- `bun run check` exit 0\n- `bun run test:e2e` exit 0 (모든 e2e 스크립트 통과)\n- `validate:conformance` exit 0\n- `.nexus/state/` 루트에 opencode-nexus specific 파일 없음",
+          "risk": "test:e2e가 27개 스크립트를 순차 실행해 수 분 걸림 — 중간 실패 시 재실행 시간 비용",
+          "status": "completed",
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "plan_issue": 4,
+          "owner": "tester",
+          "created_at": "2026-04-13T12:16:47.977Z"
+        },
+        {
+          "id": 10,
+          "title": "리뷰어 검증: 문서 업데이트 사실/문법/일관성 확인",
+          "context": "Task 4(writer)의 결과물을 검증한다. 경로 정합성, 사실 정확성, 문법, UPSTREAM.md의 v0.4.0 기록 형식 일관성을 확인한다.",
+          "approach": "1) README.md/README.en.md — 구 경로 잔존 여부 grep으로 최종 확인, 두 언어판 내용 정합성 교차 검증. 2) UPSTREAM.md — v0.2.0 기록 포맷과 톤·필드 정합성(브랜치명, 날짜, 주요 변경 요약, sibling relationship 유지 표현) 확인. 3) .nexus/context/*, .nexus/memory/* — 경로 참조 정확성, 링크 끊김 여부. 4) 문법/맞춤법/띄어쓰기. 5) 사실 불일치(예: 실제 rename된 파일명과 문서 내용 mismatch) 탐지. 6) 필요 시 수정 사항을 Task 4로 피드백.",
+          "acceptance": "- 모든 대상 문서에서 구 경로 참조 없음\n- UPSTREAM.md v0.4.0 섹션이 기존 v0.2.0 포맷과 일관\n- 사실 오류 0건\n- 문법/오탈자 0건",
+          "risk": "writer가 실제 변경된 파일명을 잘못 옮겨 적을 수 있음 — 실제 state-schemas/와 src 결과를 대조",
+          "status": "completed",
+          "deps": [
+            4
+          ],
+          "plan_issue": 5,
+          "owner": "reviewer",
+          "created_at": "2026-04-13T12:16:56.941Z"
+        },
+        {
+          "id": 11,
+          "title": "nxHistorySearch 구현 (src/tools/workflow.ts 또는 신규 파일)",
+          "context": "nexus-core v0.4.0 conformance fixture `history-search.json`가 요구하는 history_search tool을 구현한다. 현재 opencode-nexus에는 nxHistorySearch가 없어 5개 fixture 전부 FAIL.",
+          "approach": "1) /Users/kih/workspaces/areas/nexus-core/conformance/tools/history-search.json 을 읽어 요구되는 args(query?, last_n?)와 return_value 형태 파악. 2) src/tools/workflow.ts에 nxHistorySearch 추가 (또는 개인 판단에 따라 src/tools/history.ts 신설 후 index.ts에 export). 3) history.json을 읽고 cycles 배열을 query(topic/research_summary/decisions text match)와 last_n으로 필터. 4) 반환 JSON: { total, showing, cycles }. 5) src/tools/index.ts의 nexusTools 객체에 등록. 6) bun run check 통과 확인.",
+          "acceptance": "- nxHistorySearch export 존재\n- fixture history-search.json의 모든 5개 test case PASS (history_search_no_history_file, history_search_no_query, history_search_query_match, history_search_query_no_match, history_search_last_n_limit)\n- bun run check 통과",
+          "risk": "fixture가 요구하는 정확한 return_value 스키마를 맞추지 못하면 postcondition assert 실패 — fixture 먼저 꼼꼼히 읽기",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:38:58.491Z"
+        },
+        {
+          "id": 12,
+          "title": "nxPlanDecide에 how_agents/how_summary/how_agent_ids 저장 + PlanIssue schema 확장",
+          "context": "v0.4.0 fixture `plan_decide_with_how_agents`는 issue에 how_agents/how_summary/how_agent_ids 필드 저장을 요구하지만 현 구현은 summary만 저장한다. src/shared/schema.ts의 PlanIssue에 해당 필드(optional) 추가하고 nxPlanDecide가 args로 받아 plan.json에 기록하도록 수정.",
+          "approach": "1) /Users/kih/workspaces/areas/nexus-core/conformance/tools/plan-decide.json을 읽어 plan_decide_with_how_agents 요구 파라미터와 postcondition의 state_file 필드 구조 파악. 2) src/shared/schema.ts의 PlanIssueSchema(존재 확인)에 how_agents: z.array(z.string()).optional(), how_summary: z.record(z.string()).optional(), how_agent_ids: z.record(z.string()).optional() 추가. 3) src/tools/plan.ts의 nxPlanDecide의 args schema에 동일 3개 필드 추가. 4) nxPlanDecide 본문에서 issue 객체 업데이트 시 이들 필드가 전달되면 함께 저장. 5) bun run check 통과 확인.",
+          "acceptance": "- src/shared/schema.ts PlanIssueSchema에 how_agents, how_summary, how_agent_ids optional 필드 존재\n- nxPlanDecide가 이 3개 args 파라미터를 받아 plan.json에 기록\n- fixture plan_decide_with_how_agents PASS\n- fixture plan_decide_happy_path 여전히 PASS\n- bun run check 통과",
+          "risk": "PlanIssueSchema에 strict 설정이 있으면 extension 필드 거부 — additionalProperties 또는 passthrough 설정 점검",
+          "status": "completed",
+          "deps": [],
+          "plan_issue": 6,
+          "owner": "engineer",
+          "created_at": "2026-04-13T12:39:07.585Z"
+        },
+        {
+          "id": 13,
+          "title": "e2e-conformance.mjs TOOL_MAP 확장 및 전체 통과 검증",
+          "context": "scripts/e2e-conformance.mjs의 TOOL_MAP에 artifact_write, context, history_search, plan_status, plan_update 5개를 추가하여 v0.4.0 확장 fixtures를 실제로 검증. 그 후 bun run test:e2e 전체 통과(exit 0)를 확인.",
+          "approach": "1) e2e-conformance.mjs의 import 라인에 추가: `import { nxArtifactWrite } from \"../dist/tools/artifact.js\"`, `import { nxContext } from \"../dist/tools/context.js\"`, `import { nxHistorySearch } from \"../dist/tools/workflow.js\"` (혹은 신규 위치), 그리고 plan.ts에서 nxPlanStatus, nxPlanUpdate 추가 import. 2) TOOL_MAP에 해당 함수 매핑 추가: artifact_write, context, history_search, plan_status, plan_update. 3) mapParams에 필요 시 param 변환 추가(대개 불필요). 4) bun run test:e2e 전체 실행 → exit 0 확인. 5) 실패 fixture 있으면 diagnostic 확인 후 해결.",
+          "acceptance": "- e2e-conformance.mjs TOOL_MAP이 11개 tool 커버\n- bun run test:e2e exit 0\n- conformance: 43 passed, 0 failed (혹은 fixture 총 개수에 맞춰)",
+          "risk": "일부 fixture의 postcondition이 opencode 구현과 미묘하게 달라 assert 실패할 수 있음 — 각각 diagnostic 확인 후 필요 시 param mapping 추가",
+          "status": "completed",
+          "deps": [
+            11,
+            12
+          ],
+          "plan_issue": 6,
+          "owner": "lead",
+          "created_at": "2026-04-13T12:39:17.096Z"
+        }
+      ]
     }
   ]
 }

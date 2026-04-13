@@ -80,11 +80,11 @@ export const nxPlanStatus = tool({
   async execute(_args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     if (!(await fileExists(paths.PLAN_FILE))) {
-      return "No active plan session";
+      return JSON.stringify({ active: false });
     }
 
     const plan = await readPlan(paths.PLAN_FILE);
-    const issues = summarizeIssues(plan);
+    const summary = summarizeIssues(plan);
     const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
     const followupParticipants = sidecar
       ? await Promise.all(
@@ -107,12 +107,15 @@ export const nxPlanStatus = tool({
 
     return JSON.stringify(
       {
-        id: plan.id,
+        active: true,
+        plan_id: plan.id,
         topic: plan.topic,
         attendees: plan.attendees,
-        issues,
+        issues: plan.issues,
+        summary,
+        research_summary: plan.research_summary,
         current_issue: pickCurrentIssue(plan),
-        decided_ratio: `${issues.decided + issues.tasked}/${issues.total}`,
+        decided_ratio: `${summary.decided + summary.tasked}/${summary.total}`,
         opencode: {
           ...summarizePlanSidecar(sidecar),
           followup_ready_roles: followupParticipants
@@ -227,25 +230,34 @@ export const nxPlanUpdate = tool({
     }
     const plan = PlanFileSchema.parse(await readJsonFile<PlanFile>(paths.PLAN_FILE, {} as PlanFile));
 
+    let result: Record<string, unknown> = {};
+
     if (args.action === "add") {
       if (!args.title) {
         throw new Error("title is required for add");
       }
       const nextId = (plan.issues.length > 0 ? Math.max(...plan.issues.map(i => i.id)) : 0) + 1;
-      plan.issues.push({
+      const added = {
         id: nextId,
         title: args.title,
-        status: "pending",
+        status: "pending" as PlanIssueStatus,
         discussion: [],
         task_refs: []
-      });
+      };
+      plan.issues.push(added);
+      result = { added: true, issue: { id: added.id, title: added.title, status: added.status } };
     }
 
     if (args.action === "remove") {
       if (!args.issue_id) {
         throw new Error("issue_id is required for remove");
       }
+      const removed = plan.issues.find((item) => item.id === args.issue_id);
+      if (!removed) {
+        throw new Error(`Issue ${args.issue_id} not found`);
+      }
       plan.issues = plan.issues.filter((issue) => issue.id !== args.issue_id);
+      result = { removed: true, issue: { id: removed.id } };
     }
 
     if (args.action === "edit") {
@@ -254,9 +266,10 @@ export const nxPlanUpdate = tool({
       }
       const issue = plan.issues.find((item) => item.id === args.issue_id);
       if (!issue) {
-        throw new Error(`issue not found: ${args.issue_id}`);
+        throw new Error(`Issue ${args.issue_id} not found`);
       }
       issue.title = args.title;
+      result = { edited: true, issue: { id: issue.id, title: issue.title } };
     }
 
     if (args.action === "reopen") {
@@ -265,17 +278,18 @@ export const nxPlanUpdate = tool({
       }
       const issue = plan.issues.find((item) => item.id === args.issue_id);
       if (!issue) {
-        throw new Error(`issue not found: ${args.issue_id}`);
+        throw new Error(`Issue ${args.issue_id} not found`);
       }
       issue.status = "pending";
       issue.decision = undefined;
       issue.summary = undefined;
       issue.task_refs = [];
+      result = { reopened: true, issue: { id: issue.id, status: issue.status } };
     }
 
     await writeJsonFile(paths.PLAN_FILE, plan);
     await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
-    return `Plan updated (${args.action})`;
+    return JSON.stringify(result);
   }
 });
 
@@ -331,7 +345,10 @@ export const nxPlanDecide = tool({
   args: {
     issue_id: z.number(),
     decision: z.string(),
-    summary: z.string().optional()
+    summary: z.string().optional(),
+    how_agents: z.array(z.string()).optional(),
+    how_summary: z.record(z.string(), z.string()).optional(),
+    how_agent_ids: z.record(z.string(), z.string()).optional()
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
@@ -348,6 +365,9 @@ export const nxPlanDecide = tool({
     issue.status = issue.task_refs.length > 0 ? "tasked" : "decided";
     issue.decision = args.decision;
     issue.summary = args.summary;
+    if (args.how_agents !== undefined) issue.how_agents = args.how_agents;
+    if (args.how_summary !== undefined) issue.how_summary = args.how_summary;
+    if (args.how_agent_ids !== undefined) issue.how_agent_ids = args.how_agent_ids;
     issue.discussion.push({
       speaker: "lead",
       message: args.decision,

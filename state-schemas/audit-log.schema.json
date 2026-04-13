@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/moreih29/opencode-nexus/blob/main/state-schemas/audit-log.schema.json",
+  "title": "AuditLogEntry",
+  "description": "Schema for a single JSONL line in opencode-nexus audit log files (all.jsonl / session.jsonl / subagent JSONL).",
+  "$comment": "Each audit log file is JSONL — one JSON object per line. This schema validates a single line object. The payload field is intentionally open-typed (any JSON value) because consumers append arbitrary event payloads. top-level additionalProperties is false; only the five declared fields are permitted at the top level.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ts", "kind"],
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the entry was recorded."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Entry kind discriminator (e.g. 'event', 'invocation', 'error')."
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Fine-grained event type within the kind (e.g. 'message.updated', 'session.status')."
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "OpenCode session ID that produced this entry, or null for global entries."
+    },
+    "payload": {
+      "description": "Consumer-defined event payload. May be any JSON value; structure varies by event_type.",
+      "type": ["object", "array", "string", "number", "boolean", "null"]
+    }
+  }
+}

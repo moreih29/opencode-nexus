@@ -29,8 +29,8 @@ await fs.writeFile(path.join(root, ".git", "HEAD"), "ref: refs/heads/test\n", "u
 const nexusPaths = createNexusPaths(root);
 assert.equal(
   nexusPaths.ORCHESTRATION_CORE_FILE,
-  path.join(root, ".nexus", "state", "orchestration.opencode.json"),
-  "canonical orchestration state path should be .nexus/state/orchestration.opencode.json"
+  path.join(root, ".nexus", "state", "opencode-nexus", "orchestration.json"),
+  "canonical orchestration state path should be .nexus/state/opencode-nexus/orchestration.json"
 );
 
 let state = createState("2026-04-02T00:00:00.000Z");

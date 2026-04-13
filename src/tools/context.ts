@@ -15,17 +15,20 @@ export const nxContext = tool({
     const root = context.worktree ?? context.directory;
     const paths = createNexusPaths(root);
 
-    const [hasPlan, hasTasks, tasksSummary, branch, plan, planSidecar, coordinationGroups] = await Promise.all([
+    const [hasPlan, hasTasks, tasksSummary, branch, plan, planSidecar, coordinationGroups, tasksFile] = await Promise.all([
       fileExists(paths.PLAN_FILE),
       fileExists(paths.TASKS_FILE),
       readTasksSummary(paths.TASKS_FILE),
       readCurrentBranch(root),
       readJsonFile<{ topic?: string; issues?: Array<{ id?: number; title?: string; status?: string }> } | null>(paths.PLAN_FILE, null),
       readPlanSidecar(paths.PLAN_SIDECAR_FILE),
-      summarizeCoordinationGroups(paths.AGENT_TRACKER_FILE)
+      summarizeCoordinationGroups(paths.AGENT_TRACKER_FILE),
+      readJsonFile<{ goal?: string; decisions?: string[] } | null>(paths.TASKS_FILE, null)
     ]);
 
-    const activeMode = hasPlan ? "plan" : hasTasks ? "run" : "idle";
+    const activeMode = hasPlan ? "plan" : hasTasks ? "team" : null;
+    const goal = typeof tasksFile?.goal === "string" ? tasksFile.goal : null;
+    const decisions = Array.isArray(tasksFile?.decisions) ? tasksFile.decisions : [];
     const currentIssue = plan?.issues?.find((issue: { status?: string }) => issue.status === "discussing") ?? plan?.issues?.find((issue: { status?: string }) => issue.status === "pending") ?? null;
     const mergedParticipants = planSidecar
       ? await Promise.all(
@@ -47,6 +50,8 @@ export const nxContext = tool({
         branch,
         branchGuard: branch === "main" || branch === "master",
         activeMode,
+        goal,
+        decisions,
         planTopic: typeof plan?.topic === "string" ? plan.topic : null,
         currentIssue,
         handoff: planSidecar

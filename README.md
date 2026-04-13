@@ -97,7 +97,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 | --- | --- | --- |
 | `nx-setup` | `nx_setup` | OpenCode용 `AGENTS.md`, `opencode.json`, entrypoint skill 설치 |
 | `nx-init` | `nx_init` | 프로젝트 온보딩과 초기 지식 생성 |
-| `nx-sync` | `nx_sync` | 아카이브된 실행 지식을 `.nexus/core/`로 동기화 |
+| `nx-sync` | `nx_sync` | 컨텍스트 문서(`.nexus/context/`)를 현재 프로젝트 상태에 맞게 동기화 |
 
 ## 태그
 
@@ -141,11 +141,11 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - HOW / DO / CHECK 역할로 나뉜 9개 Nexus 에이전트 카탈로그
 - 기본 primary `nexus`와 specialist subagent 조합
 - `.nexus/state/`에 저장되는 상태 기반 plan/task 워크플로
-- canonical `.nexus`와 분리된 OpenCode sidecar(`plan.opencode.json`) 기반 HOW 패널 연속성
+- canonical `.nexus`와 분리된 OpenCode sidecar(`.nexus/state/opencode-nexus/plan.extension.json`) 기반 HOW 패널 연속성
 - HOW 패널 participant별 `task_id/session_id` 재개 힌트 저장
 - `nx_plan_resume`로 HOW participant 재개 핸들 조회 가능
 - `nx_plan_followup`로 HOW participant follow-up delegation 입력 생성 가능
-- identity / codebase / reference / memory 계층의 `.nexus/core/`
+- `.nexus/context/`(설계 문서)와 `.nexus/memory/`(lessons/참조) 기반의 flat 지식 구조
 - edit 도구에 대한 task pipeline 가드레일
 - meeting reminder, run notice, 더 엄격한 cycle-close discipline
 - `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
@@ -155,7 +155,8 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 `opencode-nexus`는 `.nexus/`에 프로젝트 지식과 워크플로 상태를 저장합니다.
 
-- `core/` — 지속되는 프로젝트 지식
+- `context/` — 정적 설계 문서 (architecture, orchestration, principles 등)
+- `memory/` — lessons learned, references, anti-patterns
 - `rules/` — 팀 규칙
 - `config.json` — Nexus 설정
 - `history.json` — 아카이브된 사이클 기록

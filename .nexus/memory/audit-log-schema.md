@@ -2,7 +2,9 @@
 
 Source: `docs/subagent-audit-fields.md`
 
-This document describes the experimental audit log structure under `.nexus/state/audit/` and the full field schema for subagent invocation records.
+This document describes the experimental audit log structure under `.nexus/state/opencode-nexus/audit/` and the full field schema for subagent invocation records.
+
+> JSON Schema: `state-schemas/audit-log.schema.json` (v0.4.0 신설, `rule:harness-state-namespace` 적용).
 
 ---
 
@@ -10,9 +12,9 @@ This document describes the experimental audit log structure under `.nexus/state
 
 | Path | Contents |
 |---|---|
-| `.nexus/state/audit/all.jsonl` | Global stream — all events across all sessions |
-| `.nexus/state/audit/sessions/<session-id>/session.jsonl` | Per-session stream |
-| `.nexus/state/audit/sessions/<parent-session-id>/subagents/<invocation-id>.jsonl` | Per-subagent stream |
+| `.nexus/state/opencode-nexus/audit/all.jsonl` | Global stream — all events across all sessions |
+| `.nexus/state/opencode-nexus/audit/sessions/<session-id>/session.jsonl` | Per-session stream |
+| `.nexus/state/opencode-nexus/audit/sessions/<parent-session-id>/subagents/<invocation-id>.jsonl` | Per-subagent stream |
 
 ---
 
