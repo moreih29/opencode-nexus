@@ -14,13 +14,13 @@ import {
   loadTagsVocab,
   verifyTagDrift,
   verifyBodyHash,
-  verifyCatalogConsistency,
   transformAgent,
   transformSkill,
   buildAgentIndividualFile,
   buildAgentIndexFile,
   buildSkillIndividualFile,
   buildSkillIndexFile,
+  buildNxSetupSkillEntry,
   loadPluginName,
   writeGenerated,
 } from './generate-from-nexus-core.lib.mjs';
@@ -76,14 +76,11 @@ async function main() {
     const body = readFileSync(bodyPath, 'utf8');
     verifyBodyHash(body, skillEntry.body_hash, `skills/${skillEntry.id}/body.md`);
     const out = transformSkill(meta, body, pluginName, `skills/${skillEntry.id}`);
-    skillEntries.push({ id: skillEntry.id, prompt: out.prompt });
+    skillEntries.push({ id: skillEntry.id, prompt: out.prompt, meta: out.meta });
   }
-
-  // Consistency check: NEXUS_AGENT_CATALOG[id].disallowedTools must match
-  // AGENT_META[id].disallowedTools (resolved from capabilities). Throws
-  // ERR_CATALOG_MISMATCH on drift (exempt agents like postdoc are skipped).
-  const catalogPath = join(OPENCODE_NEXUS_ROOT, 'src/agents/catalog.ts');
-  verifyCatalogConsistency(agentEntries, catalogPath);
+  // nx-setup is a locally-defined skill (not in nexus-core manifest).
+  // Its prompt lives in templates/skills/nx-setup/SKILL.md.
+  skillEntries.push(buildNxSetupSkillEntry(pluginName));
 
   const agentsGeneratedDir = join(OPENCODE_NEXUS_ROOT, 'src/agents/generated');
   const skillsGeneratedDir = join(OPENCODE_NEXUS_ROOT, 'src/skills/generated');

@@ -2,9 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { NEXUS_AGENT_CATALOG } from "./agents/catalog.js";
 import { NEXUS_PRIMARY_AGENT_ID, NEXUS_PRIMARY_DESCRIPTION, NEXUS_PRIMARY_PROMPT } from "./agents/primary.js";
-import { AGENT_PROMPTS } from "./agents/prompts.js";
+import { AGENT_META, AGENT_PROMPTS } from "./agents/prompts.js";
 
 type ConfigLike = Record<string, unknown>;
 
@@ -27,16 +26,16 @@ export function createConfigHook() {
       };
     }
 
-    for (const profile of NEXUS_AGENT_CATALOG) {
-      if (nextAgent[profile.id]) {
+    for (const meta of Object.values(AGENT_META)) {
+      if (nextAgent[meta.id]) {
         continue;
       }
-      nextAgent[profile.id] = {
-        description: profile.description,
+      nextAgent[meta.id] = {
+        description: meta.description,
         mode: "subagent",
-        model: profile.model,
-        prompt: AGENT_PROMPTS[profile.id],
-        tools: buildToolPolicy(profile.disallowedTools)
+        model: meta.model,
+        prompt: AGENT_PROMPTS[meta.id],
+        tools: buildToolPolicy(meta.disallowedTools as string[])
       };
     }
 

@@ -29,9 +29,9 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 |---|---|---|
 | nx-plan | [plan] | Structured planning — subagent-based analysis, deliberate decisions, produce execution plan |
 | nx-run | [run] | Execution — user-directed agent composition |
-| nx-init | nx-init | Project onboarding — scan, mission, essentials, context generation |
-| nx-sync | nx-sync | Context knowledge synchronization |
-| nx-setup | nx-setup | Interactive Nexus configuration wizard |
+| nx-init | /opencode-nexus:nx-init | Project onboarding — scan, mission, essentials, context generation |
+| nx-sync | [sync] | Context knowledge synchronization |
+| nx-setup | /opencode-nexus:nx-setup | Interactive Nexus configuration wizard |
 
 ### Tags
 
@@ -52,7 +52,6 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 - Keep edits scoped to active tasks and update status with `nx_task_update`.
 - Verify before closure; run `nx_sync` when useful, then archive with `nx_task_close`.
 - Apply Branch Guard on `main` or `master` before substantial execution.
-- Use `nx_briefing(role, hint?)` before specialist delegation when context matters.
 
 ### Coordination Model
 

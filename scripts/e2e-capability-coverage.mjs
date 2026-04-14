@@ -33,8 +33,6 @@ const KNOWN_OPENCODE_TOOLS = new Set([
   "nx_task_list",
   "nx_plan_start",
   "nx_plan_decide",
-  "nx_plan_discuss",
-  "nx_plan_join",
   "nx_plan_status",
   "nx_plan_update",
   "nx_plan_followup",

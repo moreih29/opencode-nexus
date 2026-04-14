@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.5.0 (4da9b345dce867d9b7b60f8b04076a1a3dc3818a)
+// Source: @moreih29/nexus-core@0.6.0 (bcde383b56308b86006babe73f87fed9222c0761)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -452,3 +452,11 @@ Either way, opencode routes the prompt to the existing architect subagent sessio
   \`51109b3\` (session_id fallback fix)
 - Smoke harness: \`scripts/smoke-opencode-run.mjs\`
 `;
+
+export const META = {
+  id: "nx-plan",
+  name: "nx-plan",
+  description: "Structured multi-perspective analysis to decompose issues, align on decisions, and produce an enriched plan before execution. Plan only — does not execute.",
+  trigger_display: "[plan]",
+  purpose: "Structured planning — subagent-based analysis, deliberate decisions, produce execution plan",
+} as const;

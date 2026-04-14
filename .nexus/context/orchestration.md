@@ -3,7 +3,7 @@
 
 ## 1. 에이전트 카탈로그
 
-모든 에이전트는 `NexusAgentProfile` 타입으로 정의된다. 카테고리는 `how / do / check` 세 가지.
+모든 에이전트는 `AGENT_META`(`src/agents/generated/index.ts:27`)로 정의된다. 카테고리는 `how / do / check` 세 가지. 에이전트 수: 9개(HOW 4, DO 3, CHECK 2).
 
 ### HOW 에이전트 — 자문 역할, 파일 수정 불가
 
@@ -35,7 +35,7 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 에이전트 프롬프트 구조
 
-에이전트 프롬프트 본체는 `@moreih29/nexus-core`를 canonical source로 하며, 빌드 타임 generator(`scripts/generate-from-nexus-core.mjs`)가 `src/agents/prompts.generated.ts`를 생성한다. `src/agents/prompts.ts`는 이를 re-export하는 thin barrel이다. `src/agents/catalog.ts`(에이전트 메타) 및 `src/skills/catalog.ts`(스킬 메타)는 as-is canonical로 유지된다.
+에이전트 프롬프트 본체는 `@moreih29/nexus-core`를 canonical source로 하며, 빌드 타임 generator(`scripts/generate-from-nexus-core.mjs`)가 `src/agents/generated/index.ts`를 생성한다. `src/agents/prompts.ts`는 이를 re-export하는 thin barrel이다. `AGENT_META`가 에이전트 메타의 single source of truth이며, `SKILL_META`가 스킬 메타의 single source of truth다(각각 `src/agents/generated/index.ts`, `src/skills/generated/index.ts`).
 
 공통 구조: `<role>` → `<constraints>` → `<guidelines>`
 
@@ -59,7 +59,12 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### nx-plan 절차
 
-1. 의도 파악 → 2. 리서치 → 3. 팀 구성 → 4. 이슈별 토론(`nx_plan_discuss`) → 5. 후속 연속성(`nx_plan_followup`) → 6. 옵션 제시 → 7. 결정 기록(`nx_plan_decide`) → 8. 갭 확인 → 9. `[run]` 전환 제안
+1. **Intent Discovery** — 요청의 planning depth(Specific/Direction-setting/Abstract) 판단, HOW subagent 구성 제안
+2. **Research** — `.nexus/memory`/`.nexus/context` 스캔, `nx_history_search`로 이전 결정 확인, 필요 시 Explore/Researcher subagent 병렬 spawn. **research가 완료되기 전에는 `nx_plan_start`를 호출하지 않는다 (hard constraint)**
+3. **Session Setup** — 리서치 완료 후 `nx_plan_start(topic, issues, research_summary)` 호출. 이슈 리스트 사용자 확인
+4. **Per-issue Analysis** — 한 번에 하나의 이슈. 현재 상태 요약 → (복잡 이슈는 HOW subagent 병렬 spawn) → 옵션 비교 표 + 권고안 제시 → 사용자 자유 응답 대기 → `[d]` 태그로 `nx_plan_decide` 호출 → 파생 이슈 즉시 점검 후 `nx_plan_update(action='add')`로 제안
+5. **Gap check + Wrap-up** — 모든 이슈 decided 후 원래 topic과 갭 점검. 갭 있으면 이슈 추가 후 Step 4 반복, 없으면 Step 6으로
+6. **Plan Document Generation** — 각 decided 이슈를 task로 분해하여 `nx_task_add(plan_issue, approach, acceptance, risk, owner)`, engineer task에 tester 자동 페어링, writer task에 reviewer 페어링. `.nexus/context/` 업데이트 task 포함. `[run]` 전환 안내
 
 ### nx-run 흐름
 

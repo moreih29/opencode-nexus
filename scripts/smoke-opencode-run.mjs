@@ -383,12 +383,11 @@ async function runGroupPlanFlow() {
       const toolNames = toolUses.map((e) => e.part?.tool ?? "").filter(Boolean);
       const hasStatusTool =
         toolNames.some((t) => t === "nx_plan_status") ||
-        toolNames.some((t) => t === "nx_plan_discuss") ||
         toolNames.some((t) => t.startsWith("nx_plan"));
 
       if (hasStatusTool) {
         const foundTool = toolNames.find(
-          (t) => t === "nx_plan_status" || t === "nx_plan_discuss" || t.startsWith("nx_plan")
+          (t) => t === "nx_plan_status" || t.startsWith("nx_plan")
         );
         r.pass(`Turn 2: plan tool called (${foundTool})`);
       } else {

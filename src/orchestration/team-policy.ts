@@ -1,11 +1,11 @@
-import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
+import { AGENT_META } from "../agents/generated/index.js";
 
 export function isKnownNexusAgent(agentType: string): boolean {
-  return NEXUS_AGENT_CATALOG.some((a) => a.id === agentType.toLowerCase());
+  return Object.values(AGENT_META).some((a) => a.id === agentType.toLowerCase());
 }
 
 export function requiresTeamInRunMode(agentType: string): boolean {
-  const agent = NEXUS_AGENT_CATALOG.find((a) => a.id === agentType.toLowerCase());
+  const agent = Object.values(AGENT_META).find((a) => a.id === agentType.toLowerCase());
   if (!agent) {
     return false;
   }

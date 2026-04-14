@@ -7,7 +7,7 @@ import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
 import { ensureNexusStructure, fileExists } from "../shared/state.js";
 import { nxInit } from "./workflow.js";
-import { NEXUS_AGENT_CATALOG, type NexusAgentProfile } from "../agents/catalog.js";
+import { AGENT_META } from "../agents/generated/index.js";
 
 const z = tool.schema;
 const MARKER_START = "<!-- NEXUS:START -->";
@@ -60,7 +60,7 @@ export const nxSetup = tool({
       selfHostedLocalPlugin: capabilities.localPluginShim
     });
 
-    const resolvedAgentModels = mergeAgentModels(next, args.agent_models as Record<string, string> | undefined, modelPreset, args.lead_model, NEXUS_AGENT_CATALOG);
+    const resolvedAgentModels = mergeAgentModels(next, args.agent_models as Record<string, string> | undefined, modelPreset, args.lead_model, Object.values(AGENT_META));
     mergePermissionPreset(next, permissionPreset);
 
     await writeJsonFile(targets.configFile, next);
@@ -226,7 +226,7 @@ function mergeAgentModels(
   explicitModels: Record<string, string> | undefined,
   preset: "unified" | "tiered" | "budget" | "skip",
   leadModel: string | undefined,
-  catalog: NexusAgentProfile[]
+  catalog: { id: string; category: string; model: string }[]
 ): Record<string, string> {
   const agent = toRecord(config.agent);
   const resolved: Record<string, string> = {};

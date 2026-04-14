@@ -7,27 +7,16 @@ import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../share
 import { fileExists } from "../shared/state.js";
 import {
   PlanFileSchema,
-  type PlanFile,
-  type PlanDiscussionKind,
-  type PlanIssueStatus
+  type PlanFile
 } from "../shared/schema.js";
 
 const z = tool.schema;
-const PLAN_DISCUSSION_KINDS = ["research", "discussion", "summary", "decision", "risk"] as const;
 
 export const nxPlanStart = tool({
   description: "Start a plan session",
   args: {
     topic: z.string(),
     research_summary: z.string(),
-    attendees: z
-      .array(
-        z.object({
-          role: z.string(),
-          name: z.string()
-        })
-      )
-      .default([]),
     issues: z.array(z.string()).default([])
   },
   async execute(args, context) {
@@ -51,16 +40,11 @@ export const nxPlanStart = tool({
     const plan: PlanFile = {
       id: await nextPlanId(paths.HISTORY_FILE),
       topic: args.topic,
-      attendees: Array.isArray(args.attendees)
-        ? args.attendees.map((a) => ({ ...a, joined_at: now }))
-        : [],
       issues: Array.isArray(args.issues)
         ? args.issues.map((title, idx) => ({
             id: idx + 1,
             title,
-            status: "pending",
-            discussion: [],
-            task_refs: []
+            status: "pending" as const
           }))
         : [],
       research_summary: args.research_summary,
@@ -110,12 +94,11 @@ export const nxPlanStatus = tool({
         active: true,
         plan_id: plan.id,
         topic: plan.topic,
-        attendees: plan.attendees,
         issues: plan.issues,
         summary,
         research_summary: plan.research_summary,
         current_issue: pickCurrentIssue(plan),
-        decided_ratio: `${summary.decided + summary.tasked}/${summary.total}`,
+        decided_ratio: `${summary.decided}/${summary.total}`,
         opencode: {
           ...summarizePlanSidecar(sidecar),
           followup_ready_roles: followupParticipants
@@ -240,9 +223,7 @@ export const nxPlanUpdate = tool({
       const added = {
         id: nextId,
         title: args.title,
-        status: "pending" as PlanIssueStatus,
-        discussion: [],
-        task_refs: []
+        status: "pending" as const
       };
       plan.issues.push(added);
       result = { added: true, issue: { id: added.id, title: added.title, status: added.status } };
@@ -283,60 +264,12 @@ export const nxPlanUpdate = tool({
       issue.status = "pending";
       issue.decision = undefined;
       issue.summary = undefined;
-      issue.task_refs = [];
       result = { reopened: true, issue: { id: issue.id, status: issue.status } };
     }
 
     await writeJsonFile(paths.PLAN_FILE, plan);
     await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
     return JSON.stringify(result);
-  }
-});
-
-export const nxPlanDiscuss = tool({
-  description: "Append discussion to plan issue",
-  args: {
-    issue_id: z.number(),
-    speaker: z.string(),
-    message: z.string(),
-    kind: z.enum(PLAN_DISCUSSION_KINDS).optional()
-  },
-  async execute(args, context) {
-    const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.PLAN_FILE))) {
-      throw new Error("No active plan session");
-    }
-    const plan = await readPlan(paths.PLAN_FILE);
-    const issue = plan.issues.find((item) => item.id === args.issue_id);
-
-    if (!issue) {
-      throw new Error(`issue not found: ${args.issue_id}`);
-    }
-
-    const speaker = args.speaker;
-    const message = args.message;
-    const kind = (args.kind ?? "discussion") as PlanDiscussionKind;
-
-    const allowedSpeaker =
-      speaker === "lead" ||
-      speaker === "user" ||
-      plan.attendees.some((attendee) => attendee.role.toLowerCase() === speaker.toLowerCase());
-
-    if (!allowedSpeaker) {
-      throw new Error(`speaker is not in attendees: ${speaker}`);
-    }
-
-    issue.status = nextIssueStatus(issue.status, kind);
-    issue.discussion.push({
-      speaker,
-      message,
-      kind,
-      recorded_at: new Date().toISOString()
-    });
-    await writeJsonFile(paths.PLAN_FILE, plan);
-    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker, message });
-
-    return `Discussion recorded for ${args.issue_id} (${kind})`;
   }
 });
 
@@ -361,58 +294,21 @@ export const nxPlanDecide = tool({
       throw new Error(`issue not found: ${args.issue_id}`);
     }
 
-    issue.status = issue.task_refs.length > 0 ? "tasked" : "decided";
+    issue.status = "decided";
     issue.decision = args.decision;
     if (args.how_agents !== undefined) issue.how_agents = args.how_agents;
     if (args.how_summary !== undefined) issue.how_summary = args.how_summary;
     if (args.how_agent_ids !== undefined) issue.how_agent_ids = args.how_agent_ids;
-    issue.discussion.push({
-      speaker: "lead",
-      message: args.decision,
-      kind: "decision",
-      recorded_at: new Date().toISOString()
-    });
 
     await writeJsonFile(paths.PLAN_FILE, plan);
     await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker: "lead", message: args.decision });
 
-    const allDecided = plan.issues.every((item) => item.status === "decided" || item.status === "tasked");
+    const allDecided = plan.issues.every((item) => item.status === "decided");
     return JSON.stringify({
       decided: true,
       allComplete: allDecided,
       remaining: plan.issues.filter((i) => i.status === "pending").map((i) => i.id)
     });
-  }
-});
-
-export const nxPlanJoin = tool({
-  description: "Join attendee to active plan",
-  args: {
-    role: z.string(),
-    name: z.string()
-  },
-  async execute(args, context) {
-    const paths = createNexusPaths(context.worktree ?? context.directory);
-    if (!(await fileExists(paths.PLAN_FILE))) {
-      throw new Error("No active plan session");
-    }
-    const plan = await readPlan(paths.PLAN_FILE);
-
-    const exists = plan.attendees.some(
-      (a) => a.role.toLowerCase() === args.role.toLowerCase() && a.name.toLowerCase() === args.name.toLowerCase()
-    );
-    if (!exists) {
-      plan.attendees.push({
-        role: args.role,
-        name: args.name,
-        joined_at: new Date().toISOString()
-      });
-      await writeJsonFile(paths.PLAN_FILE, plan);
-    }
-
-    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
-
-    return exists ? "Attendee already joined." : `Joined attendee ${args.role} (${args.name})`;
   }
 });
 
@@ -493,7 +389,6 @@ function emptyPlan(): PlanFile {
   return {
     id: 0,
     topic: "",
-    attendees: [],
     issues: [],
     created_at: new Date(0).toISOString()
   };
@@ -503,24 +398,22 @@ function summarizeIssues(plan: PlanFile) {
   const summary = {
     total: plan.issues.length,
     pending: 0,
-    researching: 0,
-    discussing: 0,
-    decided: 0,
-    deferred: 0,
-    tasked: 0
-  } satisfies Record<PlanIssueStatus | "total", number>;
+    decided: 0
+  };
 
   for (const issue of plan.issues) {
-    summary[issue.status] += 1;
+    if (issue.status === "decided") {
+      summary.decided += 1;
+    } else {
+      summary.pending += 1;
+    }
   }
 
   return summary;
 }
 
 function pickCurrentIssue(plan: PlanFile) {
-  const issue = plan.issues.find((item) => item.status === "researching" || item.status === "discussing")
-    ?? plan.issues.find((item) => item.status === "pending" || item.status === "deferred")
-    ?? null;
+  const issue = plan.issues.find((item) => item.status === "pending") ?? null;
 
   if (!issue) {
     return null;
@@ -530,19 +423,6 @@ function pickCurrentIssue(plan: PlanFile) {
     id: issue.id,
     title: issue.title,
     status: issue.status,
-    task_refs: issue.task_refs,
     has_decision: Boolean(issue.decision)
   };
-}
-
-function nextIssueStatus(current: PlanIssueStatus, kind: PlanDiscussionKind): PlanIssueStatus {
-  if (current === "decided" || current === "tasked") {
-    return current;
-  }
-
-  if (kind === "research") {
-    return current === "pending" || current === "deferred" ? "researching" : current;
-  }
-
-  return "discussing";
 }

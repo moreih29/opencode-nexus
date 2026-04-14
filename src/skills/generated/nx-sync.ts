@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.5.0 (4da9b345dce867d9b7b60f8b04076a1a3dc3818a)
+// Source: @moreih29/nexus-core@0.6.0 (bcde383b56308b86006babe73f87fed9222c0761)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -84,3 +84,11 @@ Context documents capture abstract knowledge that cannot be read directly from s
 
 These documents are updated when code changes reflect a shift in principles, a new architectural decision is made, or the development stack evolves. They are not updated for routine code additions that do not change the underlying design.
 `;
+
+export const META = {
+  id: "nx-sync",
+  name: "nx-sync",
+  description: "Context knowledge synchronization — scans project state and updates .nexus/context/ design documents",
+  trigger_display: "[sync]",
+  purpose: "Context knowledge synchronization",
+} as const;

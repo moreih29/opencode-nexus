@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.5.0 (4da9b345dce867d9b7b60f8b04076a1a3dc3818a)
+// Source: @moreih29/nexus-core@0.6.0 (bcde383b56308b86006babe73f87fed9222c0761)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -262,3 +262,11 @@ Either way, opencode routes the prompt to the existing architect subagent sessio
   \`51109b3\` (session_id fallback fix)
 - Smoke harness: \`scripts/smoke-opencode-run.mjs\`
 `;
+
+export const META = {
+  id: "nx-run",
+  name: "nx-run",
+  description: "Execution — user-directed agent composition.",
+  trigger_display: "[run]",
+  purpose: "Execution — user-directed agent composition",
+} as const;

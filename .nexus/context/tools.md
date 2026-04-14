@@ -19,18 +19,17 @@
 
 | 도구 | 역할 |
 |------|------|
-| `nx_plan_start` | Plan 세션 시작. 주제, 참석자, 이슈 목록 초기화 |
+| `nx_plan_start` | Plan 세션 시작. 주제, research_summary, 이슈 목록 초기화 |
 | `nx_plan_status` | 현재 Plan 상태 조회 |
 | `nx_plan_resume` | HOW 역할 참여자의 재개 라우팅 정보 조회 |
 | `nx_plan_followup` | 참여자에 대한 위임 준비 팔로업 안내 생성 |
 | `nx_plan_update` | Plan 이슈 추가·제거·수정·재오픈 |
-| `nx_plan_discuss` | Plan 이슈에 토론 항목 추가 |
 | `nx_plan_decide` | Plan 이슈에 결정 사항 기록 |
-| `nx_plan_join` | 실행 중인 Plan에 참석자 추가 |
 | `nx_task_add` | 태스크 사이클에 태스크 추가 |
 | `nx_task_list` | 태스크 목록 및 상태 요약 조회 |
 | `nx_task_update` | 태스크 상태 변경 |
 | `nx_task_close` | 태스크 사이클 종료 및 히스토리 아카이브 |
+| `nx_history_search` | 과거 plan·태스크 히스토리 조회 |
 | `nx_init` | 저장소 스캔 후 core 지식 초기화 |
 | `nx_sync` | `ensureNexusStructure` 호출 + nx-sync skill 워크플로 안내 메시지 반환. LLM이 `[sync]` 태그 시 git diff 실행 → Writer agent spawn → `.nexus/context/` Read/Write 직접 처리 |
 | `nx_setup` | OpenCode 설정 파일과 스킬 파일 생성·병합 |
@@ -39,10 +38,7 @@
 
 | 도구 | 역할 |
 |------|------|
-| `nx_rules_read` | rules 문서 조회 |
-| `nx_rules_write` | rules 문서 작성 |
 | `nx_context` | 현재 Nexus 상태 요약 조회 |
-| `nx_briefing` | 브리핑 생성 — `.nexus/{context,memory,rules}/` 3-디렉토리 수집. 출력 순서: Decisions → Rules → Context → Memory |
 | `nx_artifact_write` | 아티팩트 파일 저장 |
 
 ### 코드 인텔리전스 (Code Intelligence)
@@ -62,18 +58,13 @@
 | `nx_ast_search` | 정규식 패턴 검색 |
 | `nx_ast_replace` | 정규식 기반 소스 코드 치환 |
 
-### 위임 (Delegation)
-
-| 도구 | 역할 |
-|------|------|
-| `nx_delegate_template` | 구조화된 위임 템플릿 생성 |
-
 ## 도구 카테고리 요약
+
+구현 근거: `src/tools/index.ts` — 26개 도구 export (`src/tools/index.ts:19-49` 참조)
 
 | 카테고리 | 도구 수 | 주요 목적 |
 |----------|---------|-----------|
-| 워크플로 | 15 | Plan·태스크 사이클, 초기화·동기화, 설정 |
-| 지식 관리 | 5 | rules 저장소, 컨텍스트, 브리핑, 아티팩트 |
+| 워크플로 | 14 | Plan·태스크 사이클, 히스토리, 초기화·동기화, 설정 |
+| 지식 관리 | 2 | 컨텍스트, 아티팩트 |
 | 코드 인텔리전스 | 10 | 휴리스틱 LSP, AST 검색·치환 |
-| 위임 | 1 | 위임 템플릿 |
-| **합계** | **31** | |
+| **합계** | **26** | |

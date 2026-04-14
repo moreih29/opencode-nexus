@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { appendHistory } from "../shared/history.js";
+import { appendHistory, type HistoryCycle } from "../shared/history.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
 import { fileExists } from "../shared/state.js";
-import { PlanFileSchema, TasksFileSchema, type PlanFile, type TaskItem, type TasksFile } from "../shared/schema.js";
+import { TasksFileSchema, type TaskItem, type TasksFile } from "../shared/schema.js";
 
 const z = tool.schema;
 
@@ -63,7 +63,6 @@ export const nxTaskAdd = tool({
       plan_issue: args.plan_issue,
       deps: args.deps,
       created_at: now,
-      updated_at: now,
       context: args.context,
       approach: args.approach,
       acceptance: args.acceptance,
@@ -80,7 +79,6 @@ export const nxTaskAdd = tool({
     tasksFile.tasks.push(task);
     TasksFileSchema.parse(tasksFile);
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
-    await syncPlanIssueTaskLink(paths.PLAN_FILE, args.plan_issue, id);
 
     const planActive = await fileExists(paths.PLAN_FILE);
     const linkageNote = planActive && !args.plan_issue ? " Link this task to its plan issue with plan_issue when possible." : "";
@@ -164,7 +162,6 @@ export const nxTaskUpdate = tool({
 
     const previousStatus = task.status;
     task.status = args.status;
-    task.updated_at = new Date().toISOString();
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
 
     if (previousStatus === "completed" && args.status !== "completed") {
@@ -266,23 +263,6 @@ async function safeUnlink(filePath: string): Promise<void> {
   }
 }
 
-async function syncPlanIssueTaskLink(planFile: string, issueID: number | undefined, taskID: number): Promise<void> {
-  if (!issueID || !(await fileExists(planFile))) {
-    return;
-  }
-
-  const plan = PlanFileSchema.parse(await readJsonFile<PlanFile>(planFile, {} as PlanFile));
-  const issue = plan.issues.find((item) => item.id === issueID);
-  if (!issue) {
-    return;
-  }
-
-  issue.task_refs = Array.from(new Set([...(issue.task_refs ?? []), taskID]));
-  if (issue.decision) {
-    issue.status = "tasked";
-  }
-  await writeJsonFile(planFile, plan);
-}
 
 async function readCurrentBranch(projectRoot: string): Promise<string> {
   const headPath = path.join(projectRoot, ".git", "HEAD");
@@ -318,3 +298,34 @@ function isOpenCodeSessionID(value: string): boolean {
 async function evaluatePipelineSnapshot(snapshot: PipelineEvaluatorSnapshot): Promise<PipelineEvaluatorResult> {
   return evaluatePipelineSnapshotPure(snapshot);
 }
+
+interface HistoryFile {
+  cycles: HistoryCycle[];
+}
+
+export const nxHistorySearch = tool({
+  description: "Search past work cycles in history.json by keyword or return recent N cycles",
+  args: {
+    query: z.string().optional(),
+    last_n: z.number().optional()
+  },
+  async execute(args, context) {
+    const paths = createNexusPaths(context.worktree ?? context.directory);
+    const history = await readJsonFile<HistoryFile>(paths.HISTORY_FILE, { cycles: [] });
+    const allCycles: HistoryCycle[] = Array.isArray(history.cycles) ? history.cycles : [];
+
+    let matched: HistoryCycle[];
+    if (args.query !== undefined && args.query !== "") {
+      const lower = args.query.toLowerCase();
+      matched = allCycles.filter((cycle) => JSON.stringify(cycle).toLowerCase().includes(lower));
+    } else {
+      matched = allCycles;
+    }
+
+    const total = matched.length;
+    const sliced = args.last_n !== undefined ? matched.slice(-args.last_n) : matched;
+    const showing = sliced.length;
+
+    return JSON.stringify({ total, showing, cycles: sliced }, null, 2);
+  }
+});

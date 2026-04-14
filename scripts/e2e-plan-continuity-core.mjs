@@ -7,7 +7,7 @@ import { createHooks } from "../dist/plugin/hooks.js";
 import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanFollowup, nxPlanJoin, nxPlanResume, nxPlanStart } from "../dist/tools/plan.js";
+import { nxPlanDecide, nxPlanFollowup, nxPlanResume, nxPlanStart } from "../dist/tools/plan.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-plan-core-first-"));
 await fs.mkdir(path.join(root, ".git"), { recursive: true });
@@ -23,13 +23,23 @@ const started = await nxPlanStart.execute(
   {
     topic: "Core continuity precedence",
     research_summary: "Validate continuity source ordering.",
-    attendees: [{ role: "architect", name: "Architect" }],
     issues: ["Continuity source precedence"]
   },
   ctx
 );
 const startedParsed = JSON.parse(started);
 assert.equal(startedParsed.created, true);
+
+// Register architect as HOW panel participant via how_agent_ids so syncPlanSidecar
+// seeds the sidecar before the hook fires (panel membership is driven by how_agent_ids)
+await nxPlanDecide.execute(
+  {
+    issue_id: 1,
+    decision: "Continuity source ordering confirmed.",
+    how_agent_ids: { architect: "ses_arch_pre_hook" }
+  },
+  ctx
+);
 
 const delegationArgs = {
   subagent_type: "architect",
@@ -119,10 +129,21 @@ assert.equal(
   "nxPlanFollowup should expose an explicit OpenCode task-tool resume handle"
 );
 
-await nxPlanJoin.execute({ role: "strategist", name: "Strategist" }, ctx);
+// Register strategist as HOW panel participant via how_agent_ids on the issue
+// (panel membership is driven by issues[].how_agent_ids)
+await nxPlanDecide.execute(
+  {
+    issue_id: 1,
+    decision: "Continuity source ordering confirmed.",
+    how_agent_ids: { strategist: "ses_strategist_init" }
+  },
+  ctx
+);
 const sidecarWithStrategist = await readJson(paths.PLAN_SIDECAR_FILE);
 const strategist = sidecarWithStrategist.panel.participants.find((item) => item.role.toLowerCase() === "strategist");
-assert.ok(strategist, "strategist participant must exist in sidecar after joining plan");
+assert.ok(strategist, "strategist participant must exist in sidecar after decide with how_agent_ids");
+// Inject sidecar-only handles to simulate a participant that only has sidecar continuity
+// (no orchestration-core entry) — tests that nxPlanResume ignores sidecar-only data
 strategist.task_id = "sidecar-task-strategist-only";
 strategist.session_id = "sidecar-session-strategist-only";
 strategist.updated_at = new Date().toISOString();

@@ -273,8 +273,8 @@ export function buildAgentPromptsFile(agents, nexusCoreVersion, nexusCoreCommit,
     `  description: string;`,
     `  model: string;`,
     `  disallowedTools: string[];`,
-    `  task?: string;`,
-    `  alias_ko?: string;`,
+    `  task: string;`,
+    `  alias_ko: string;`,
     `  resume_tier: string;`,
     `}> = {`,
     metaEntries,
@@ -391,8 +391,8 @@ export function buildAgentIndexFile(agents, capsMap, nexusCoreVersion, nexusCore
     `  description: string;`,
     `  model: string;`,
     `  disallowedTools: readonly string[];`,
-    `  task?: string;`,
-    `  alias_ko?: string;`,
+    `  task: string;`,
+    `  alias_ko: string;`,
     `  resume_tier: string;`,
     `}> = {`,
     metaEntries,
@@ -404,14 +404,30 @@ export function buildAgentIndexFile(agents, capsMap, nexusCoreVersion, nexusCore
 }
 
 /**
+ * Emit one SKILL_META entry as a TypeScript object literal string.
+ * @param {{ id: string, name: string, description: string, trigger_display: string, purpose: string }} meta
+ * @returns {string}
+ */
+function emitSkillMetaEntry(meta) {
+  const lines = [
+    `    id: ${JSON.stringify(meta.id)},`,
+    `    name: ${JSON.stringify(meta.name)},`,
+    `    description: ${JSON.stringify(meta.description)},`,
+    `    trigger_display: ${JSON.stringify(meta.trigger_display)},`,
+    `    purpose: ${JSON.stringify(meta.purpose)},`,
+  ];
+  return `  ${JSON.stringify(meta.id)}: {\n${lines.join('\n')}\n  },`;
+}
+
+/**
  * Build the content for one skill's individual file (src/skills/generated/{id}.ts).
- * @param {{ id: string, prompt: string }} skill
+ * @param {{ id: string, prompt: string, meta: { id: string, name: string, description: string, trigger_display: string, purpose: string } }} skill
  * @param {string} nexusCoreVersion
  * @param {string} nexusCoreCommit
  * @returns {string}
  */
 export function buildSkillIndividualFile(skill, nexusCoreVersion, nexusCoreCommit) {
-  const { prompt } = skill;
+  const { prompt, meta } = skill;
   return [
     `// AUTO-GENERATED — do not edit by hand.`,
     `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
@@ -419,12 +435,20 @@ export function buildSkillIndividualFile(skill, nexusCoreVersion, nexusCoreCommi
     ``,
     `export const PROMPT = \`${escapeTemplateLiteral(prompt)}\`;`,
     ``,
+    `export const META = {`,
+    `  id: ${JSON.stringify(meta.id)},`,
+    `  name: ${JSON.stringify(meta.name)},`,
+    `  description: ${JSON.stringify(meta.description)},`,
+    `  trigger_display: ${JSON.stringify(meta.trigger_display)},`,
+    `  purpose: ${JSON.stringify(meta.purpose)},`,
+    `} as const;`,
+    ``,
   ].join('\n');
 }
 
 /**
  * Build the index file content for src/skills/generated/index.ts.
- * @param {{ id: string, prompt: string }[]} skills
+ * @param {{ id: string, prompt: string, meta: { id: string, name: string, description: string, trigger_display: string, purpose: string } }[]} skills
  * @param {string} nexusCoreVersion
  * @param {string} nexusCoreCommit
  * @returns {string}
@@ -433,29 +457,78 @@ export function buildSkillIndexFile(skills, nexusCoreVersion, nexusCoreCommit) {
   const imports = skills
     .map(({ id }) => {
       const varId = id.replace(/-/g, '_');
-      return `import { PROMPT as ${varId} } from './${id}.js';`;
+      return `import { PROMPT as ${varId}_prompt, META as ${varId}_meta } from './${id}.js';`;
     })
     .join('\n');
 
-  const entries = skills
+  const promptEntries = skills
     .map(({ id }) => {
       const varId = id.replace(/-/g, '_');
-      return `  ${JSON.stringify(id)}: ${varId},`;
+      return `  ${JSON.stringify(id)}: ${varId}_prompt,`;
     })
+    .join('\n');
+
+  const metaEntries = skills
+    .map(({ meta }) => emitSkillMetaEntry(meta))
     .join('\n');
 
   return [
     `// AUTO-GENERATED — do not edit by hand.`,
     `// Source: @moreih29/nexus-core@${nexusCoreVersion} (${nexusCoreCommit})`,
-    `// Aggregates all skill prompts.`,
+    `// Aggregates all skill prompts and metadata.`,
     ``,
     imports,
     ``,
     `export const SKILL_PROMPTS: Record<string, string> = {`,
-    entries,
+    promptEntries,
+    `};`,
+    ``,
+    `export const SKILL_META: Record<string, {`,
+    `  id: string;`,
+    `  name: string;`,
+    `  description: string;`,
+    `  trigger_display: string;`,
+    `  purpose: string;`,
+    `}> = {`,
+    metaEntries,
     `};`,
     ``,
   ].join('\n');
+}
+
+/**
+ * Build a skill entry for the locally-defined nx-setup skill.
+ * nx-setup is not in nexus-core manifest; its prompt lives in
+ * templates/skills/nx-setup/SKILL.md as a YAML-frontmatter document.
+ * @param {string} pluginName
+ * @returns {{ id: string, prompt: string, meta: { id: string, name: string, description: string, trigger_display: string, purpose: string } }}
+ */
+export function buildNxSetupSkillEntry(pluginName) {
+  const skillMdPath = join(OPENCODE_NEXUS_ROOT, 'templates/skills/nx-setup/SKILL.md');
+  const raw = readFileSync(skillMdPath, 'utf8');
+
+  // Parse YAML frontmatter (delimited by --- ... ---)
+  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!fmMatch) {
+    throw new Error('nx-setup SKILL.md is missing YAML frontmatter');
+  }
+  const fmObj = parseYaml(fmMatch[1]);
+  const body = fmMatch[2];
+
+  const description = collapseDescription(fmObj.description ?? '');
+  const trigger_display = `/${pluginName}:nx-setup`;
+
+  return {
+    id: 'nx-setup',
+    prompt: body.trimStart(),
+    meta: {
+      id: 'nx-setup',
+      name: fmObj.name ?? 'nx-setup',
+      description,
+      trigger_display,
+      purpose: description,
+    },
+  };
 }
 
 /**
@@ -619,92 +692,6 @@ export function verifyTagDrift(tagsVocab, gateSrcPath) {
       `Tag drift detected:\n` +
       (missingInGate.length ? `  Missing in tag-parser.ts: [${missingInGate.join(', ')}]\n` : '') +
       (extraInGate.length ? `  Extra in tag-parser.ts (not in vocab): [${extraInGate.join(', ')}]\n` : '')
-    );
-  }
-}
-
-// ==========================================================================
-// Catalog consistency
-// ==========================================================================
-
-/**
- * Agents whose catalog.ts disallowedTools intentionally diverges from
- * AGENT_META (resolved from nexus-core capabilities). Each entry must
- * reference an open upstream issue explaining the divergence.
- *
- * postdoc: opencode-nexus blocks `bash` for the research-methodology agent.
- *   nexus-core plan session #2 Issue #3 rejected adding `no_shell_exec`
- *   (see nexus-core/.nexus/context/boundaries.md:100). We filed
- *   moreih29/nexus-core#3 requesting reconsideration as an opt-in capability.
- *   Until that lands, postdoc's catalog.ts entry keeps `bash` in disallowedTools
- *   while AGENT_META does not — consistency check skips this agent.
- */
-const CATALOG_CONSISTENCY_EXEMPT = new Set([
-  'postdoc', // Gap 1 workaround — see moreih29/nexus-core#3
-]);
-
-/**
- * Verify that `NEXUS_AGENT_CATALOG[id].disallowedTools` in catalog.ts matches
- * `AGENT_META[id].disallowedTools` in the generated file, detecting silent
- * drift. Reads catalog.ts as text (no TypeScript preprocessor available in the
- * build script) and uses a regex to extract each agent's disallowedTools array.
- *
- * Exempt agents (see CATALOG_CONSISTENCY_EXEMPT) are skipped entirely.
- *
- * Throws ERR_CATALOG_MISMATCH on any drift (hard-fail; extends the §8.8 error set).
- *
- * @param {Array<{id: string, meta: {disallowedTools: string[]}}>} agentEntries
- * @param {string} catalogPath - absolute path to src/agents/catalog.ts
- */
-export function verifyCatalogConsistency(agentEntries, catalogPath) {
-  const src = readFileSync(catalogPath, 'utf8');
-  const issues = [];
-
-  for (const entry of agentEntries) {
-    if (CATALOG_CONSISTENCY_EXEMPT.has(entry.id)) continue;
-
-    // Match: id: "architect" ... disallowedTools: ["edit", "write", ...]
-    // Across newlines between id and disallowedTools.
-    const pattern = new RegExp(
-      `id:\\s*["']${entry.id}["'][\\s\\S]*?disallowedTools:\\s*\\[([^\\]]*)\\]`,
-      'm'
-    );
-    const match = src.match(pattern);
-    if (!match) {
-      issues.push(`  ${entry.id}: not found in catalog.ts (or missing disallowedTools field)`);
-      continue;
-    }
-
-    const catalogTools = match[1]
-      .split(',')
-      .map((s) => s.trim().replace(/^["']|["']$/g, ''))
-      .filter(Boolean);
-    const metaTools = entry.meta?.disallowedTools ?? [];
-
-    const catalogSet = new Set(catalogTools);
-    const metaSet = new Set(metaTools);
-    const missingInCatalog = [...metaSet].filter((x) => !catalogSet.has(x));
-    const extraInCatalog = [...catalogSet].filter((x) => !metaSet.has(x));
-
-    if (missingInCatalog.length || extraInCatalog.length) {
-      issues.push(
-        `  ${entry.id}:` +
-          (missingInCatalog.length
-            ? ` missing in catalog.ts=[${missingInCatalog.join(', ')}]`
-            : '') +
-          (extraInCatalog.length
-            ? ` extra in catalog.ts=[${extraInCatalog.join(', ')}]`
-            : '')
-      );
-    }
-  }
-
-  if (issues.length > 0) {
-    throw new Error(
-      `ERR_CATALOG_MISMATCH: catalog.ts disallowedTools drift vs AGENT_META\n` +
-        issues.join('\n') +
-        `\n\nUpdate catalog.ts to match AGENT_META, or add the agent to ` +
-        `CATALOG_CONSISTENCY_EXEMPT with an upstream issue reference.`
     );
   }
 }

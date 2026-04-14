@@ -7,7 +7,7 @@ import { createHooks } from "../dist/plugin/hooks.js";
 import { createPluginState } from "../dist/plugin-state.js";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
-import { nxPlanFollowup, nxPlanJoin, nxPlanResume } from "../dist/tools/plan.js";
+import { nxPlanFollowup, nxPlanResume } from "../dist/tools/plan.js";
 import { nxContext } from "../dist/tools/context.js";
 import { nxTaskAdd } from "../dist/tools/task.js";
 
@@ -24,8 +24,14 @@ await fs.writeFile(
     {
       id: 1,
       topic: "Procedural parity",
-      attendees: [{ role: "lead", name: "Lead", joined_at: new Date().toISOString() }],
-      issues: [{ id: 1, title: "Plan run workflow", status: "pending", discussion: [] }],
+      issues: [
+        {
+          id: 1,
+          title: "Plan run workflow",
+          status: "pending",
+          how_agent_ids: { architect: "ses_arch_init" }
+        }
+      ],
       created_at: new Date().toISOString()
     },
     null,
@@ -35,7 +41,6 @@ await fs.writeFile(
 );
 
 const ctx = { directory: root, worktree: root };
-await nxPlanJoin.execute({ role: "architect", name: "Architect" }, ctx);
 const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Implement workflow" }, ctx));
 assert.match(addResult.message, /Link this task to its plan issue/);
 assert.equal(typeof addResult.task.id, "number");

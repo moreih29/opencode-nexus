@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
+import { AGENT_META } from "../agents/generated/index.js";
 import { NO_FILE_EDIT_TOOLS } from "../agents/prompts.js";
 import { registerEnd, registerStart } from "../orchestration/core.js";
 import {
@@ -14,8 +14,8 @@ import {
   readPlanParticipantContinuityFromCore
 } from "../orchestration/plan-continuity-adapter.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
-import { canJoinPlanWithoutTeam, isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
-import { NEXUS_SKILL_CATALOG } from "../skills/catalog.js";
+import { isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
+import { SKILL_META } from "../skills/prompts.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
 import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, toAuditRecord } from "../shared/audit-log.js";
@@ -179,10 +179,6 @@ export function createHooks(ctx: PluginContext) {
           session_id: sessionID,
           args: toAuditRecord(output.args)
         });
-      }
-
-      if (input.tool === "nx_plan_start") {
-        await validatePlanStart(output.args, paths.AGENT_TRACKER_FILE);
       }
 
       if (input.tool === "task") {
@@ -391,8 +387,8 @@ export function createHooks(ctx: PluginContext) {
       output.system.push(
         buildNexusSystemPrompt({
           mode,
-          agents: NEXUS_AGENT_CATALOG,
-          skills: NEXUS_SKILL_CATALOG
+          agents: Object.values(AGENT_META),
+          skills: Object.values(SKILL_META)
         })
       );
     }
@@ -418,25 +414,6 @@ function getTargetPath(args: Record<string, unknown>, projectRoot: string): stri
   return path.join(projectRoot, picked);
 }
 
-async function validatePlanStart(args: Record<string, unknown>, trackerFile: string): Promise<void> {
-  const attendees = Array.isArray(args.attendees) ? args.attendees : [];
-  const hasNonLead = attendees.some((a) => {
-    if (!a || typeof a !== "object") {
-      return false;
-    }
-    const role = (a as { role?: unknown }).role;
-    return typeof role === "string" && !canJoinPlanWithoutTeam(role);
-  });
-
-  if (!hasNonLead) {
-    return;
-  }
-
-  const teamExists = await hasRunningTeam(trackerFile);
-  if (!teamExists) {
-    throw new Error("Attendees include non-lead agents. Start subagent coordination first with a shared team_name label.");
-  }
-}
 
 async function enforceTaskTeamPolicy(
   args: Record<string, unknown>,
@@ -676,12 +653,12 @@ function pickNestedString(source: Record<string, unknown>, keys: string[]): stri
 }
 
 function isHowAgent(agentType: string): boolean {
-  return NEXUS_AGENT_CATALOG.some((agent) => agent.category === "how" && agent.id === agentType.toLowerCase());
+  return Object.values(AGENT_META).some((agent) => agent.category === "how" && agent.id === agentType.toLowerCase());
 }
 
 function isDoOrCheckAgent(agentType: string): boolean {
   const normalized = agentType.toLowerCase();
-  return NEXUS_AGENT_CATALOG.some(
+  return Object.values(AGENT_META).some(
     (agent) => (agent.category === "do" || agent.category === "check") && agent.id === normalized
   );
 }
@@ -894,9 +871,9 @@ async function buildStatefulNotice(
 
   if (attendeeMentions.length > 0) {
     if (hasPlan) {
-      return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Add them with nx_plan_join before continuing discussion.`;
+      return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Delegate to HOW agents via subagent coordination before deciding the issue.`;
     }
-    return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Start or resume a plan first, then use nx_plan_join.`;
+    return `[nexus] Attendee request detected (${attendeeMentions.join(", ")}). Start a plan with nx_plan_start first, then delegate to HOW agents.`;
   }
 
   if (!mode) {
@@ -927,21 +904,20 @@ async function buildStatefulNotice(
       ? [
           "[nexus] Plan session is active.",
           planReminder ?? "",
-          "Continue one issue at a time. Record major deliberation with nx_plan_discuss, compare options with trade-offs, and use [d] -> nx_plan_decide only after discussion is logged. Do not open the next issue until the current issue is decided or explicitly deferred."
+          "Continue one issue at a time. Compare options with trade-offs and use [d] -> nx_plan_decide to record the decision. Do not open the next issue until the current issue is decided."
         ]
           .filter(Boolean)
           .join(" ")
       : [
           "[nexus] Plan mode detected.",
           "Research first, then start with nx_plan_start(topic, research_summary, issues). Do not open discussion until the current issue has grounded research.",
-          "If non-lead attendees are needed, start grouped coordination before starting the plan.",
           "Keep the agenda one issue at a time and decide only after discussing trade-offs."
         ].join(" ");
   }
 
   if (mode === "decide") {
     return hasPlan
-      ? "[nexus] Decision tag detected. Record supporting reasoning with nx_plan_discuss first if it is missing, then record the active issue with nx_plan_decide."
+      ? "[nexus] Decision tag detected. Record the active issue decision with nx_plan_decide."
       : "[nexus] [d] detected but no active plan session. Run nx_plan_start first.";
   }
 
@@ -958,7 +934,7 @@ async function buildStatefulNotice(
         branchGuard ? `Branch Guard: current branch is ${branch}. Create a task branch before substantial execution.` : "",
         "TASK PIPELINE: check plan decisions, decompose work, register each task with nx_task_add, then edit.",
         "If decomposition yields multiple tasks or multiple target files, do not continue as Lead solo; delegate code execution units to Engineer.",
-        "Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
+        "Read relevant .nexus/ files before specialist delegation when prior decisions or role-specific context matter.",
         "After implementation, update task states, verify, optionally nx_sync, and close with nx_task_close."
       ].join(" ");
     }
@@ -969,7 +945,7 @@ async function buildStatefulNotice(
         branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
         `Active tasks: pending=${activeSummary.pending}, in_progress=${activeSummary.in_progress}, blocked=${activeSummary.blocked}.`,
         activeSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
-        "Keep edits scoped to active tasks, do not continue as Lead solo once work is decomposed, involve Engineer for code execution units, use nx_briefing before specialist delegation, and update status as each unit completes."
+        "Keep edits scoped to active tasks, do not continue as Lead solo once work is decomposed, involve Engineer for code execution units, read relevant .nexus/ files before specialist delegation, and update status as each unit completes."
       ].join(" ");
     }
     if (evaluation.nextGuidanceKey === "spawn_qa_then_close") {
@@ -987,7 +963,7 @@ async function buildStatefulNotice(
 
   if (mode === "rule") {
     const suffix = ruleTags && ruleTags.length > 0 ? ` Tags requested: ${ruleTags.join(", ")}.` : " Infer stable rule tags from the instruction.";
-    return `[nexus] Rule mode detected. Save durable conventions to .nexus/rules with nx_rules_write.${suffix}`;
+    return `[nexus] Rule mode detected. Save durable conventions to .nexus/rules via Nexus rule tooling.${suffix}`;
   }
 
   if (mode === "sync") {
@@ -1050,17 +1026,15 @@ async function buildPlanReminder(planFile: string): Promise<string | null> {
   try {
     const raw = JSON.parse(await fs.readFile(planFile, "utf8")) as {
       topic?: unknown;
-      issues?: Array<{ id?: unknown; title?: unknown; status?: unknown; decision?: unknown; task_refs?: unknown[] }>;
+      issues?: Array<{ id?: unknown; title?: unknown; status?: unknown; decision?: unknown }>;
     };
     const issues = Array.isArray(raw.issues) ? raw.issues : [];
-    const active = issues.find((issue) => issue.status === "researching" || issue.status === "discussing");
-    const queued = issues.find((issue) => issue.status === "pending" || issue.status === "deferred");
-    const current = active ?? queued;
+    const current = issues.find((issue) => issue.status === "pending") ?? null;
     const decidedCount = issues.filter((issue) => issue.status === "decided" || issue.status === "tasked").length;
     const currentText = current
-      ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\" (${String(current.status ?? "unknown")}).`
-      : "All issues are decided or already linked to execution.";
-    return `[nexus] Plan session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Decided ${decidedCount}/${issues.length}. Use one-issue-at-a-time discussion, record important reasoning in nx_plan_discuss, and do not open the next issue until the current issue is decided or explicitly deferred.`;
+      ? `Current issue: ${String(current.id ?? "unknown")} \"${String(current.title ?? "untitled")}\".`
+      : "All issues are decided.";
+    return `[nexus] Plan session \"${String(raw.topic ?? "unknown topic")}\" is active. ${currentText} Decided ${decidedCount}/${issues.length}. Use one-issue-at-a-time approach and use [d] -> nx_plan_decide to record decisions.`;
   } catch {
     return null;
   }

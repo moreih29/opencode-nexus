@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.5.0 (4da9b345dce867d9b7b60f8b04076a1a3dc3818a)
+// Source: @moreih29/nexus-core@0.6.0 (bcde383b56308b86006babe73f87fed9222c0761)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -244,3 +244,11 @@ nx-init Step 4가 생성하는 프로젝트 섹션에 포함되는 내용:
 - \`opencode.json\`의 \`instructions\` 필드도 instruction path로 사용 가능하나, 구조화된 nexus section은 \`AGENTS.md\`에 작성.
 - \`templates/nexus-section.md\`에 생성 가능한 섹션 템플릿이 존재.
 `;
+
+export const META = {
+  id: "nx-init",
+  name: "nx-init",
+  description: "Project onboarding — scan, mission, essentials, context generation",
+  trigger_display: "/opencode-nexus:nx-init",
+  purpose: "Project onboarding — scan, mission, essentials, context generation",
+} as const;

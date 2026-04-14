@@ -17,6 +17,7 @@ export const TaskItemSchema = z.object({
   plan_issue: z.number().optional(),
   deps: z.array(z.number()).optional(),
   created_at: z.string().optional(),
+  // updated_at deprecated — accepted on read but not written in new data
   updated_at: z.string().optional(),
   context: z.string().optional(),
   approach: z.string().optional(),
@@ -30,6 +31,7 @@ export const TasksFileSchema = z.object({
   tasks: z.array(TaskItemSchema)
 });
 
+// Deprecated — kept for graceful parsing of legacy plan.json only. Not used in new writes.
 export const PlanAttendeeSchema = z.object({
   role: z.string(),
   name: z.string(),
@@ -38,9 +40,10 @@ export const PlanAttendeeSchema = z.object({
 
 export const PlanIssueStatusSchema = z.enum([
   "pending",
+  "decided",
+  // Legacy statuses — mapped to canonical on read (see PlanIssueSchema transform)
   "researching",
   "discussing",
-  "decided",
   "deferred",
   "tasked"
 ]);
@@ -69,24 +72,26 @@ export const PlanIssueSchema = z
     id: z.number(),
     title: z.string(),
     status: PlanIssueStatusSchema,
-    discussion: z.array(PlanDiscussionRecordSchema).default([]),
+    // Legacy fields — accepted on read but not written in new data
+    discussion: z.array(PlanDiscussionRecordSchema).default([]).optional(),
+    task_refs: z.array(z.number()).default([]).optional(),
     decision: z.string().optional(),
     summary: z.string().optional(),
-    task_refs: z.array(z.number()).default([]),
     how_agents: z.array(z.string()).optional(),
     how_summary: z.record(z.string(), z.string()).optional(),
     how_agent_ids: z.record(z.string(), z.string()).optional()
   })
   .transform((issue) => ({
     ...issue,
-    task_refs: issue.task_refs ?? [],
-    discussion: issue.discussion ?? []
+    // Map legacy statuses to canonical values
+    status: (issue.status === "tasked" ? "decided" : issue.status) as "pending" | "decided" | "researching" | "discussing" | "deferred"
   }));
 
 export const PlanFileSchema = z.object({
   id: z.number(),
   topic: z.string(),
-  attendees: z.array(PlanAttendeeSchema).default([]),
+  // Legacy field — accepted on read but not written in new data
+  attendees: z.array(PlanAttendeeSchema).default([]).optional(),
   issues: z.array(PlanIssueSchema),
   research_summary: z.string().optional(),
   created_at: z.string()

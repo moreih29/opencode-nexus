@@ -6,6 +6,7 @@ import path from "node:path";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
 import { nxPlanStart } from "../dist/tools/plan.js";
+import { nxTaskClose } from "../dist/tools/task.js";
 
 async function makeRoot(suffix) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), `opencode-nexus-plan-defaults-${suffix}-`));
@@ -18,7 +19,13 @@ async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, "utf8"));
 }
 
-// Case 1: explicit attendees + issues arrays
+let passCount = 0;
+function pass(label) {
+  console.log(`  PASS: ${label}`);
+  passCount += 1;
+}
+
+// Case 1: canonical fields present — {id, topic, issues, research_summary, created_at}
 {
   const root = await makeRoot("case1");
   const ctx = { directory: root, worktree: root };
@@ -28,9 +35,8 @@ async function readJson(filePath) {
   const result = JSON.parse(
     await nxPlanStart.execute(
       {
-        topic: "Explicit arrays test",
-        research_summary: "Testing explicit attendees and issues arrays.",
-        attendees: [{ role: "architect", name: "Architect" }],
+        topic: "Canonical fields test",
+        research_summary: "Verifying all canonical fields are present.",
         issues: ["First issue", "Second issue"]
       },
       ctx
@@ -38,38 +44,51 @@ async function readJson(filePath) {
   );
   assert.equal(result.created, true, "case1: created should be true");
   assert.equal(result.issueCount, 2, "case1: issueCount should be 2");
+  assert.equal(typeof result.plan_id, "number", "case1: plan_id should be a number");
+  assert.equal(result.topic, "Canonical fields test", "case1: topic in result");
+  pass("case1: nxPlanStart result has created, issueCount, plan_id, topic");
 
   const plan = await readJson(paths.PLAN_FILE);
-  assert.equal(plan.attendees.length, 1, "case1: attendees length should be 1");
-  assert.equal(plan.issues.length, 2, "case1: issues length should be 2");
+  assert.equal(typeof plan.id, "number", "case1: plan.id is a number");
+  assert.equal(plan.topic, "Canonical fields test", "case1: plan.topic");
+  assert.equal(plan.research_summary, "Verifying all canonical fields are present.", "case1: plan.research_summary");
+  assert.equal(typeof plan.created_at, "string", "case1: plan.created_at is a string");
+  assert.equal(Array.isArray(plan.issues), true, "case1: plan.issues is array");
+  assert.equal(plan.issues.length, 2, "case1: issues length is 2");
+  assert.equal(Object.hasOwn(plan, "attendees"), false, "case1: no attendees field in new write");
+  pass("case1: plan.json has all canonical fields, no attendees");
 }
 
-// Case 2: empty arrays explicitly passed
+// Case 2: issues default status is 'pending'
 {
   const root = await makeRoot("case2");
   const ctx = { directory: root, worktree: root };
   const paths = createNexusPaths(root);
   await ensureNexusStructure(paths);
 
-  const result = JSON.parse(
-    await nxPlanStart.execute(
-      {
-        topic: "Empty arrays test",
-        research_summary: "Testing empty attendees and issues arrays.",
-        attendees: [],
-        issues: []
-      },
-      ctx
-    )
+  await nxPlanStart.execute(
+    {
+      topic: "Issue status test",
+      research_summary: "Verifying default issue status.",
+      issues: ["Alpha", "Beta", "Gamma"]
+    },
+    ctx
   );
-  assert.equal(result.created, true, "case2: created should be true");
 
   const plan = await readJson(paths.PLAN_FILE);
-  assert.deepEqual(plan.attendees, [], "case2: attendees should be empty array");
-  assert.deepEqual(plan.issues, [], "case2: issues should be empty array");
+  assert.equal(plan.issues.length, 3, "case2: 3 issues written");
+  for (const issue of plan.issues) {
+    assert.equal(issue.status, "pending", `case2: issue ${issue.id} status should be pending`);
+    assert.equal(typeof issue.id, "number", `case2: issue ${issue.id} has numeric id`);
+    assert.equal(typeof issue.title, "string", `case2: issue ${issue.id} has string title`);
+  }
+  assert.equal(plan.issues[0].id, 1, "case2: first issue id is 1");
+  assert.equal(plan.issues[1].id, 2, "case2: second issue id is 2");
+  assert.equal(plan.issues[2].id, 3, "case2: third issue id is 3");
+  pass("case2: all issues default to status='pending' with sequential ids");
 }
 
-// Case 3: attendees and issues keys omitted entirely
+// Case 3: issues omitted → empty array; issueCount is 0
 {
   const root = await makeRoot("case3");
   const ctx = { directory: root, worktree: root };
@@ -79,64 +98,77 @@ async function readJson(filePath) {
   const result = JSON.parse(
     await nxPlanStart.execute(
       {
-        topic: "Omitted keys test",
-        research_summary: "Testing omitted attendees and issues keys."
+        topic: "No issues test",
+        research_summary: "Verifying empty issues default."
       },
       ctx
     )
   );
   assert.equal(result.created, true, "case3: created should be true");
+  assert.equal(result.issueCount, 0, "case3: issueCount should be 0 when issues omitted");
 
   const plan = await readJson(paths.PLAN_FILE);
-  assert.deepEqual(plan.attendees, [], "case3: attendees should be empty array");
-  assert.deepEqual(plan.issues, [], "case3: issues should be empty array");
+  assert.deepEqual(plan.issues, [], "case3: issues should be empty array when omitted");
+  assert.equal(Object.hasOwn(plan, "attendees"), false, "case3: no attendees field");
+  pass("case3: omitting issues produces empty array and issueCount=0");
 }
 
-// Case 4: attendees provided, issues omitted (and reverse)
+// Case 4: plan_id increments — second plan after archive gets id 2
 {
-  const root = await makeRoot("case4a");
+  const root = await makeRoot("case4");
   const ctx = { directory: root, worktree: root };
   const paths = createNexusPaths(root);
   await ensureNexusStructure(paths);
 
-  const result = JSON.parse(
+  const first = JSON.parse(
     await nxPlanStart.execute(
-      {
-        topic: "Attendees only test",
-        research_summary: "Testing attendees provided but issues omitted.",
-        attendees: [{ role: "engineer", name: "Engineer" }]
-      },
+      { topic: "First plan", research_summary: "First." },
       ctx
     )
   );
-  assert.equal(result.created, true, "case4a: created should be true");
+  assert.equal(first.plan_id, 1, "case4: first plan_id is 1");
+  pass("case4: first nxPlanStart gets plan_id=1");
 
-  const plan = await readJson(paths.PLAN_FILE);
-  assert.equal(plan.attendees.length, 1, "case4a: attendees length should be 1");
-  assert.deepEqual(plan.issues, [], "case4a: issues should be empty array");
+  // Archive the first plan cycle so history records plan id=1
+  await nxTaskClose.execute({ archive: true }, ctx);
+
+  const second = JSON.parse(
+    await nxPlanStart.execute(
+      { topic: "Second plan", research_summary: "Second." },
+      ctx
+    )
+  );
+  assert.equal(second.plan_id, 2, "case4: second plan_id increments to 2");
+  pass("case4: second nxPlanStart after archive gets plan_id=2 (increment)");
+
+  const plan2 = await readJson(paths.PLAN_FILE);
+  assert.equal(plan2.id, 2, "case4: plan.json id is 2 for second plan");
+  assert.equal(plan2.topic, "Second plan", "case4: plan.json topic is updated");
+  pass("case4: plan.json reflects second plan after start-over");
 }
 
+// Case 5: sidecar is created alongside plan.json on nxPlanStart
 {
-  const root = await makeRoot("case4b");
+  const root = await makeRoot("case5");
   const ctx = { directory: root, worktree: root };
   const paths = createNexusPaths(root);
   await ensureNexusStructure(paths);
 
-  const result = JSON.parse(
-    await nxPlanStart.execute(
-      {
-        topic: "Issues only test",
-        research_summary: "Testing issues provided but attendees omitted.",
-        issues: ["Only issue"]
-      },
-      ctx
-    )
+  await nxPlanStart.execute(
+    {
+      topic: "Sidecar init test",
+      research_summary: "Verifying sidecar is initialised.",
+      issues: ["Check sidecar"]
+    },
+    ctx
   );
-  assert.equal(result.created, true, "case4b: created should be true");
 
-  const plan = await readJson(paths.PLAN_FILE);
-  assert.deepEqual(plan.attendees, [], "case4b: attendees should be empty array");
-  assert.equal(plan.issues.length, 1, "case4b: issues length should be 1");
+  const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
+  assert.equal(sidecar.schema_version, 1, "case5: sidecar schema_version is 1");
+  assert.equal(sidecar.handoff.policy, "canonical-first", "case5: sidecar handoff policy");
+  assert.equal(sidecar.panel.strategy, "how-fixed-panel", "case5: sidecar panel strategy");
+  assert.equal(Array.isArray(sidecar.panel.participants), true, "case5: sidecar participants is array");
+  pass("case5: nxPlanStart initialises plan sidecar with canonical structure");
 }
 
-console.log("e2e plan-start-defaults passed");
+console.log(`e2e plan-start-defaults passed (${passCount} assertions)`);

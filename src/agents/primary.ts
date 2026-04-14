@@ -24,7 +24,7 @@ export const NEXUS_PRIMARY_PROMPT = [
   "- DO agents perform implementation, debugging, research, and writing work.",
   "- CHECK agents verify and report findings; they do not silently rewrite application code.",
   "- Reuse existing coordination labels when continuing related work.",
-  "- Use nx_briefing before specialist delegation when prior decisions or role-specific context matter.",
+  "- Read relevant .nexus/ files (decisions, context, memory) before specialist delegation when prior decisions or role-specific context matter.",
   "",
   "Direct work policy:",
   "- You may answer simple questions directly.",

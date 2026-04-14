@@ -1,4 +1,4 @@
-import { NEXUS_AGENT_CATALOG } from "../agents/catalog.js";
+import { AGENT_META } from "../agents/generated/index.js";
 import { readJsonFile, writeJsonFile } from "./json-store.js";
 import { PlanFileSchema, PlanSidecarSchema, type PlanFile, type PlanSidecar } from "./schema.js";
 
@@ -68,25 +68,63 @@ function mergeHowParticipants(
   update?: { speaker?: string; message?: string; taskID?: string; sessionID?: string; teamName?: string }
 ) {
   const participantMap = new Map((existing?.panel.participants ?? []).map((item) => [item.role.toLowerCase(), item]));
-  for (const attendee of plan.attendees) {
-    if (!isHowRole(attendee.role)) {
+
+  // Collect HOW agent roles from issues[].how_agent_ids keys (union across all issues),
+  // falling back to issues[].how_agents for issues that only have the older field.
+  const howRoles = collectHowRolesFromIssues(plan);
+  for (const role of howRoles) {
+    const key = role.toLowerCase();
+    if (participantMap.has(key)) {
       continue;
     }
-    const key = attendee.role.toLowerCase();
-    const previous = participantMap.get(key);
     const isUpdateTarget = update?.speaker?.toLowerCase() === key;
     participantMap.set(key, {
-      role: attendee.role,
-      session_id: isUpdateTarget ? update?.sessionID ?? previous?.session_id : previous?.session_id,
-      task_id: isUpdateTarget ? update?.taskID ?? previous?.task_id : previous?.task_id,
-      last_summary: isUpdateTarget ? update?.message ?? previous?.last_summary : previous?.last_summary,
-      updated_at: isUpdateTarget ? now : previous?.updated_at ?? now
+      role,
+      session_id: isUpdateTarget ? update?.sessionID : undefined,
+      task_id: isUpdateTarget ? update?.taskID : undefined,
+      last_summary: isUpdateTarget ? update?.message : undefined,
+      updated_at: now
     });
+  }
+
+  if (update?.speaker) {
+    const key = update.speaker.toLowerCase();
+    const previous = participantMap.get(key);
+    if (previous) {
+      participantMap.set(key, {
+        ...previous,
+        session_id: update.sessionID ?? previous.session_id,
+        task_id: update.taskID ?? previous.task_id,
+        last_summary: update.message ?? previous.last_summary,
+        updated_at: now
+      });
+    }
   }
 
   return Array.from(participantMap.values()).sort((a, b) => a.role.localeCompare(b.role));
 }
 
+function collectHowRolesFromIssues(plan: PlanFile): string[] {
+  const roles = new Set<string>();
+  for (const issue of plan.issues) {
+    if (issue.how_agent_ids) {
+      for (const role of Object.keys(issue.how_agent_ids)) {
+        if (isHowRole(role)) {
+          roles.add(role.toLowerCase());
+        }
+      }
+    }
+    if (issue.how_agents) {
+      for (const role of issue.how_agents) {
+        if (isHowRole(role)) {
+          roles.add(role.toLowerCase());
+        }
+      }
+    }
+  }
+  return Array.from(roles);
+}
+
 function isHowRole(role: string): boolean {
-  return NEXUS_AGENT_CATALOG.some((agent) => agent.category === "how" && agent.id === role.toLowerCase());
+  return Object.values(AGENT_META).some((agent) => agent.category === "how" && agent.id === role.toLowerCase());
 }

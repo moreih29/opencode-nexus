@@ -51,7 +51,6 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 - Keep edits scoped to active tasks and update status with `nx_task_update`.
 - Verify before closure; run `nx_sync` when useful, then archive with `nx_task_close`.
 - Apply Branch Guard on `main` or `master` before substantial execution.
-- Use `nx_briefing(role, hint?)` before specialist delegation when context matters.
 
 ### Coordination Model
 

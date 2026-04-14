@@ -108,7 +108,7 @@ export function buildTagNotice(mode: NexusTagMode): string | null {
   }
 
   if (mode === "plan") {
-    return "[nexus] Plan mode detected. Research first, then use nx_plan_start / nx_plan_discuss / nx_plan_decide.";
+    return "[nexus] Plan mode detected. Research first, then use nx_plan_start to open a session and nx_plan_decide to record decisions.";
   }
   if (mode === "run") {
     return "[nexus] Run mode detected. Follow nx_task_add -> nx_task_update -> nx_task_close around all file edits.";
@@ -117,7 +117,7 @@ export function buildTagNotice(mode: NexusTagMode): string | null {
     return "[nexus] Decision tag detected. Record decision with nx_plan_decide.";
   }
   if (mode === "rule") {
-    return "[nexus] Rule mode detected. Persist durable conventions in .nexus/rules via nx_rules_write.";
+    return "[nexus] Rule mode detected. Persist durable conventions in .nexus/rules via Nexus rule tooling.";
   }
   if (mode === "sync") {
     return "[nexus] Sync mode detected. Invoke skill({name:'nx-sync'}) or follow the context synchronization workflow.";
