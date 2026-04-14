@@ -260,10 +260,13 @@ async function runGroupBasic() {
   }
 
   // A2: [sync] tag → nx_sync OR skill tool OR nx_context/read related call
+  // Note: [sync] triggers nx-sync skill which spawns a Writer subagent to update
+  // .nexus/context/ docs. Multi-step (git diff → context reads → writer spawn),
+  // so timeout raised to 600s to match A3 [plan] scenario.
   {
-    console.log("  [basic/A2] [sync] tag");
+    console.log("  [basic/A2] [sync] tag (extended 600s timeout)");
     try {
-      const { events } = await runOpencode("[sync]");
+      const { events } = await runOpencode("[sync]", { timeoutMs: 600000 });
       // Flexible: nx_sync tool, or skill tool, or any tool with "sync" in name
       const toolUses = filterToolUses(events);
       const toolNames = toolUses.map((e) => e.part?.tool ?? "").filter(Boolean);
@@ -318,14 +321,22 @@ async function runGroupBasic() {
     }
   }
 
-  // A4: [rule:test-category] tag → nx_rules_write
+  // A4: [rule:test-category] tag → write to .nexus/rules/
+  // Note: nx_rules_write tool removed in spec alignment refactor.
+  // LLM now uses native write tool targeting .nexus/rules/ path.
   {
-    console.log("  [basic/A4] [rule:test-category] tag → nx_rules_write");
+    console.log("  [basic/A4] [rule:test-category] tag → write to .nexus/rules/");
     try {
       const { events } = await runOpencode("[rule:smoke-test-category] 테스트용 임시 규칙");
       trackArtifacts(events);
-      assertToolCalled(events, "nx_rules_write");
-      r.pass("nx_rules_write called");
+      assertToolCalled(events, "write", {
+        inputCheck: (inp) => {
+          const fp = inp.filePath ?? inp.file_path ?? inp.path ?? "";
+          return fp.includes(".nexus/rules/");
+        },
+        inputCheckDesc: "write target is .nexus/rules/* (native write replaces removed nx_rules_write)",
+      });
+      r.pass("write to .nexus/rules/ detected");
     } catch (err) {
       r.fail(`[rule:...] scenario: ${err.message}`);
     }
@@ -415,10 +426,10 @@ async function runGroupPlanFlow() {
       });
       assertToolCalled(events, "nx_plan_decide", {
         inputCheck: (inp) =>
-          typeof inp.summary === "string" && inp.summary.length > 0,
-        inputCheckDesc: "input.summary is non-empty string",
+          typeof inp.decision === "string" && inp.decision.length > 0,
+        inputCheckDesc: "input.decision is non-empty string",
       });
-      r.pass("Turn 3: nx_plan_decide called with non-empty summary");
+      r.pass("Turn 3: nx_plan_decide called with non-empty decision");
     } catch (err) {
       r.fail(`Turn 3: ${err.message}`);
     }
