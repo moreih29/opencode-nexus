@@ -153,24 +153,14 @@ export const nxTaskUpdate = tool({
       throw new Error("tasks.json not found");
     }
     const tasksFile = TasksFileSchema.parse(await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] }));
-    const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
     const task = tasksFile.tasks.find((item) => item.id === args.id);
 
     if (!task) {
       throw new Error(`Task id ${args.id} not found`);
     }
 
-    const previousStatus = task.status;
     task.status = args.status;
     await writeJsonFile(paths.TASKS_FILE, tasksFile);
-
-    if (previousStatus === "completed" && args.status !== "completed") {
-      tracker.reopenCount += 1;
-    }
-    if (previousStatus !== "blocked" && args.status === "blocked") {
-      tracker.blockedTransitions += 1;
-    }
-    await writeJsonFile(paths.REOPEN_TRACKER_FILE, tracker);
 
     return JSON.stringify(
       {
@@ -193,7 +183,6 @@ export const nxTaskClose = tool({
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const plan = await readJsonFile<Record<string, unknown> | null>(paths.PLAN_FILE, null);
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
-    const tracker = await readTracker(paths.REOPEN_TRACKER_FILE);
 
     // Note: conformance contract (nexus-core v0.2.0) specifies task_close always succeeds.
     // Pipeline evaluation is used for advisory guidance only, not as a gate.
@@ -206,9 +195,6 @@ export const nxTaskClose = tool({
     const memoryHint = {
       taskCount,
       decisionCount,
-      hadLoopDetection: tracker.reopenCount > 0 || tracker.blockedTransitions > 0,
-      reopenCount: tracker.reopenCount,
-      blockedTransitions: tracker.blockedTransitions,
       cycleTopics: [typeof (plan as { topic?: unknown } | null)?.topic === "string" ? (plan as { topic: string }).topic : ""]
         .filter(Boolean)
     };
@@ -232,8 +218,6 @@ export const nxTaskClose = tool({
 
     await safeUnlink(paths.PLAN_FILE);
     await safeUnlink(paths.TASKS_FILE);
-    await safeUnlink(paths.STOP_WARNED_FILE);
-    await writeJsonFile(paths.REOPEN_TRACKER_FILE, { reopenCount: 0, blockedTransitions: 0 });
 
     return JSON.stringify(
       {
@@ -279,17 +263,6 @@ async function readCurrentBranch(projectRoot: string): Promise<string> {
   }
 }
 
-
-async function readTracker(filePath: string): Promise<{ reopenCount: number; blockedTransitions: number }> {
-  const tracker = await readJsonFile<{ reopenCount?: number; blockedTransitions?: number }>(filePath, {
-    reopenCount: 0,
-    blockedTransitions: 0
-  });
-  return {
-    reopenCount: Number(tracker.reopenCount ?? 0),
-    blockedTransitions: Number(tracker.blockedTransitions ?? 0)
-  };
-}
 
 function isOpenCodeSessionID(value: string): boolean {
   return value.startsWith("ses_");

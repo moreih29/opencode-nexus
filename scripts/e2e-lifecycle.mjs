@@ -42,13 +42,11 @@ await assert.rejects(
 );
 
 const close = JSON.parse(await nxTaskClose.execute({ archive: true }, ctx));
-assert.equal(close.memoryHint.hadLoopDetection, true);
-assert.equal(close.memoryHint.reopenCount, 1);
-assert.equal(close.memoryHint.blockedTransitions, 1);
+assert.equal(close.closed, true);
+assert.equal(typeof close.memoryHint.taskCount, "number");
 
 const history = JSON.parse(await fs.readFile(paths.HISTORY_FILE, "utf8"));
-assert.equal(history.cycles.at(-1).memoryHint.reopenCount, 1);
-assert.equal(history.cycles.at(-1).memoryHint.blockedTransitions, 1);
+assert.equal(history.cycles.at(-1).memoryHint.taskCount, 1);
 
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 const emptyClose = JSON.parse(await nxTaskClose.execute({ archive: false }, ctx));

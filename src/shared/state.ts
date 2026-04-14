@@ -23,13 +23,11 @@ export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
   await fs.mkdir(paths.ARTIFACTS_ROOT, { recursive: true });
   await fs.mkdir(paths.AUDIT_LOGS_ROOT, { recursive: true });
 
-  await ensureFile(paths.CONFIG_FILE, JSON.stringify({ statuslinePreset: "default" }, null, 2) + "\n");
   await ensureFile(paths.HISTORY_FILE, JSON.stringify({ cycles: [] }, null, 2) + "\n");
   await ensureFile(
     paths.ORCHESTRATION_CORE_FILE,
     JSON.stringify({ schema_version: 1, updated_at: now, invocations: [] }, null, 2) + "\n"
   );
-  await ensureFile(paths.REOPEN_TRACKER_FILE, JSON.stringify({ reopenCount: 0, blockedTransitions: 0 }, null, 2) + "\n");
 
   await fs.writeFile(paths.AGENT_TRACKER_FILE, "[]\n", "utf8");
 }

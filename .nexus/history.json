@@ -5585,6 +5585,236 @@
           "created_at": "2026-04-14T04:35:44.823Z"
         }
       ]
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T05:47:40.923Z",
+      "branch": "nexus-spec-alignment",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "스모크 테스트 저장 — smoke-run-harness",
+          "status": "completed",
+          "created_at": "2026-04-14T05:47:15.643Z",
+          "approach": "Nexus 메모리 시스템에 smoke-run-harness 관련 참조 정보 기록",
+          "acceptance": "`.nexus/memory/smoke-run-harness.md` 파일 생성 완료"
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "hadLoopDetection": false,
+        "reopenCount": 0,
+        "blockedTransitions": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T05:54:24.113Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 25,
+        "topic": "스모크 테스트 검증",
+        "issues": [
+          {
+            "id": 1,
+            "title": "스모크 테스트 2-Tier 구조 및 운영 기준 확정",
+            "status": "decided",
+            "decision": "스모크 테스트는 2-Tier 구조로 운영: (1) Fast Smoke (CI mandatory) - e2e-smoke.mjs + e2e-loader-smoke.mjs, 실행시간 <5초, dist 모듈 직접 호출, $0 비용 (2) Full Smoke (pre-release 수동) - smoke-opencode-run.mjs, 실행시간 ~3-5분, 실제 opencode CLI 검증, LLM 비용 발생. smoke-opencode-run.mjs에 --ci 플래그 추가하여 Group A/B만 실행 (60초 타임아웃). 규칙 문서 .nexus/rules/smoke-test-category.md 신규 작성.",
+            "how_agents": [
+              "architect",
+              "tester"
+            ],
+            "how_summary": {
+              "architect": "2-tier 구조 권장, Fast smoke는 CI mandatory로, Full smoke는 release 전 수동 실행으로. --ci 플래그 추가로 CI 환경 최적화. 규칙 문서화 필요.",
+              "tester": "최소 5개 체크포인트 표준, curl 기반 시작, 성공/실패 기준 수치화. 재시도는 인프라 오류에만 제한. 배포 게이트와 경고 지표 분리 운영."
+            }
+          }
+        ],
+        "research_summary": "이미 충분한 리서치 완료됨. 스모크 테스트는 배포 전/후 시스템의 핵심 기능이 정상 작동하는지 빠르게 검증하는 sanity check. 범위, 도구, 실행 방식에 대한 결정 필요.",
+        "created_at": "2026-04-14T05:50:58.729Z"
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T05:56:01.469Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 26,
+        "topic": "캐싱 전략",
+        "issues": [
+          {
+            "id": 1,
+            "title": "캐싱 전략 - TTL 기반 접근",
+            "status": "decided",
+            "decision": "TTL(Time-To-Live) 기반 캐싱 전략 채택. 캐시 엔트리에 만료 시간을 설정하여 자동 무효화 처리."
+          }
+        ],
+        "research_summary": "리서치 생략. 사용자가 단순 주제로 바로 계획 진행을 요청함.",
+        "created_at": "2026-04-14T05:54:24.124Z"
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T06:10:12.177Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 27,
+        "topic": "플러그인 상태 영속성 방식 결정",
+        "issues": [
+          {
+            "id": 1,
+            "title": "플러그인 상태 영속성 메커니즘 선택",
+            "status": "decided",
+            "decision": "File-based 유지 + 규칙 문서화. 핵심 상태(plan/tasks/orchestration)는 JSON 파일, audit logs는 JSONL 유지. 동시성 실제 제한되어 있어 file-based 충분. DB 도입은 향후 스케일 시점에서 검토. 즉시 보강: temp 파일 gc, schema_version 마이그레이션 메커니즘, .nexus/rules/state-persistence.md 문서화.",
+            "how_summary": "file-based: 채택(consumer 계약, 현재 규모 충분, 복잡도 회피) | db-based: 미채택(부적합한 phase, infra 과부하) | hybrid: 부분 채택(현재 수준에서는 file-based로 충분, 향후 필요시 재평가)"
+          }
+        ],
+        "research_summary": "리서치 생략. 설계 결정을 위한 직접적인 분석 세션 시작.",
+        "created_at": "2026-04-14T05:56:01.474Z"
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T06:11:09.394Z",
+      "branch": "carry-over",
+      "plan": {
+        "id": 28,
+        "topic": "엔지니어 역할 명세 확인",
+        "issues": [],
+        "research_summary": "리서치 생략 - 엔지니어(agent: engineer) 역할의 정의, 책임, 출력 형식 및 제약 조건을 확인하는 내적 분석",
+        "created_at": "2026-04-14T06:10:12.183Z"
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T07:01:13.588Z",
+      "branch": "research/nexus-core-harness-drift",
+      "plan": {
+        "id": 29,
+        "topic": "nexus-core 공통 가이드라인 중 실제로 하네스 종속인 항목 식별 및 GitHub 이슈 제출",
+        "issues": [
+          {
+            "id": 1,
+            "title": "nexus-core가 공통으로 강제하는 상태 파일/스키마 중 실제 하네스에 종속된 사례 전수 식별과 GitHub 이슈 초안 작성",
+            "status": "decided",
+            "decision": "GitHub 이슈 제출 방향 확정 — 두 가지 권고를 한 이슈로 묶어 제출:\n\n**권고 1 — 하네스 종속 상태 파일은 harness 네임스페이스로 격리**:\nnexus-core가 공통으로 강제하지만 실제로는 특정 하네스 플랫폼 고유 개념만 담기는 상태 파일은 `.nexus/state/<harness-id>/` 디렉토리로 이동. 대표 사례: `agent-tracker.json` (Claude Code의 agentId/scoped name 구조).\n\n**권고 2 — 파일명은 공통 컨벤션으로 유지**:\n네임스페이스 이동 후에도 **동일 목적의 파일은 양쪽에서 같은 이름**을 쓰도록 가이드 제공. 예: `.nexus/state/claude-nexus/agent-tracker.json` + `.nexus/state/opencode-nexus/agent-tracker.json`. 이름이 같으면 \"목적은 같고 내용만 하네스별 상이\"라는 의미 추론이 가능해 공통 컨벤션 레이어가 생긴다. 스키마는 각 하네스가 자유롭게 확장하되 core field(e.g. `harness_id`, `started_at`)는 공통 규약화.\n\n**이슈 본문 구성**:\n1. Executive Summary: 두 권고 요약\n2. 발견 사례 목록 (agent-tracker + 추가 조사된 항목): 파일명, 현재 위치(공통 강제), 실제 소비 하네스, 실 사용 증거(파일 내용/코드 경로)\n3. 권고 1 상세: 해당 파일들을 harness 네임스페이스로 이동\n4. 권고 2 상세: 이동 후에도 파일명 통일 + core field 공통화 제안\n5. Migration 영향: claude-nexus(agent-tracker 경로 이동), opencode-nexus(공통 강제 경로 제거)\n6. 첨부: 소스 코드 링크(files_touched 증거)\n\n**실행 계획**:\n- T1 researcher: nexus-core guidelines(CONSUMING.md, nexus-layout.md, schemas/) + claude-nexus/opencode-nexus 소스 전수 조사. 하네스 종속 사례 목록화.\n- T2 writer: 이슈 본문 마크다운 초안 작성.\n- T3 reviewer: 초안 검증 (사실 정확성, 근거 링크, 두 권고 모두 반영).\n- T4 lead: 사용자 최종 승인 후 `gh issue create --repo moreih29/nexus-core` 실행.\n\n**이슈 repo**: github.com/moreih29/nexus-core\n**이슈 type**: enhancement (harness-state-namespace 규약 확장)"
+          }
+        ],
+        "research_summary": "현재 대화 세션에서 이미 파악된 맥락:\n\n**발견된 사례 1 — agent-tracker.json**:\n- 위치: `.nexus/state/agent-tracker.json` (공통 루트, harness-state-namespace 안 아님)\n- nexus-core 가이드라인이 이 파일을 공통으로 정의한 근거: `opencode-nexus/src/shared/paths.ts:29`의 `AGENT_TRACKER_FILE: path.join(STATE_ROOT, \"agent-tracker.json\")` — opencode가 nexus-core 스펙 따라 공통 경로에 정의. claude-nexus `src/shared/paths.ts:27-30`의 `HARNESS_STATE_ROOT`가 있음에도 agent-tracker는 STATE_ROOT(루트)에 둠.\n- 실제 내용(claude-nexus의 실 파일): `harness_id`, `agent_name: \"claude-nexus:reviewer\"` (Claude Code scoped name), `agent_id: \"abe0ae4ada29373dd\"` (Claude Code UUID agentId, SendMessage resume 대상), `resume_count`, `files_touched` 등. **모든 필드가 Claude Code 플랫폼 고유 개념**.\n- opencode-nexus에서 실제 상태: 영구 `[]` 빈 배열. team_name coordination label 기반 tracking인데 opencode에서는 team_name이 실사용에서 거의 없음.\n- 즉 **agent-tracker.json은 claude-nexus 전용 상태 파일**이며, nexus-core가 \"공통\"으로 강제하는 것은 부정확. `harness-state-namespace` 규약에 따르면 `.nexus/state/claude-nexus/`로 격리되어야 함.\n\n**대조 사례 — orchestration.json**:\n- opencode-nexus 전용 (Claude Code의 team API 부재를 보상). 이미 `.nexus/state/opencode-nexus/`에 격리됨 ✓ (올바른 패턴)\n\n**대조 사례 — plan.extension.json**:\n- opencode 전용 sidecar. `.nexus/state/opencode-nexus/`에 격리됨 ✓\n\n**추가 조사 필요**:\n1. nexus-core 가이드라인 문서(CONSUMING.md, nexus-layout.md, schemas/)에서 agent-tracker 같은 공통 강제 규정의 위치\n2. 비슷한 성격의 다른 상태 파일: `reopen-tracker.json`, `stop-warned`, `runtime.json` (v0.6.0에서 제거됨), `tool-log.jsonl` 등 하네스 종속 여부\n3. claude-nexus 소스 전반에서 \"공통으로 보이지만 Claude Code-only\" 사례 추가 발견\n\n**Deliverable**: GitHub 이슈 초안 (github.com/moreih29/nexus-core). 사례 목록 + 각 사례의 하네스 종속 근거 + 권고 (harness-state-namespace로 이동 또는 스펙에서 제거).\n\n**사용자 포지션**: \"두 플러그인 모두 접근 가능한 특별 상황\"을 활용. 실 사용 증거 기반으로 reporting.",
+        "created_at": "2026-04-14T06:30:44.936Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "하네스 종속 상태 파일/가이드라인 전수 조사",
+          "context": "nexus-core가 공통으로 강제하지만 실제로는 특정 하네스 전용인 사례를 두 플러그인 소스와 nexus-core 가이드라인 문서에서 전수 식별.",
+          "approach": "1) nexus-core 가이드라인 문서 스캔: `/Users/kih/workspaces/areas/opencode-nexus/node_modules/@moreih29/nexus-core/` (접근 가능 여부 Glob으로 확인 후, CONSUMING.md, nexus-layout.md, schemas/, MIGRATIONS/, README 등에서 \"공통 상태 파일\" 강제 목록 추출). 접근 막힐 경우 opencode-nexus와 claude-nexus의 generator 스크립트가 소비하는 경로에서 역추론. 2) claude-nexus 실사용 조사: `/Users/kih/workspaces/areas/claude-nexus/.nexus/state/*` 실 파일 내용 + `src/shared/paths.ts`의 상수 + `src/mcp/tools/*`와 `src/hooks/*`의 파일 생성/읽기 지점 grep. 3) opencode-nexus 실사용 조사: `/Users/kih/workspaces/areas/opencode-nexus/src/shared/paths.ts` (HARNESS_NAMESPACE_ROOT 분리 여부), `.nexus/state/*` 실 파일 크기/내용. 4) 각 파일을 5개 카테고리로 분류: (a) 진짜 공통(plan.json/tasks.json/history.json/config.json처럼 양쪽 동일 스키마), (b) nexus-core가 공통 강제 but claude-nexus 전용(agent-tracker 같은), (c) nexus-core가 공통 강제 but opencode 전용, (d) 이미 올바르게 harness 네임스페이스로 격리됨(orchestration.json/plan.extension.json 같은), (e) 제거된 것(runtime.json v0.6.0). 5) 결과를 `.nexus/state/artifacts/harness-drift-findings.md`에 markdown 표로 정리 (파일명, 현재 위치, 스펙 근거, 실 사용 하네스, 내용 샘플 링크, 권고 분류).",
+          "acceptance": "- `.nexus/state/artifacts/harness-drift-findings.md` 산출물 생성\n- 5개 카테고리별 분류된 파일 목록 존재\n- 각 (b)/(c) 사례에 대해 실 사용 증거 포함 (파일 경로 + 라인 + 실 파일 내용 샘플)\n- nexus-core 가이드라인 문서 인용(가능한 경우 파일:라인) 또는 접근 불가 시 그 사유 명시\n- agent-tracker.json 포함 최소 1건 이상의 (b) 또는 (c) 사례 식별\n- 최종 리포트 400단어 내 요약 + 상세 표",
+          "risk": "- nexus-core node_modules 직접 접근이 막힐 가능성 → generator 스크립트 + opencode/claude 소스에서 역추론 필요\n- \"하네스 종속\"의 판정 기준이 주관적일 수 있음 → 실 파일 내용(agentId, coordination_label 등 플랫폼 고유 식별자) 여부를 objective criterion으로 적용",
+          "status": "pending",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "researcher",
+          "created_at": "2026-04-14T06:32:00.100Z"
+        },
+        {
+          "id": 2,
+          "title": "GitHub 이슈 본문 초안 작성",
+          "context": "Task 1의 조사 결과를 바탕으로 moreih29/nexus-core GitHub 이슈 본문 마크다운 작성.",
+          "approach": "`.nexus/state/artifacts/harness-drift-findings.md`를 읽고 `.nexus/state/artifacts/nexus-core-drift-issue-draft.md`에 GitHub 이슈 본문 작성. 구성: (1) Title 제안 1줄 — \"rule:harness-state-namespace 확장: 하네스 전용 상태 파일의 네임스페이스 격리 + 공통 파일명 컨벤션\"류, (2) Executive Summary 2-3문장 — 특별한 관찰 상황(양 플러그인 접근)과 두 권고 요약, (3) Context — 현재 nexus-core v0.5.0 기준 공통 강제 상태 파일 목록과 harness-state-namespace 규약 간의 간극, (4) Findings — 조사 결과 표 + 각 사례 상세(사용 증거 코드 링크), (5) Recommendation 1 — 네임스페이스 이동(제거 아님). (6) Recommendation 2 — 공통 파일명 컨벤션(이름은 같고 내용은 하네스별 상이 가능). core field 최소 공통 스키마(e.g. harness_id, updated_at) 제안 선택사항. (7) Migration impact — claude-nexus 측 변경 요약, opencode-nexus 측 변경 요약 (기존 경로 제거). (8) Open questions — 스키마 validation을 nexus-core가 어디까지 책임질지, optional vs required core field 구분. 한국어/영어 선택은 nexus-core 이슈 작성 관행에 맞춤 (이전 이슈들 확인 후 결정 — gh issue list로). 형식: markdown, 코드 블록 파일 경로 명시, 표 사용.",
+          "acceptance": "- `.nexus/state/artifacts/nexus-core-drift-issue-draft.md` 산출물 생성\n- 제목 1줄(70자 내) + 본문 구성 8개 섹션 포함\n- 두 권고 모두 명시(네임스페이스 이동 + 공통 파일명 컨벤션)\n- 최소 agent-tracker.json 사례의 구체적 근거(내용 샘플, 코드 경로)\n- nexus-core repo의 기존 이슈 관행에 맞는 언어(한/영) 선택\n- markdown 유효성 (heading 계층, 코드 블록 닫힘, 표 구조)",
+          "risk": "- 기존 nexus-core 이슈 언어 관행 확인을 위한 gh CLI 접근이 필요. 접근 불가 시 영어 기본으로 가되 한글 병기 허용.\n- findings의 미완 사례(접근 제한으로 불명)가 많으면 이슈가 불완전해 보일 수 있음 — 그 경우 \"incomplete enumeration, seeking maintainer input\"로 framing.",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "writer",
+          "created_at": "2026-04-14T06:32:18.481Z"
+        },
+        {
+          "id": 3,
+          "title": "이슈 초안 검증",
+          "context": "Writer의 초안이 조사 결과와 일치하는지, 사실 오류/누락/불완전한 근거가 없는지 검증.",
+          "approach": "`.nexus/state/artifacts/nexus-core-drift-issue-draft.md`를 `.nexus/state/artifacts/harness-drift-findings.md`와 교차 검증. 체크 항목: (a) Findings에 언급된 모든 파일이 조사 결과에 존재, (b) 코드 경로/라인 참조가 실제 존재(Grep 확인), (c) 권고 2개 모두 본문에 포함되고 서로 논리적으로 연결됨, (d) agent-tracker 사례가 대표 예로 상세히 기술됨, (e) Migration impact가 양쪽 플러그인 대상 모두 커버, (f) 제목이 이슈 성격 정확히 전달 + 70자 내, (g) markdown 유효성. severity별 findings(critical/warning/suggestion/note). Approved 시 writer에게 reconfirm 불필요, Requires revision 시 writer resume.",
+          "acceptance": "- 4개 파일 교차 체크: findings.md, draft.md, 인용된 소스 파일, nexus-core 접근 증거\n- severity별 findings 리포트\n- Recommendation: Approved / Approved with conditions / Requires revision\n- Critical 0 목표",
+          "risk": "- 초안이 불완전할 경우 writer resume 필요 → 시간 추가. Review에서 수정 범위 명확히 전달",
+          "status": "pending",
+          "deps": [
+            2
+          ],
+          "plan_issue": 1,
+          "owner": "reviewer",
+          "created_at": "2026-04-14T06:32:28.430Z"
+        },
+        {
+          "id": 4,
+          "title": "사용자 승인 후 GitHub 이슈 제출",
+          "context": "Reviewer Approved 받은 초안을 사용자에게 최종 제시하고 승인 후 gh CLI로 moreih29/nexus-core에 이슈 생성.",
+          "approach": "1) 사용자에게 `.nexus/state/artifacts/nexus-core-drift-issue-draft.md` 본문을 markdown blockquote로 제시(제목/body 분리). 2) 사용자 승인 확인. 3) `gh issue create --repo moreih29/nexus-core --title \"<title>\" --body-file <path>` 실행. 4) 생성된 이슈 URL 사용자에게 보고. 5) 필요 시 `.nexus/state/artifacts/nexus-core-drift-issue-draft.md`의 footer에 이슈 URL 추가.",
+          "acceptance": "- 사용자가 제출 승인\n- gh CLI로 이슈 생성 성공\n- 생성된 이슈 URL 사용자에게 보고\n- artifacts 파일에 최종 URL 기록",
+          "risk": "- gh CLI 인증이 moreih29/nexus-core 쓰기 권한 있어야 함 (사용자 계정). 없으면 사용자 수동 제출로 전환\n- 사용자가 revision 요청하면 writer resume 사이클 추가 필요",
+          "status": "pending",
+          "deps": [
+            3
+          ],
+          "plan_issue": 1,
+          "owner": "lead",
+          "created_at": "2026-04-14T06:32:35.346Z"
+        }
+      ]
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T07:13:24.276Z",
+      "branch": "refactor/nexus-spec-alignment",
+      "plan": {
+        "id": 30,
+        "topic": "opencode-nexus 하네스 전용 state 파일 cleanup (runtime/reopen-tracker/stop-warned/config.json)",
+        "issues": [
+          {
+            "id": 1,
+            "title": "4건(runtime.json, reopen-tracker.json, stop-warned, config.json statuslinePreset) 처리 방향 결정",
+            "status": "decided",
+            "decision": "4건 모두 **완전 제거** 방향. 이동(HARNESS_NAMESPACE_ROOT 격리)이 아닌 삭제.\n\n**제거 대상 및 범위**:\n\n1. **runtime.json + 관련 코드 완전 제거**:\n   - `src/shared/runtime.ts` 파일 삭제 (writeRuntimeFile 함수 정의)\n   - `src/shared/paths.ts:25` `RUNTIME_FILE` 상수 삭제\n   - `src/plugin/hooks.ts:137` writeRuntimeFile 호출 및 import 제거\n   - `src/shared/state.ts` 내 관련 초기화가 있으면 제거\n   - 이유: nexus-core v0.6.0에서 이미 제거된 개념. 읽는 코드 0건.\n\n2. **reopen-tracker.json + 관련 코드 완전 제거**:\n   - `src/shared/paths.ts:31` `REOPEN_TRACKER_FILE` 상수 삭제\n   - `src/shared/state.ts:32` ensureFile 호출 삭제\n   - `src/tools/task.ts`: `readTracker` 함수 정의 삭제, nxTaskUpdate의 reopenCount/blockedTransitions 증분 로직 제거, nxTaskClose 반환 shape에서 `hadLoopDetection`/`reopenCount`/`blockedTransitions` 필드 제거\n   - 이유: gate 로직 없는 통계 표시만. LLM이 loop 정보 없어도 해로움 없음.\n\n3. **stop-warned + 관련 코드 완전 제거**:\n   - `src/shared/paths.ts:32` `STOP_WARNED_FILE` 상수 삭제\n   - `src/plugin/hooks.ts:299,305,307` /exit 감지 중복 방지 로직 제거 (경고 기능 자체는 유지하되 매번 표시)\n   - `src/plugin/hooks.ts:713` `readStopWarning` 함수 정의 삭제\n   - `src/tools/task.ts:235` nxTaskClose 시 unlink 호출 제거\n   - 이유: UX convenience (중복 경고 방지)이지만 functional-critical 아님. 제거 시 경고 반복이 최악 이 정도.\n\n4. **config.json + statuslinePreset 로직 제거**:\n   - `src/shared/state.ts:26` ensureFile(CONFIG_FILE, {statuslinePreset:\"default\"}) 초기화 삭제\n   - `src/shared/paths.ts:24` `CONFIG_FILE` 상수 — **nx_setup에서도 안 쓰면 완전 제거, 다른 용도 있으면 유지**(구현 시 확인)\n   - `src/tools/setup.ts`: statuslinePreset 관련 모든 로직 삭제 (args.statusline_preset zod schema, readJsonFile(CONFIG_FILE), writeJsonFile 등). nx_setup 도구는 .opencode/skills/ 설치와 opencode.json 생성에만 집중하도록 축소.\n   - `src/tools/setup.ts`의 response shape에서 `nexusConfigFile` 필드 제거\n   - 기존 `.nexus/config.json` 파일은 유지 (사용자 설정 보존). 코드가 안 건드릴 뿐.\n   - 이유: 소비 코드 0건, 양측 dead state.\n\n**공통 원칙**:\n- 제거 후 tsc 통과 필수\n- e2e 관련 테스트가 있으면 해당 테스트도 업데이트 또는 제거\n- nx-run.ts, nx-plan.ts generated 주석에 runtime.json 언급 있으면 nexus-core upstream 이슈이므로 건드리지 않음 (generator 재실행 시 updated)\n\n**Rejected — 네임스페이스 이동 옵션**: 4건 모두 `HARNESS_NAMESPACE_ROOT/opencode-nexus/`로 이동만 하면 \"파일이 있되 아무도 안 씀\" 상태가 되어 dead state drift가 새 위치로 이동할 뿐. 제거가 근본 해결.\n\n**Rejected — 일부 유지 옵션**: stop-warned는 UX value가 있으나 제거 후 실제 불편이 얼마나 큰지 관찰해보고 재도입 여부 결정 (YAGNI 적용)."
+          }
+        ],
+        "research_summary": "이전 nexus-core drift 조사(GitHub 이슈 #16 제출)의 후속 cleanup. 사용자 의견: 3건(reopen/stop/config)은 필요 없을 가능성 매우 높음.\n\n**실사용 확인 결과**:\n\n1. **runtime.json** — nexus-core v0.6.0에서 제거. opencode-nexus stale:\n   - `src/shared/paths.ts:25` RUNTIME_FILE 상수\n   - `src/shared/runtime.ts` writeRuntimeFile 함수\n   - `src/plugin/hooks.ts:137` session.created 시 호출\n   - **읽는 코드 0건** — 완전 dead write\n\n2. **reopen-tracker.json** — opencode 자체 선택:\n   - `src/tools/task.ts:156-173,196,236` nxTaskUpdate/nxTaskClose에서 reopenCount/blockedTransitions 증분/조회\n   - `src/tools/task.ts:209-211` nxTaskClose 반환 shape에 `{hadLoopDetection, reopenCount, blockedTransitions}` 포함 → LLM에 정보 노출\n   - **gate/decision 로직 없음** — 단순 통계 표시용\n   - 제거 시: nxTaskClose 반환 shape에서 3필드 삭제 (LLM이 loop 여부 모름 — 실제 해로움 없음)\n\n3. **stop-warned** sentinel — opencode 자체 선택:\n   - `src/plugin/hooks.ts:299-307,713` command.execute.before `/exit` 감지 시 중복 경고 방지\n   - `src/tools/task.ts:235` nxTaskClose 시 unlink\n   - **UX convenience** (매번 같은 경고 반복 방지). functional-critical 아님.\n   - 제거 시: /exit 때마다 같은 경고 반복 (사용자가 큰 불편 아니면 허용)\n\n4. **config.json statuslinePreset** — 양측 dead state:\n   - `src/shared/state.ts:26` 초기화 `{statuslinePreset: \"default\"}`\n   - `src/tools/setup.ts:21,34,53,68-75,77,90` nx_setup에서 저장/참조\n   - **소비 코드 없음** (opencode 플랫폼이 읽는지 외부 검증 불가하나 플러그인 내부 consumer 0)\n   - claude-nexus에도 statuslinePreset grep 0건 (설치되어 있던 `\"full\"` 값은 순수 잔재)\n\n**이전 결정 맥락**: 이번 Spec-alignment refactor의 \"선제적 추가했으나 실 소비자 없는 필드/파일 배제\" 원칙이 본 cleanup의 기반. Issue #1(updated_at 제거), Issue #5(edit-tracker.json 도입 취소)와 일관.</research_summary>\n",
+        "created_at": "2026-04-14T07:05:20.593Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "4건 state 파일 cleanup 통합 실행",
+          "context": "runtime.json, reopen-tracker.json, stop-warned, config.json statuslinePreset 관련 코드 전부 제거.",
+          "approach": "파일 단위가 아닌 대상 단위로 순차 처리:\n\n**Target 1: runtime.json 완전 제거**\n- `src/shared/runtime.ts` 파일 삭제\n- `src/shared/paths.ts`의 `RUNTIME_FILE` 상수 line 제거\n- `src/plugin/hooks.ts`의 `writeRuntimeFile` import + line 137 호출 제거\n- `src/shared/state.ts` 내 runtime.json 관련 초기화가 있으면 제거\n- grep으로 잔존 참조 0건 확인\n\n**Target 2: reopen-tracker.json 완전 제거**\n- `src/shared/paths.ts` `REOPEN_TRACKER_FILE` 상수 삭제\n- `src/shared/state.ts:32` ensureFile 호출 삭제\n- `src/tools/task.ts`: `readTracker` 함수 정의(line 283-290) 삭제, nxTaskUpdate(line 156-173) 내 reopenCount/blockedTransitions 로직 제거, nxTaskClose(line 196, 209-211) 반환 shape에서 `hadLoopDetection`/`reopenCount`/`blockedTransitions` 필드 제거 및 tracker read 제거, line 236 reset 호출 제거\n- TasksFile consumer들이 위 필드를 기대하는지 확인 (shape 변경 영향)\n\n**Target 3: stop-warned 완전 제거**\n- `src/shared/paths.ts` `STOP_WARNED_FILE` 상수 삭제\n- `src/plugin/hooks.ts:299` event 훅의 safeUnlink 제거, line 305-307의 command.execute.before 중복 방지 로직 제거(경고 자체는 유지 — 매번 표시), line 713 `readStopWarning` 함수 정의 삭제\n- `src/tools/task.ts:235` nxTaskClose의 safeUnlink 호출 제거\n- grep으로 잔존 참조 0건 확인\n\n**Target 4: config.json statuslinePreset 로직 제거**\n- `src/shared/state.ts:26` `ensureFile(CONFIG_FILE, ... statuslinePreset: \"default\" ...)` 호출 삭제\n- `src/shared/paths.ts` `CONFIG_FILE` 상수 — nx_setup 외 소비처 확인(grep). 없으면 삭제, 있으면 유지.\n- `src/tools/setup.ts`: statuslinePreset 관련 zod schema(line 21), argument handling(line 34), readJsonFile(CONFIG_FILE, line 68), nexusConfig.statuslinePreset 설정(line 69), writeJsonFile(CONFIG_FILE, line 75), response의 nexusConfigFile 필드(line 77, 90) 모두 제거. nx_setup은 `.opencode/skills/` 설치와 `opencode.json` 생성에만 집중.\n- `src/tools/setup.ts`의 `generatedFiles` 배열에서 `projectPaths.CONFIG_FILE` 제거.\n- 기존 `.nexus/config.json` 파일은 건드리지 않음 (사용자 설정 보존 원칙).\n\n**공통**:\n- Shell 파일 수정 금지 — Edit/Write primitive만\n- 각 Target 완료 시점에 `bun run check` 실행하여 중간 상태 오류 파악\n- 최종적으로 `bun run check` + `bun run build` 통과\n- e2e 영향 받는 테스트 파악: e2e-smoke, e2e-setup-template, e2e-lifecycle 등에서 stoppage/reopen 관련 assertion 있을 수 있음 — 실패 시 test 파일도 업데이트",
+          "acceptance": "- `src/shared/runtime.ts` 파일 없음\n- `grep -rn \"RUNTIME_FILE\\|writeRuntimeFile\\|runtime\\.json\" src/` 결과 0 (generated 주석 제외)\n- `grep -rn \"REOPEN_TRACKER_FILE\\|reopenCount\\|blockedTransitions\\|hadLoopDetection\" src/` 결과 0\n- `grep -rn \"STOP_WARNED_FILE\\|readStopWarning\" src/` 결과 0\n- `grep -rn \"statuslinePreset\\|statusline_preset\" src/` 결과 0\n- `bun run check` 통과\n- `bun run build` 통과\n- nxTaskClose 반환 shape이 claude-nexus와 일치 (loop detection 필드 없음)\n- nx_setup이 정상 작동 (.opencode/skills/ 설치 및 opencode.json 생성)",
+          "risk": "- nxTaskClose 반환 shape 변경이 MODE PLAYBOOK 프롬프트나 e2e 테스트에 영향. 영향 받는 곳 grep으로 확인 후 동반 수정\n- stop-warned 제거 후 /exit 경고가 매번 표시됨 — UX 관찰 대상이나 blocker 아님\n- CONFIG_FILE 상수 제거 여부는 nx_setup 외 소비처 확인 결과에 따라 판단",
+          "status": "pending",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T07:06:23.036Z"
+        },
+        {
+          "id": 2,
+          "title": "Cleanup 검증 — 빌드/타입/e2e 통과 확인",
+          "context": "T1 cleanup 후 전체 검증.",
+          "approach": "1) `bun run check` 통과 확인. 2) `bun run build` 통과 확인. 3) e2e 핵심 서브셋: e2e-conformance, e2e-lifecycle, e2e-setup-template, e2e-stop-guard, e2e-pipeline-evaluator, e2e-plan-continuity-core, e2e-plan-start-defaults, e2e-prompts-generated, e2e-system-transform, e2e-tag-handlers, e2e-hook-notices. 4) 4개 대상 파일 모두 grep 0 확인 (T1 acceptance와 동일). 5) nxTaskClose 반환 shape 확인 (`jq` 또는 수동 execute). 6) 발견 사항 severity별 report.",
+          "acceptance": "- tsc 0 errors, build 성공\n- 명시 e2e 테스트 PASS (또는 실패 시 stale test로 판정 가능한 근거)\n- grep 4개 패턴 모두 0\n- severity report + Approved/Revision Required 권고",
+          "risk": "- e2e-stop-guard나 lifecycle 테스트가 stop-warned/reopen-tracker에 의존할 가능성 — 실패 시 T1에서 미리 업데이트했어야 했는지 판정",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "tester",
+          "created_at": "2026-04-14T07:06:32.715Z"
+        }
+      ]
     }
-  ]
+  ],
+  "schema_version": "0.5"
 }

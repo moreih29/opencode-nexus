@@ -29,7 +29,7 @@ assert.match(out1.parts[0].text, /Active task cycle detected/i);
 const out2 = { parts: [] };
 await hooks["command.execute.before"]({ command: "exit", sessionID: "s1" }, out2);
 assert.equal(out2.parts.length > 0, true);
-assert.match(out2.parts[0].text, /Active tasks still remain/i);
+assert.match(out2.parts[0].text, /Active task cycle detected/i);
 
 await fs.writeFile(
   paths.TASKS_FILE,
@@ -45,7 +45,7 @@ assert.match(out3.parts[0].text, /completed-but-not-closed cycle/i);
 const out4 = { parts: [] };
 await hooks["command.execute.before"]({ command: "exit", sessionID: "s1" }, out4);
 assert.equal(out4.parts.length > 0, true);
-assert.match(out4.parts[0].text, /completed cycle is still open/i);
+assert.match(out4.parts[0].text, /completed-but-not-closed cycle/i);
 
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 await hooks["tool.execute.before"]({ tool: "nx_task_close" }, { args: { archive: true } });

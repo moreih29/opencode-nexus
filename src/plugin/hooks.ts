@@ -22,7 +22,6 @@ import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, to
 import { loadCanonicalPlan, syncPlanSidecar } from "../shared/plan-sidecar.js";
 import { createNexusPaths, isNexusInternalPath, HARNESS_ID } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
-import { writeRuntimeFile } from "../shared/runtime.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
 import { buildNexusSystemPrompt } from "./system-prompt.js";
 import type { NexusPluginState } from "../plugin-state.js";
@@ -134,7 +133,6 @@ export function createHooks(ctx: PluginContext) {
       if (event.type === "session.created") {
         await ensureNexusStructure(paths);
         await resetAgentTracker(paths.AGENT_TRACKER_FILE);
-        await writeRuntimeFile(paths.RUNTIME_FILE);
         try {
           await syncAgentsMdTemplate(paths.PROJECT_ROOT);
         } catch {
@@ -296,19 +294,15 @@ export function createHooks(ctx: PluginContext) {
       }
       const summary = await readTasksSummary(paths.TASKS_FILE);
       if (!summary || summary.total === 0) {
-        await safeUnlink(paths.STOP_WARNED_FILE);
         return;
       }
 
       const evaluation = await evaluatePipelineFromSummary(summary);
       const status = getExitGuardStatus(evaluation);
-      const previous = await readStopWarning(paths.STOP_WARNED_FILE);
-      const repeated = previous === status;
-      await fs.writeFile(paths.STOP_WARNED_FILE, `${status}\n`, "utf8");
 
       output.parts.push({
         type: "text",
-        text: buildExitWarning(status, repeated)
+        text: buildExitWarning(status)
       } as Record<string, unknown>);
     },
 
@@ -694,31 +688,16 @@ function getExitGuardStatus(result: PipelineEvaluatorResult) {
   return "clear" as const;
 }
 
-function buildExitWarning(status: "active" | "completed-open" | "clear", repeated: boolean): string {
+function buildExitWarning(status: "active" | "completed-open" | "clear"): string {
   if (status === "active") {
-    return repeated
-      ? "[nexus] Active tasks still remain. Update task status or finish the cycle before exiting; use nx_task_close only after all tasks are complete."
-      : "[nexus] Active task cycle detected. Do not abandon the cycle silently: update blocked/in-progress tasks, finish verification, and use nx_task_close only when the cycle is actually complete.";
+    return "[nexus] Active task cycle detected. Do not abandon the cycle silently: update blocked/in-progress tasks, finish verification, and use nx_task_close only when the cycle is actually complete.";
   }
 
   if (status === "completed-open") {
-    return repeated
-      ? "[nexus] This completed cycle is still open. Archive it with nx_task_close before exiting."
-      : "[nexus] A completed-but-not-closed cycle is still open. Verify if needed, run nx_sync when useful, then archive the cycle with nx_task_close before exiting.";
+    return "[nexus] A completed-but-not-closed cycle is still open. Verify if needed, run nx_sync when useful, then archive the cycle with nx_task_close before exiting.";
   }
 
   return "[nexus] No active Nexus cycle is blocking exit.";
-}
-
-async function readStopWarning(filePath: string): Promise<string | null> {
-  if (!(await fileExists(filePath))) {
-    return null;
-  }
-  try {
-    return (await fs.readFile(filePath, "utf8")).trim() || null;
-  } catch {
-    return null;
-  }
 }
 
 function pickSessionID(input: unknown): string | null {

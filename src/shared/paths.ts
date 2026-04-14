@@ -21,15 +21,11 @@ export function createNexusPaths(projectRoot: string) {
     STATE_ROOT,
     HARNESS_NAMESPACE_ROOT,
     HISTORY_FILE: path.join(NEXUS_ROOT, "history.json"),
-    CONFIG_FILE: path.join(NEXUS_ROOT, "config.json"),
-    RUNTIME_FILE: path.join(STATE_ROOT, "runtime.json"),
     PLAN_FILE: path.join(STATE_ROOT, "plan.json"),
     PLAN_SIDECAR_FILE: path.join(HARNESS_NAMESPACE_ROOT, "plan.extension.json"),
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),
     AGENT_TRACKER_FILE: path.join(STATE_ROOT, "agent-tracker.json"),
     ORCHESTRATION_CORE_FILE: path.join(HARNESS_NAMESPACE_ROOT, "orchestration.json"),
-    REOPEN_TRACKER_FILE: path.join(STATE_ROOT, "reopen-tracker.json"),
-    STOP_WARNED_FILE: path.join(STATE_ROOT, "stop-warned"),
     ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts"),
     AUDIT_LOGS_ROOT: path.join(HARNESS_NAMESPACE_ROOT, "audit")
   };

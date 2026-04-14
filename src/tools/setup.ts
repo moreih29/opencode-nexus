@@ -18,7 +18,6 @@ export const nxSetup = tool({
   args: {
     scope: z.enum(["project", "user"]).default("project"),
     profile: z.enum(["auto", "full", "minimal", "legacy-compat"]).default("auto"),
-    statusline_preset: z.enum(["full", "minimal", "skip"]).default("minimal"),
     install_plugin: z.boolean().default(true),
     init_after_setup: z.boolean().default(false),
     instructions_file: z.string().optional(),
@@ -31,7 +30,6 @@ export const nxSetup = tool({
     const root = context.worktree ?? context.directory;
     const scope = args.scope ?? "project";
     const profile = args.profile ?? "auto";
-    const statuslinePreset = args.statusline_preset ?? "minimal";
     const installPlugin = args.install_plugin ?? true;
     const initAfterSetup = args.init_after_setup ?? false;
     const modelPreset = args.model_preset ?? "skip";
@@ -65,16 +63,7 @@ export const nxSetup = tool({
 
     await writeJsonFile(targets.configFile, next);
 
-    const nexusConfig = await readJsonFile<Record<string, unknown>>(projectPaths.CONFIG_FILE, {});
-    nexusConfig.statuslinePreset = statuslinePreset;
-    nexusConfig.setupScope = scope;
-    nexusConfig.setupProfile = resolvedProfile;
-    nexusConfig.instructionsFile = targets.instructionsFile;
-    nexusConfig.setupCapabilities = capabilities;
-    nexusConfig.updated_at = new Date().toISOString();
-    await writeJsonFile(projectPaths.CONFIG_FILE, nexusConfig);
-
-    const generatedFiles = [targets.instructionsFile, targets.configFile, projectPaths.CONFIG_FILE, ...skillFiles];
+    const generatedFiles = [targets.instructionsFile, targets.configFile, ...skillFiles];
     let initResult: string | null = null;
     if (initAfterSetup && scope === "project") {
       initResult = await nxInit.execute({ reset: false, setup_rules: false }, context);
@@ -87,7 +76,6 @@ export const nxSetup = tool({
         targetPaths: {
           instructionsFile: targets.instructionsFile,
           configFile: targets.configFile,
-          nexusConfigFile: projectPaths.CONFIG_FILE,
           skillsRoot: targets.skillsRoot
         },
         generatedFiles,
