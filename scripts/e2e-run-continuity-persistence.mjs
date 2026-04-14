@@ -91,10 +91,10 @@ await hooksB["tool.execute.before"]({ tool: "task" }, beforeNew);
 assert.equal(beforeNew.args.resume_task_id, "task-new", "later before should use newer continuity task handle");
 assert.equal(beforeNew.args.resume_session_id, "session-new", "later before should use newer continuity session handle");
 
-const core = JSON.parse(await fs.readFile(paths.ORCHESTRATION_CORE_FILE, "utf8"));
-const latest = core.invocations
-  .filter((item) => item.agent_type === "engineer")
-  .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
+const tracker = JSON.parse(await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8"));
+const latest = tracker.invocations
+  .filter((item) => item.agent_type === "engineer" && item.ended_at)
+  .sort((a, b) => Date.parse(b.ended_at) - Date.parse(a.ended_at))[0];
 
 assert.equal(latest.continuity.child_task_id, "task-new", "core state should retain newest child task id");
 assert.equal(latest.continuity.child_session_id, "session-new", "core state should retain newest child session id");
@@ -109,13 +109,8 @@ assert.deepEqual(
   "core state should retain newest resume handles"
 );
 
-const audit = parseJsonl(await fs.readFile(path.join(paths.AUDIT_LOGS_ROOT, "all.jsonl"), "utf8"));
-assert.equal(audit.length > 0, true, "audit log should be inspectable after persistence test");
-
-console.log("[inspect:persistence] orchestration-core");
-console.log(JSON.stringify(core, null, 2));
-console.log("[inspect:persistence] audit-all");
-console.log(JSON.stringify(audit, null, 2));
+console.log("[inspect:persistence] agent-tracker");
+console.log(JSON.stringify(tracker, null, 2));
 
 console.log("e2e run continuity persistence passed");
 

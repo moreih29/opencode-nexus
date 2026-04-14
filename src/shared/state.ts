@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { AgentTrackerSchema, TasksFileSchema, type TaskStatus } from "./schema.js";
-import type { NexusPaths } from "./paths.js";
+import { HARNESS_ID, type NexusPaths } from "./paths.js";
 
 export interface TasksSummary {
   total: number;
@@ -12,8 +12,6 @@ export interface TasksSummary {
 }
 
 export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
-  const now = new Date().toISOString();
-
   await fs.mkdir(paths.NEXUS_ROOT, { recursive: true });
   await fs.mkdir(paths.CONTEXT_ROOT, { recursive: true });
   await fs.mkdir(paths.MEMORY_ROOT, { recursive: true });
@@ -21,15 +19,11 @@ export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
   await fs.mkdir(paths.STATE_ROOT, { recursive: true });
   await fs.mkdir(paths.HARNESS_NAMESPACE_ROOT, { recursive: true });
   await fs.mkdir(paths.ARTIFACTS_ROOT, { recursive: true });
-  await fs.mkdir(paths.AUDIT_LOGS_ROOT, { recursive: true });
 
   await ensureFile(paths.HISTORY_FILE, JSON.stringify({ cycles: [] }, null, 2) + "\n");
-  await ensureFile(
-    paths.ORCHESTRATION_CORE_FILE,
-    JSON.stringify({ schema_version: 1, updated_at: now, invocations: [] }, null, 2) + "\n"
-  );
 
-  await fs.writeFile(paths.AGENT_TRACKER_FILE, "[]\n", "utf8");
+  await resetAgentTracker(paths.AGENT_TRACKER_FILE);
+  await resetToolLog(paths.TOOL_LOG_FILE);
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
@@ -68,19 +62,28 @@ export async function readTasksSummary(tasksFile: string): Promise<TasksSummary 
 }
 
 export async function resetAgentTracker(trackerFile: string): Promise<void> {
-  await fs.writeFile(trackerFile, "[]\n", "utf8");
+  const initial = {
+    harness_id: HARNESS_ID,
+    started_at: new Date().toISOString(),
+    invocations: []
+  };
+  await fs.writeFile(trackerFile, JSON.stringify(initial, null, 2) + "\n", "utf8");
+}
+
+export async function resetToolLog(toolLogFile: string): Promise<void> {
+  await fs.writeFile(toolLogFile, "", "utf8");
 }
 
 export async function validateAgentTracker(trackerFile: string): Promise<void> {
   if (!(await fileExists(trackerFile))) {
-    await fs.writeFile(trackerFile, "[]\n", "utf8");
+    await resetAgentTracker(trackerFile);
     return;
   }
 
   const raw = await fs.readFile(trackerFile, "utf8");
   const parsed = AgentTrackerSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) {
-    await fs.writeFile(trackerFile, "[]\n", "utf8");
+    await resetAgentTracker(trackerFile);
   }
 }
 

@@ -33,7 +33,7 @@ export const nxContext = tool({
     const mergedParticipants = planSidecar
       ? await Promise.all(
           planSidecar.panel.participants.map(async (participant: { role: string; last_summary?: string | null }) => {
-            const coreParticipant = await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, participant.role);
+            const coreParticipant = await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, participant.role);
 
             return {
               role: participant.role,

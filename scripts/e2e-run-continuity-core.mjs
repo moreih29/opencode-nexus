@@ -175,35 +175,24 @@ await inspectState(paths, "core");
 console.log("e2e run continuity core passed");
 
 async function inspectState(paths, label) {
-  const core = JSON.parse(await fs.readFile(paths.ORCHESTRATION_CORE_FILE, "utf8"));
-  const audit = parseJsonl(await fs.readFile(path.join(paths.AUDIT_LOGS_ROOT, "all.jsonl"), "utf8"));
+  const toolLog = await fs.readFile(paths.TOOL_LOG_FILE, "utf8");
   const tracker = JSON.parse(await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8"));
 
-  assert.equal(Array.isArray(core.invocations), true, "orchestration core should be inspectable");
-  assert.equal(audit.length > 0, true, "global audit log should contain entries");
-  assert.equal(Array.isArray(tracker), true, "agent tracker should be inspectable");
+  assert.equal(Array.isArray(tracker.invocations), true, "agent tracker should be inspectable");
+  assert.equal(typeof toolLog, "string", "tool-log file should exist and be readable");
 
-  const injectedAudit = audit.find(
-    (entry) =>
-      entry.kind === "tool.execute.before" &&
-      entry.tool === "task" &&
-      entry.args?.subagent_type === "engineer" &&
-      entry.args?.resume_task_id === "core-task-old" &&
-      entry.args?.resume_session_id === "core-session-old" &&
-      entry.args?.resume_handles?.thread === "thread-old"
+  const injectedInvocation = tracker.invocations.find(
+    (inv) =>
+      inv.agent_type === "engineer" &&
+      inv.continuity?.child_task_id === "core-task-old" &&
+      inv.continuity?.child_session_id === "core-session-old" &&
+      inv.continuity?.resume_handles?.thread === "thread-old"
   );
-  assert.ok(injectedAudit, "audit log should show injected continuity args");
+  assert.ok(injectedInvocation, "agent tracker should have invocation with injected continuity args");
 
-  console.log(`[inspect:${label}] orchestration-core`);
-  console.log(JSON.stringify(core, null, 2));
-  console.log(`[inspect:${label}] audit-all`);
-  console.log(JSON.stringify(audit, null, 2));
+  console.log(`[inspect:${label}] agent-tracker`);
+  console.log(JSON.stringify(tracker, null, 2));
+  console.log(`[inspect:${label}] tool-log`);
+  console.log(toolLog);
 }
 
-function parseJsonl(raw) {
-  return raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
-}

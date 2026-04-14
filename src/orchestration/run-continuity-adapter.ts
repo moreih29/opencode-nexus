@@ -1,6 +1,14 @@
-import type { OrchestrationCoreState } from "../shared/schema.js";
-import { type ContinuitySelection, pickContinuityFromState } from "./core.js";
-import { readOrchestrationCoreState } from "./core-store.js";
+import type { AgentTracker, InvocationContinuityHandles, InvocationLifecycleStatus } from "../shared/schema.js";
+import { pickContinuityFromTrackerState, readAgentTracker } from "../shared/agent-tracker.js";
+
+// Local definition replacing the old ContinuitySelection from orchestration/core.ts.
+export interface ContinuitySelection {
+  invocation_id: string;
+  agent_type: string;
+  coordination_label?: string;
+  status: InvocationLifecycleStatus;
+  continuity: InvocationContinuityHandles;
+}
 
 export interface RunContinuityQuery {
   agent_type: string;
@@ -22,12 +30,15 @@ export async function selectRunContinuityFromCore(
   coreFilePath: string,
   query: RunContinuityQuery
 ): Promise<RunContinuitySelection | null> {
-  const state = await readOrchestrationCoreState(coreFilePath);
-  return selectRunContinuityFromState(state, query);
+  const tracker = await readAgentTracker(coreFilePath);
+  return selectRunContinuityFromState(tracker, query);
 }
 
+// Alias for consumers that prefer the tracker-oriented name.
+export const selectRunContinuityFromTracker = selectRunContinuityFromCore;
+
 export function selectRunContinuityFromState(
-  state: OrchestrationCoreState,
+  tracker: AgentTracker,
   query: RunContinuityQuery
 ): RunContinuitySelection | null {
   const normalizedAgentType = normalizeRequired(query.agent_type);
@@ -37,7 +48,7 @@ export function selectRunContinuityFromState(
 
   const normalizedLabel = normalizeOptional(query.coordination_label);
   if (normalizedLabel) {
-    const matchedByLabel = pickContinuityFromState(state, {
+    const matchedByLabel = pickContinuitySelectionFromTracker(tracker, {
       agent_type: normalizedAgentType,
       coordination_label: normalizedLabel,
       prefer_running: true
@@ -50,7 +61,7 @@ export function selectRunContinuityFromState(
     }
   }
 
-  const matchedByAgent = pickContinuityFromState(state, {
+  const matchedByAgent = pickContinuitySelectionFromTracker(tracker, {
     agent_type: normalizedAgentType,
     prefer_running: true
   });
@@ -96,6 +107,54 @@ export function injectMissingRunResumeArgs(
   }
 
   return nextArgs;
+}
+
+function pickContinuitySelectionFromTracker(
+  tracker: AgentTracker,
+  query: { agent_type?: string; coordination_label?: string; prefer_running?: boolean }
+): ContinuitySelection | null {
+  const continuity = pickContinuityFromTrackerState(tracker, query);
+  if (!continuity) {
+    return null;
+  }
+
+  const normalizedAgentType = query.agent_type?.toLowerCase();
+  const normalizedLabel = query.coordination_label;
+  const preferRunning = query.prefer_running ?? true;
+
+  const candidates = tracker.invocations.filter((item) => {
+    if (normalizedAgentType && item.agent_type.toLowerCase() !== normalizedAgentType) {
+      return false;
+    }
+    if (normalizedLabel && item.coordination_label !== normalizedLabel) {
+      return false;
+    }
+    return item.continuity != null;
+  });
+
+  candidates.sort((left, right) => {
+    const leftRunning = left.status === "running" ? 1 : 0;
+    const rightRunning = right.status === "running" ? 1 : 0;
+    if (preferRunning && leftRunning !== rightRunning) {
+      return rightRunning - leftRunning;
+    }
+    const leftTs = Date.parse(left.ended_at ?? left.updated_at ?? left.started_at);
+    const rightTs = Date.parse(right.ended_at ?? right.updated_at ?? right.started_at);
+    return (Number.isFinite(rightTs) ? rightTs : -1) - (Number.isFinite(leftTs) ? leftTs : -1);
+  });
+
+  const selected = candidates[0];
+  if (!selected) {
+    return null;
+  }
+
+  return {
+    invocation_id: selected.invocation_id,
+    agent_type: selected.agent_type,
+    coordination_label: selected.coordination_label,
+    status: selected.status,
+    continuity: continuity
+  };
 }
 
 function isSelectionEnvelope(

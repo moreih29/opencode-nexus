@@ -200,7 +200,7 @@ async function readJson(filePath) {
 }
 
 async function logState(label, paths) {
-  const core = await readJson(paths.ORCHESTRATION_CORE_FILE);
+  const core = await readJson(paths.AGENT_TRACKER_FILE);
   const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
   console.log(`[inspect:${label}] orchestration-core`);
   console.log(JSON.stringify(core, null, 2));

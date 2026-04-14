@@ -4,19 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { createNexusPaths } from "../dist/shared/paths.js";
 
-const corePath = "../dist/orchestration/core.js";
-const storePath = "../dist/orchestration/core-store.js";
-const core = await import(new URL(corePath, import.meta.url).href);
-const store = await import(new URL(storePath, import.meta.url).href);
+const trackerPath = "../dist/shared/agent-tracker.js";
+const core = await import(new URL(trackerPath, import.meta.url).href);
 
-assert.equal(typeof core.applyRegisterStart, "function", "core must export applyRegisterStart");
-assert.equal(typeof core.applyRegisterEnd, "function", "core must export applyRegisterEnd");
-assert.equal(typeof core.pickContinuityFromState, "function", "core must export pickContinuityFromState");
+assert.equal(typeof core.applyInvocationStart, "function", "core must export applyInvocationStart");
+assert.equal(typeof core.applyInvocationEnd, "function", "core must export applyInvocationEnd");
+assert.equal(typeof core.pickContinuityFromTrackerState, "function", "core must export pickContinuityFromTrackerState");
 
-const writeState =
-  store.writeOrchestrationCoreState ?? core.writeOrchestrationState ?? core.writeOrchestrationCoreState ?? null;
-const readState = store.readOrchestrationCoreState ?? core.readOrchestrationState ?? core.readOrchestrationCoreState ?? null;
-const createState = store.createEmptyOrchestrationCoreState ?? core.createEmptyOrchestrationCoreState ?? null;
+const writeState = core.writeAgentTracker ?? null;
+const readState = core.readAgentTracker ?? null;
+const createState = core.createEmptyAgentTracker ?? null;
 
 assert.equal(typeof writeState, "function", "persistence write helper must be available");
 assert.equal(typeof readState, "function", "persistence read helper must be available");
@@ -28,13 +25,13 @@ await fs.writeFile(path.join(root, ".git", "HEAD"), "ref: refs/heads/test\n", "u
 
 const nexusPaths = createNexusPaths(root);
 assert.equal(
-  nexusPaths.ORCHESTRATION_CORE_FILE,
-  path.join(root, ".nexus", "state", "opencode-nexus", "orchestration.json"),
-  "canonical orchestration state path should be .nexus/state/opencode-nexus/orchestration.json"
+  nexusPaths.AGENT_TRACKER_FILE,
+  path.join(root, ".nexus", "state", "opencode-nexus", "agent-tracker.json"),
+  "canonical agent tracker state path should be .nexus/state/opencode-nexus/agent-tracker.json"
 );
 
 let state = createState("2026-04-02T00:00:00.000Z");
-state = core.applyRegisterStart(
+state = core.applyInvocationStart(
   state,
   {
     invocation_id: "persist-invocation",
@@ -43,11 +40,11 @@ state = core.applyRegisterStart(
     purpose: "persist-case"
   },
   "2026-04-02T00:00:01.000Z"
-).nextState;
-state = core.applyRegisterEnd(
+);
+state = core.applyInvocationEnd(
   state,
+  "persist-invocation",
   {
-    invocation_id: "persist-invocation",
     status: "completed",
     runtime_metadata: {
       task_id: "task-persist",
@@ -61,35 +58,35 @@ state = core.applyRegisterEnd(
     }
   },
   "2026-04-02T00:00:02.000Z"
-).nextState;
+);
 
-const file = path.join(root, "orchestration-core-state.json");
+const file = path.join(root, "agent-tracker.json");
 await writeState(file, state);
 const restored = await readState(file);
 
-const selected = core.pickContinuityFromState(restored, {
+const selected = core.pickContinuityFromTrackerState(restored, {
   agent_type: "architect",
   coordination_label: "persist-team"
 });
 
-const taskID = selected?.continuity?.child_task_id ?? null;
-const sessionID = selected?.continuity?.child_session_id ?? null;
+const taskID = selected?.child_task_id ?? null;
+const sessionID = selected?.child_session_id ?? null;
 
 assert.equal(taskID, "task-persist", "persisted state should retain resumable task handle");
 assert.equal(sessionID, "ses-persist", "persisted state should retain resumable session handle");
 
 assert.equal(
-  selected?.continuity?.resume_task_id,
+  selected?.resume_task_id,
   "resume-task-persist",
   "persisted state should retain resume task handle"
 );
 assert.equal(
-  selected?.continuity?.resume_session_id,
+  selected?.resume_session_id,
   "resume-ses-persist",
   "persisted state should retain resume session handle"
 );
 assert.deepEqual(
-  selected?.continuity?.resume_handles,
+  selected?.resume_handles,
   {
     ticket: "persist-ticket",
     cursor: "persist-cursor"
@@ -97,7 +94,7 @@ assert.deepEqual(
   "persisted state should retain resume handles"
 );
 
-const plan = core.buildDelegationPlanFromState(restored, {
+const plan = core.buildDelegationPlanFromTracker(restored, {
   agent_type: "architect",
   coordination_label: "persist-team",
   purpose: "resume persisted"
@@ -111,4 +108,4 @@ assert.deepEqual(
   "delegation plan should preserve persisted resume handles"
 );
 
-console.log(`e2e orchestration core persistence passed (${storePath})`);
+console.log(`e2e orchestration core persistence passed (${trackerPath})`);

@@ -5814,6 +5814,328 @@
           "created_at": "2026-04-14T07:06:32.715Z"
         }
       ]
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T09:10:52.320Z",
+      "branch": "refactor/nexus-spec-alignment",
+      "plan": {
+        "id": 31,
+        "topic": "nexus-core 최신 스펙 반영 — agent-tracker 네임스페이스 이동 + orchestration 통합 + audit→tool-log 전환",
+        "issues": [
+          {
+            "id": 1,
+            "title": "nexus-core 최신 스펙 정합 (agent-tracker 경로/스키마, orchestration.json 통합, audit→tool-log 전환, conformance validator 정합)",
+            "status": "decided",
+            "decision": "전체 refactor를 **단일 이슈로 묶어** 일괄 처리. 핵심 결정 6가지:\n\n**결정 1 — agent-tracker.json 경로 이동**:\n`.nexus/state/agent-tracker.json` → `.nexus/state/opencode-nexus/agent-tracker.json` (nexus-core 스펙 준수, shared-purpose file)\n\n**결정 2 — orchestration.json 폐기 + 데이터 통합**:\n`.nexus/state/opencode-nexus/orchestration.json` 파일 제거. 모든 invocation 데이터(현재 orchestration.json의 invocations[])를 agent-tracker.json의 optional `invocations` 필드(harness-defined extension)로 이관. src/orchestration/core-store.ts는 agent-tracker.json 기반으로 재작성.\n\n**결정 3 — agent-tracker.json 스키마**:\n```json\n{\n  \"harness_id\": \"opencode-nexus\",      // required\n  \"started_at\": \"ISO8601\",              // required\n  \"invocations\": [                      // optional, harness extension\n    {\n      \"invocation_id\", \"agent_type\", \"status\",\n      \"coordination_label\", \"purpose\", \"continuity\",\n      \"started_at\", \"updated_at\", \"ended_at\",\n      \"last_message\",\n      \"files_touched\": [\"...\"]          // NEW, tool-log 집계\n    }\n  ]\n}\n```\n\n**결정 4 — audit → tool-log 전환**:\n- `.nexus/state/opencode-nexus/audit/` 전체 구조 제거 (sessions/<sid>/*.jsonl, all.jsonl)\n- `.nexus/state/opencode-nexus/tool-log.jsonl` 신규 (flat append)\n- 쓰기: `hooks.ts`의 `tool.execute.after`에서 file-editing 도구(write/edit/patch/multiedit) 호출 완료 시 `{agent_id, file, tool, at}` append\n- 세션 시작 시 reset (빈 파일로)\n- `src/shared/audit-log.ts` 삭제 후 `src/shared/tool-log.ts` 신규 (appendToolLog + readToolLog)\n- `paths.ts`: `AUDIT_LOGS_ROOT` 제거, `TOOL_LOG_FILE` 추가\n\n**결정 5 — files_touched 집계 메커니즘**:\nsubagent 완료 시점(`tool.execute.after`가 task tool 완료 이벤트 수신) 또는 `markLatestTeamCompleted` 내부에서 tool-log.jsonl 파싱 → `agent_id === <current_child_session_id>`인 entry의 file 필드 Set → agent-tracker.json invocations의 해당 invocation_id entry에 `files_touched` 업데이트. claude-nexus gate.ts:583-604 패턴 참조.\n\n**결정 6 — agent-tracker lifecycle**:\n- Session start(opencode `event` 훅 `session.created`): hooks.ts가 `{harness_id, started_at, invocations:[]}`로 초기화 쓰기. 현재 `resetAgentTracker([])` → 새 스키마 초기화 함수로 교체.\n- Session end: opencode에 명시적 SessionEnd 훅 있으면 해당 훅에서 삭제. 없으면 다음 session.created 시 덮어쓰기로 effective하게 처리.\n\n**부가 결정**:\n- Agent_id 형식: 현재 opencode `${agentType}-${Date.now()}` 합성 ID를 유지. child_session_id가 있으면 그걸 우선 사용 (opencode task tool resume 연계).\n- .gitignore 확인: `.nexus/state/opencode-nexus/` 하위 agent-tracker.json, tool-log.jsonl 모두 git-tracked No 보장.\n- state-schemas/: `orchestration.schema.json`, `audit-log.schema.json` 제거. `agent-tracker.extension.schema.json` 추가 (harness extension 필드 검증).\n\n**실행 계획**:\n- T1 architect: 상세 설계 검토 + scheme/lifecycle/집계 타이밍 확정 (architect가 implementation 전 validation)\n- T2 engineer: 통합 구현\n- T3 tester: build + check + e2e + conformance 검증\n\nRejected — **옵션 B (agent-tracker.extension.json 분리)**: outputs-contract가 harness-defined extension fields를 agent-tracker 본체에 optional로 두는 것을 허용하므로 별도 extension 파일은 redundant. Option A(통합)가 파일 수 최소화 + claude-nexus의 single agent-tracker.json 패턴과 대칭.\n\nRejected — **옵션: audit 유지 + tool-log 병행**: 두 구조가 같은 정보를 중복 기록. audit는 거의 read-only debugging용인데 tool-log로 대체하면 동일한 debugging도 가능. 단일 소스가 깔끔.",
+            "how_agents": [
+              "lead"
+            ],
+            "how_summary": {
+              "lead": "nexus-core CONSUMING.md + outputs-contract + state-overview 직접 확인 후 스펙 양도화. agent-tracker는 shared-purpose file로 화인녀임스페이스 내 배치, 스키마는 required 2필드 + harness extension 허용. orchestration.json은 스펙에 없는 파일로, 데이터를 agent-tracker의 optional invocations 필드로 통합. audit은 write-only debugging으로 거의 dead이므로 tool-log.jsonl 단일 파일로 대체. claude-nexus 패턴(gate.ts:583-604) 참조."
+            }
+          }
+        ],
+        "research_summary": "nexus-core의 최신 CONSUMING.md + docs/nexus-outputs-contract.md + docs/nexus-state-overview.md 확인 결과.\n\n**핵심 스펙**:\n\n1. **agent-tracker.json 위치**: `.nexus/state/{harness-id}/agent-tracker.json` (harness 네임스페이스 안, shared-purpose file). 현재 opencode-nexus는 `.nexus/state/agent-tracker.json` (루트)에 두어 위반.\n\n2. **agent-tracker 스키마** (state-overview): Required `{harness_id, started_at}` + Optional `{agent_id, tasks, artifacts, harness 확장 필드}`. agent_id는 harness-scoped opaque string (cross-harness parse 금지).\n\n3. **Lifecycle**: Session start에서 harness hook이 생성, session end에서 삭제. MCP tool은 write 안 함.\n\n4. **4 파일 유형 분류** (outputs-contract):\n   - 공통 state: `.nexus/state/{name}.json` (plan/tasks/history) — nexus-core tool write\n   - shared-purpose: `.nexus/state/{harness-id}/{shared-base}.json` (agent-tracker) — harness hook write, nexus-core schema\n   - 하네스 extension: `.nexus/state/{harness-id}/{base}.extension.json` (plan.extension)\n   - 하네스 독립 파일: `.nexus/state/{harness-id}/{any}.json`\n\n5. **Prohibited**:\n   - `.nexus/state/` 루트에 신규 하네스 파일 금지\n   - `{harness-id}/` 하위에서 공통 스키마 파일명 재사용 금지 (plan/tasks/history)\n   - agent-tracker는 shared-purpose로 예외 허용\n\n6. **Legacy carve-out**: v0.3.x 이하 `edit-tracker.json`, `reopen-tracker.json` 루트 위치는 backward-compat로 허용. 신규 파일은 예외 금지. (이전 cleanup에서 reopen-tracker 제거했으므로 현재 불필요)\n\n7. **Git-tracked**: session-scoped(`plan/tasks/agent-tracker/artifacts`) MUST NOT git-tracked.\n\n**현재 opencode-nexus 상태**:\n- `.nexus/state/agent-tracker.json` (루트, 영구 `[]` — 실사용 없음)\n- `.nexus/state/opencode-nexus/orchestration.json` (하네스 고유, invocations 배열)\n- `.nexus/state/opencode-nexus/plan.extension.json` (이미 정합)\n- `.nexus/state/opencode-nexus/audit/sessions/<sid>/session.jsonl`, `all.jsonl` (write-only)\n- paths.ts에 `AGENT_TRACKER_FILE`, `ORCHESTRATION_CORE_FILE`, `AUDIT_LOGS_ROOT` 정의\n- src/shared/agent-tracker.ts (team_name 기반 tracking — 실사용 없음)\n- src/orchestration/core.ts, core-store.ts (invocation 기록/조회)\n\n**claude-nexus 참조 패턴**:\n- `.nexus/state/claude-nexus/tool-log.jsonl` — flat append jsonl, PostToolUse 이벤트별 `{agent_id, file, ...}` 기록\n- `.nexus/state/claude-nexus/agent-tracker.json` — SubagentStop 시 tool-log를 파싱하여 agent_id별 `files_touched` Set 집계\n\n**사용자 지시 요약**:\n1. nexus-core 업데이트 방향에 맞춰 agent-tracker를 네임스페이스로 이동 + 현재 orchestration.json 데이터를 agent-tracker(.extension)에 이관\n2. audit 개념 폐기 → tool-log.jsonl 단일 파일로 전환 (claude-nexus 패턴)\n\n**구현 결정 포인트**:\n- orchestration.json 데이터(invocations[{agent_type, child_session_id, coordination_label, purpose, continuity 등}])를 agent-tracker.json optional 필드로 재매핑 방식: \n  - Option A: agent-tracker.json의 최상위 `invocations: [...]` optional field로 그대로 유지\n  - Option B: agent-tracker.json은 required field만 (harness_id, started_at) + orchestration 데이터는 `agent-tracker.extension.json`으로 분리\n- audit 전환: 기존 `audit/sessions/<sid>/*.jsonl` 구조 제거 → `.nexus/state/opencode-nexus/tool-log.jsonl` (flat, session 시작 시 reset)\n- files_touched 집계: subagent 완료 시점(tool.execute.after의 task tool 또는 markLatestTeamCompleted)에 tool-log 파싱 → agent-tracker의 해당 entry에 기록\n\n**conformance validator**:\n- `package.json`의 `validate:conformance` 스크립트 이미 존재 (scripts/validate-conformance.mjs). nexus-core의 conformance-coverage.ts와 어떻게 맞물리는지 구현 단계에서 확인.",
+        "created_at": "2026-04-14T08:21:36.654Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "T0 — Finalize schema.ts (Stage 0)",
+          "context": "AgentTracker/Invocation 스키마 최종화. 기존 OrchestrationInvocation* 타입/스키마 제거.",
+          "approach": "src/shared/schema.ts: (a) OrchestrationInvocationSchema, OrchestrationCoreStateSchema 및 관련 type export 삭제. (b) InvocationSchema, AgentTrackerSchema, InvocationContinuitySchema, InvocationContinuityHandlesSchema, InvocationLifecycleStatusSchema 유지/완성. (c) InvocationSchema에 §1.2의 모든 필드 포함 (invocation_id, agent_id, agent_type, coordination_label?, purpose?, status, started_at, updated_at?, ended_at?, resume_count?, last_resumed_at?, last_message?, stopped_at?, continuity?, files_touched?). 참고: .nexus/state/artifacts/state-refactor-design.md §1, §6.1.",
+          "acceptance": "tsc --noEmit src/shared/schema.ts clean; OrchestrationInvocation* export 0건",
+          "status": "pending",
+          "deps": [],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:00.000Z"
+        },
+        {
+          "id": 2,
+          "title": "T1 — Rewrite agent-tracker.ts (Stage 1)",
+          "context": "Array-of-items API를 AgentTracker object API로 재작성. orchestration core의 continuity 로직 흡수.",
+          "approach": "src/shared/agent-tracker.ts 재작성: readAgentTracker, writeAgentTracker, registerInvocationStart, registerInvocationEnd, applyInvocationStart, applyInvocationEnd, pickContinuityFromTrackerState, pickContinuityFromTracker, buildDelegationPlanFromTracker, getInvocation, listGroupState, extractObservedContinuity, mergeContinuity, hasContinuity, summarizeCoordinationGroups, hasRunningTeam, createEmptyAgentTracker. fingerprint matching(buildSubagentFingerprint) resume 보존. 참고: artifact §6.2 T1.",
+          "acceptance": "파일 standalone 컴파일 (mock unused); §5.1 export 일치",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:01.000Z"
+        },
+        {
+          "id": 3,
+          "title": "T2 — Fix state.ts (Stage 1, 병렬)",
+          "context": "AUDIT_LOGS_ROOT mkdir 제거, 새 tracker object 초기화, tool-log 초기화 helper 추가.",
+          "approach": "src/shared/state.ts: (a) fs.mkdir(paths.AUDIT_LOGS_ROOT) 제거; (b) paths.ORCHESTRATION_CORE_FILE ensure 블록 제거; (c) resetAgentTracker(trackerFile)이 {harness_id: HARNESS_ID, started_at: ISO, invocations: []} 쓰기 (HARNESS_ID import); (d) NEW resetToolLog(toolLogFile) 빈 문자열 쓰기; (e) validateAgentTracker가 object schema parse; (f) ensureNexusStructure가 resetAgentTracker + resetToolLog 호출 (T6과 경계 확인). 참고: §6.2 T2.",
+          "acceptance": "tsc --noEmit src/shared/state.ts clean",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:02.000Z"
+        },
+        {
+          "id": 4,
+          "title": "T3 — paths.ts: drop ORCHESTRATION_CORE_FILE (Stage 1, 병렬)",
+          "context": "paths.ts에서 ORCHESTRATION_CORE_FILE 제거.",
+          "approach": "src/shared/paths.ts에서 ORCHESTRATION_CORE_FILE 라인 삭제. AGENT_TRACKER_FILE, TOOL_LOG_FILE 등 나머지는 유지. NexusPaths type에서 해당 키 제거. 참고: §6.2 T3.",
+          "acceptance": "type NexusPaths에 ORCHESTRATION_CORE_FILE 없음",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:03.000Z"
+        },
+        {
+          "id": 5,
+          "title": "T4 — Delete audit-log.ts (Stage 1, 병렬)",
+          "context": "src/shared/audit-log.ts 파일 삭제.",
+          "approach": "Read+confirm 후 src/shared/audit-log.ts 삭제. T6에서 imports 제거됨. 참고: §6.2 T4.",
+          "acceptance": "파일 absent",
+          "status": "pending",
+          "deps": [
+            1
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:04.000Z"
+        },
+        {
+          "id": 6,
+          "title": "T5 — Delete orchestration/core.ts + core-store.ts (Stage 1, 병렬)",
+          "context": "두 파일 삭제. continuity 로직은 T1(agent-tracker.ts)이 흡수.",
+          "approach": "src/orchestration/core.ts, src/orchestration/core-store.ts 삭제. delegation.ts, team-policy.ts는 의존성 없음(검증 완료, §6.2 T5). 참고: §6.2 T5.",
+          "acceptance": "두 파일 absent",
+          "status": "pending",
+          "deps": [
+            1,
+            2
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:05.000Z"
+        },
+        {
+          "id": 7,
+          "title": "T6 — Rewrite hooks.ts (Stage 2, 단독)",
+          "context": "audit 호출 제거, tool-log 배선, agent-tracker 라우팅. 큰 파일(1020 lines), 단독 owner stage. ★위험 가장 큼.",
+          "approach": "src/plugin/hooks.ts: (a) audit imports + writeAuditEntry helper(line 732-742) 제거; (b) appendAgentTracker/markLatestTeamCompleted/hasRunningTeam → registerInvocationStart/End/hasRunningTeam로 교체; (c) 4 call sites in updatePlanParticipantContinuity(L476-492) + updateRunParticipantContinuity(L521-537)에서 paths.AGENT_TRACKER_FILE 사용; (d) selectRunContinuityFromCore + readPlanParticipantContinuityFromCore 경로 인자 변경; (e) event 훅(L125-142): session.created에서 resetAgentTracker + resetToolLog 호출; (f) tool.execute.before(L144-215): writeAuditEntry 제거, trackSubagentStart(L437-456) → 인라인 registerInvocationStart; (g) tool.execute.after(L217-274): writeAuditEntry 제거, task tool 시 registerInvocationEnd + files_touched 집계, non-task의 file-editing tool은 TOOL_LOG_FILE append; (h) experimental.session.compacting(L354) tracker.invocations 사용; (i) Section 4의 files_touched 집계를 tool.execute.after(tool=='task')에서; (j) registerSubagentInvocation/resolveSubagentInvocation/buildSubagentFingerprint는 local helper로 유지(in-memory map). ★ scope checklist는 §6.3 T6 참고. 탐색적 edit 금지, 무관 함수(buildStatefulNotice 등) 접근 금지.",
+          "acceptance": "tsc --noEmit src/plugin/hooks.ts clean; 7개 hook trace로 audit 호출 0건 확인",
+          "status": "pending",
+          "deps": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:06.000Z"
+        },
+        {
+          "id": 8,
+          "title": "T7 — Update tools/context.ts (Stage 3, 병렬)",
+          "context": "context tool에서 ORCHESTRATION_CORE_FILE → AGENT_TRACKER_FILE 참조 교체.",
+          "approach": "src/tools/context.ts: paths.ORCHESTRATION_CORE_FILE → paths.AGENT_TRACKER_FILE (line 36 등). readPlanParticipantContinuityFromCore 호출은 T9의 새 어댑터(시그니처 동일) 사용. nxContext 출력 schema 불변. 참고: §6.4 T7.",
+          "acceptance": "tsc --noEmit src/tools/context.ts clean; nxContext output 동일",
+          "status": "pending",
+          "deps": [
+            7,
+            10
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:07.000Z"
+        },
+        {
+          "id": 9,
+          "title": "T8 — Update tools/plan.ts (Stage 3, 병렬)",
+          "context": "plan tool에서 ORCHESTRATION_CORE_FILE → AGENT_TRACKER_FILE 참조 교체.",
+          "approach": "src/tools/plan.ts: paths.ORCHESTRATION_CORE_FILE → paths.AGENT_TRACKER_FILE (3 call sites: lines 78, 123, 165). T9 어댑터 시그니처 동일. nxPlanResume/nxPlanFollowup output 불변. 참고: §6.4 T8.",
+          "acceptance": "tsc --noEmit clean; nxPlanResume/Followup output 동일",
+          "status": "pending",
+          "deps": [
+            7,
+            10
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:08.000Z"
+        },
+        {
+          "id": 10,
+          "title": "T9 — Update orchestration adapters (Stage 3, 병렬)",
+          "context": "plan/run continuity adapter를 agent-tracker 기반으로 전환. 시그니처 보존.",
+          "approach": "src/orchestration/plan-continuity-adapter.ts + src/orchestration/run-continuity-adapter.ts: imports를 ./core-store.js + ./core.js → ../shared/agent-tracker.js로. readOrchestrationCoreState → readAgentTracker. pickContinuityFromState → pickContinuityFromTrackerState. 공개 함수 (selectRunContinuityFromCore, buildRunContinuityAdapterHints, injectMissingRunResumeArgs, readPlanParticipantContinuityFromCore, buildPlanContinuityAdapterHints, injectMissingPlanResumeArgs) 시그니처 유지. *FromCore → *FromTracker 변경 시 alias export로 호환. 참고: §6.4 T9.",
+          "acceptance": "tsc --noEmit src/orchestration/* clean; 기존 export 보존(또는 alias)",
+          "status": "pending",
+          "deps": [
+            2,
+            7
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:09.000Z"
+        },
+        {
+          "id": 11,
+          "title": "T10 — e2e-orchestration-core.mjs migration (Stage 4, 병렬)",
+          "context": "e2e-orchestration-core를 agent-tracker 기반으로 갱신.",
+          "approach": "scripts/e2e-orchestration-core.mjs: imports를 dist/orchestration/core.js → dist/shared/agent-tracker.js로 변경. applyRegisterStart/End → applyInvocationStart/End. pickContinuityFromState → pickContinuityFromTrackerState. createEmptyOrchestrationCoreState → createEmptyAgentTracker. shape: {harness_id, started_at, invocations}. 파일명 e2e-agent-tracker-core.mjs로 rename 권장. 참고: §6.5 T10.",
+          "acceptance": "스크립트 PASS",
+          "status": "pending",
+          "deps": [
+            2,
+            7
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:10.000Z"
+        },
+        {
+          "id": 12,
+          "title": "T11 — e2e-orchestration-core-persistence.mjs migration (Stage 4, 병렬)",
+          "context": "persistence test agent-tracker 기반으로 갱신.",
+          "approach": "scripts/e2e-orchestration-core-persistence.mjs: nexusPaths.ORCHESTRATION_CORE_FILE → nexusPaths.AGENT_TRACKER_FILE (line 31-34). path는 .nexus/state/opencode-nexus/agent-tracker.json. applyRegister* rename. 로컬 fixture 파일명 orchestration-core-state.json → agent-tracker.json. 참고: §6.5 T11.",
+          "acceptance": "PASS",
+          "status": "pending",
+          "deps": [
+            2,
+            7
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:11.000Z"
+        },
+        {
+          "id": 13,
+          "title": "T12 — e2e-plan-continuity-core.mjs migration (Stage 4, 병렬)",
+          "context": "plan-continuity-core e2e 갱신.",
+          "approach": "scripts/e2e-plan-continuity-core.mjs: paths.ORCHESTRATION_CORE_FILE (line 203) → paths.AGENT_TRACKER_FILE. logState 구조가 {harness_id, started_at, invocations} 객체. 구조적 assertion 업데이트. 참고: §6.5 T12.",
+          "acceptance": "PASS",
+          "status": "pending",
+          "deps": [
+            2,
+            7,
+            10
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:12.000Z"
+        },
+        {
+          "id": 14,
+          "title": "T13 — e2e-run-continuity-core.mjs migration (Stage 4, 병렬)",
+          "context": "run-continuity-core e2e 갱신, audit 제거.",
+          "approach": "scripts/e2e-run-continuity-core.mjs: (a) paths.ORCHESTRATION_CORE_FILE (line 178) → paths.AGENT_TRACKER_FILE; (b) paths.AUDIT_LOGS_ROOT 참조(line 179) DROP — 대체로 paths.TOOL_LOG_FILE 파싱 또는 invocation continuity 체크; (c) tracker shape 변경: assert.equal(Array.isArray(tracker), true) → assert.equal(Array.isArray(tracker.invocations), true) (line 184); (d) injectedAudit 블록(L186-195)을 tool-log 존재 체크 또는 invocation 검증으로 교체. 참고: §6.5 T13.",
+          "acceptance": "PASS",
+          "status": "pending",
+          "deps": [
+            2,
+            7
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:13.000Z"
+        },
+        {
+          "id": 15,
+          "title": "T14 — e2e-run-continuity-persistence.mjs migration (Stage 4, 병렬)",
+          "context": "T13과 같은 패턴, persistence 버전.",
+          "approach": "scripts/e2e-run-continuity-persistence.mjs: 동일 패턴. lines 94-110 paths 교체, lines 112-113 AUDIT_LOGS_ROOT 제거. 'core' 변수 rename(가독성). 참고: §6.5 T14.",
+          "acceptance": "PASS",
+          "status": "pending",
+          "deps": [
+            2,
+            7
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:14.000Z"
+        },
+        {
+          "id": 16,
+          "title": "T15 — e2e-plan-resume-inject.mjs migration (Stage 4, 병렬)",
+          "context": "fixture를 새 agent-tracker shape으로 갱신.",
+          "approach": "scripts/e2e-plan-resume-inject.mjs: on-disk fixture (lines 130-148) shape 변경 — {harness_id: 'opencode-nexus', started_at, invocations: [...]}. 로컬 fixture 파일명 orchestration.json → agent-tracker.json. 9 unit cases 자체는 변경 없음. 참고: §6.5 T15.",
+          "acceptance": "9/9 cases PASS",
+          "status": "pending",
+          "deps": [
+            10
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:15.000Z"
+        },
+        {
+          "id": 17,
+          "title": "T16 — e2e-orchestration-filename-migration.mjs (Stage 4, Lead confirm 후)",
+          "context": "Legacy migration 검증 — 권고: DELETE.",
+          "approach": "scripts/e2e-orchestration-filename-migration.mjs: legacy orchestration-core.v1.json → orchestration.json migration 검증. agent-tracker로 완전 전환되므로 폐기 권고. **Lead가 최종 confirm 후 git rm**. 변환 옵션은 무시. 참고: §6.5 T16. **Architect Planning Gate condition: Lead 최종 confirm 필수**.",
+          "acceptance": "파일 deleted (또는 converted)",
+          "status": "pending",
+          "deps": [
+            7
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:16.000Z"
+        },
+        {
+          "id": 18,
+          "title": "T17 — e2e-lifecycle.mjs sanity (Stage 4, 병렬)",
+          "context": "ensureNexusStructure 변경 영향 확인 — 변경 없을 가능성.",
+          "approach": "scripts/e2e-lifecycle.mjs: AUDIT_LOGS_ROOT 또는 ORCHESTRATION_CORE_FILE 참조 확인(설계 시점 grep 결과 0). 변경 없을 가능성 높음. T2 ensureNexusStructure 변경의 backward compatibility 확인. 참고: §6.5 T17.",
+          "acceptance": "PASS unchanged (또는 minimal edit 후 PASS)",
+          "status": "pending",
+          "deps": [
+            3
+          ],
+          "plan_issue": 1,
+          "owner": "engineer",
+          "created_at": "2026-04-14T08:50:17.000Z"
+        },
+        {
+          "id": 19,
+          "title": "T18 — Validation: smoke + memory update (Stage 5)",
+          "context": "전체 검증 + 메모리 업데이트.",
+          "approach": "(a) bun run check + bun run build + bun run test:e2e (전체 스위트); (b) bun scripts/smoke-opencode-run.mjs all 또는 핵심 group; (c) .nexus/memory/audit-log-schema.md 삭제 또는 tool-log-schema.md로 교체 (artifact §1.2, §1.3에서 복사하여 ~80줄). 참고: §6.6 T18.",
+          "acceptance": "전체 suite green; memory file 교체 완료",
+          "status": "pending",
+          "deps": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "plan_issue": 1,
+          "owner": "tester",
+          "created_at": "2026-04-14T08:50:18.000Z"
+        }
+      ]
     }
   ],
   "schema_version": "0.5"

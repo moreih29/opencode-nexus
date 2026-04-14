@@ -75,7 +75,7 @@ export const nxPlanStatus = tool({
           sidecar.panel.participants.map(async (item) =>
             mergeParticipantContinuity(
               item.role,
-              await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, item.role),
+              await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, item.role),
               {
                 role: item.role,
                 task_id: item.task_id ?? null,
@@ -120,7 +120,7 @@ export const nxPlanResume = tool({
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
+    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, args.role);
     const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
     const sidecarParticipant = pickParticipantFromSidecar(sidecar, args.role);
     if (!coreParticipant && !sidecar) {
@@ -162,7 +162,7 @@ export const nxPlanFollowup = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
-    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, args.role);
+    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, args.role);
     const plan = await readCanonicalFollowupPlan(paths.PLAN_FILE);
     const participant = mergeParticipantContinuity(args.role, coreParticipant, pickParticipantFromSidecar(sidecar, args.role));
     const recommendation = buildResumeRecommendation(participant ?? { role: args.role }, args.question);

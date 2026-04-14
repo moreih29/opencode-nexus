@@ -2,7 +2,6 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { AGENT_META } from "../agents/generated/index.js";
 import { NO_FILE_EDIT_TOOLS } from "../agents/prompts.js";
-import { registerEnd, registerStart } from "../orchestration/core.js";
 import {
   buildRunContinuityAdapterHints,
   injectMissingRunResumeArgs,
@@ -17,11 +16,11 @@ import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pip
 import { isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
 import { SKILL_META } from "../skills/prompts.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
-import { appendAgentTracker, hasRunningTeam, markLatestTeamCompleted } from "../shared/agent-tracker.js";
-import { appendGlobalAuditLog, appendSessionAuditLog, appendSubagentAuditLog, toAuditRecord } from "../shared/audit-log.js";
+import { readAgentTracker, registerInvocationEnd, registerInvocationStart, writeAgentTracker } from "../shared/agent-tracker.js";
 import { loadCanonicalPlan, syncPlanSidecar } from "../shared/plan-sidecar.js";
-import { createNexusPaths, isNexusInternalPath, HARNESS_ID } from "../shared/paths.js";
+import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
+import { aggregateFilesForAgent, appendToolLogEntry, resetToolLog } from "../shared/tool-log.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
 import { buildNexusSystemPrompt } from "./system-prompt.js";
 import type { NexusPluginState } from "../plugin-state.js";
@@ -123,16 +122,10 @@ export function createHooks(ctx: PluginContext) {
 
   return {
     event: async ({ event }: { event: { type: string } }) => {
-      await writeAuditEntry(paths, {
-        kind: "event",
-        event_type: event.type,
-        session_id: pickSessionID(event),
-        payload: toAuditRecord(event)
-      });
-
       if (event.type === "session.created") {
         await ensureNexusStructure(paths);
         await resetAgentTracker(paths.AGENT_TRACKER_FILE);
+        await resetToolLog(paths.TOOL_LOG_FILE);
         try {
           await syncAgentsMdTemplate(paths.PROJECT_ROOT);
         } catch {
@@ -150,38 +143,19 @@ export function createHooks(ctx: PluginContext) {
       const sessionID = pickSessionID(input) ?? pickSessionID(output.args);
       const subagentInvocation = input.tool === "task" ? registerSubagentInvocation(ctx.state, output.args, sessionID) : null;
 
-      await writeAuditEntry(paths, {
-        kind: "tool.execute.before",
-        tool: input.tool,
-        session_id: sessionID,
-        args: toAuditRecord(output.args),
-        subagent: subagentInvocation
-          ? {
-              invocation_id: subagentInvocation.invocationID,
-              agent_type: subagentInvocation.agentType,
-              team_name: subagentInvocation.teamName,
-              fingerprint: subagentInvocation.fingerprint
-            }
-          : null
-      });
-
-      if (subagentInvocation) {
-        await appendSubagentAuditLog(paths, sessionID, subagentInvocation.invocationID, {
-          ts: new Date().toISOString(),
-          kind: "subagent.lifecycle",
-          phase: "before",
-          invocation_id: subagentInvocation.invocationID,
-          started_at: subagentInvocation.startedAt,
-          agent_type: subagentInvocation.agentType,
-          team_name: subagentInvocation.teamName,
-          session_id: sessionID,
-          args: toAuditRecord(output.args)
-        });
-      }
-
       if (input.tool === "task") {
         await enforceTaskTeamPolicy(output.args, paths);
-        await trackSubagentStart(output.args, paths.AGENT_TRACKER_FILE);
+        if (subagentInvocation) {
+          const agentType = pickString(output.args, ["subagent_type", "agent", "type"]);
+          const coordinationLabel = pickCoordinationLabel(output.args) ?? undefined;
+          await registerInvocationStart(paths.AGENT_TRACKER_FILE, {
+            invocation_id: subagentInvocation.invocationID,
+            agent_type: agentType ?? "unknown",
+            coordination_label: coordinationLabel,
+            team_name: coordinationLabel,
+            purpose: pickString(output.args, ["description", "task", "prompt"]) ?? undefined
+          });
+        }
       }
 
       if (input.tool === "nx_task_close") {
@@ -222,55 +196,57 @@ export function createHooks(ctx: PluginContext) {
       const sessionID = pickSessionID(input) ?? pickSessionID(output.metadata) ?? subagentInvocation?.sessionID ?? null;
       const taskHandles = input.tool === "task" ? extractParticipantHandles(output.metadata) : {};
 
-      await writeAuditEntry(paths, {
-        kind: "tool.execute.after",
-        tool: input.tool,
-        session_id: sessionID,
-        title: output.title,
-        output_preview: output.output.slice(0, 1000),
-        metadata: toAuditRecord(output.metadata),
-        subagent: subagentInvocation
-          ? {
-              invocation_id: subagentInvocation.invocationID,
-              started_at: subagentInvocation.startedAt,
-              agent_type: subagentInvocation.agentType,
-              team_name: subagentInvocation.teamName,
-              fingerprint: subagentInvocation.fingerprint,
-              task_id: taskHandles.taskID ?? null,
-              session_id: taskHandles.sessionID ?? null
+      if (input.tool === "task") {
+        const agentType = pickString(input.args, ["subagent_type", "agent", "type"]);
+        if (agentType && subagentInvocation) {
+          const filesTouched = await aggregateFilesForAgent(paths.TOOL_LOG_FILE, subagentInvocation.invocationID);
+          await registerInvocationEnd(paths.AGENT_TRACKER_FILE, subagentInvocation.invocationID, {
+            status: "completed",
+            last_message: output.output.slice(0, 500),
+            runtime_metadata: output.metadata,
+            continuity: {
+              child_task_id: taskHandles.taskID,
+              child_session_id: taskHandles.sessionID
             }
-          : null
-      });
-
-      if (subagentInvocation) {
-        await appendSubagentAuditLog(paths, sessionID, subagentInvocation.invocationID, {
-          ts: new Date().toISOString(),
-          kind: "subagent.lifecycle",
-          phase: "after",
-          invocation_id: subagentInvocation.invocationID,
-          started_at: subagentInvocation.startedAt,
-          agent_type: subagentInvocation.agentType,
-          team_name: subagentInvocation.teamName,
-          session_id: sessionID,
-          subagent_task_id: taskHandles.taskID ?? null,
-          subagent_session_id: taskHandles.sessionID ?? null,
-          title: output.title,
-          output_preview: output.output.slice(0, 1000),
-          metadata: toAuditRecord(output.metadata)
-        });
-      }
-
-      if (input.tool !== "task") {
+          });
+          if (filesTouched.length > 0) {
+            const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
+            const idx = tracker.invocations.findIndex(
+              (inv) => inv.invocation_id === subagentInvocation.invocationID
+            );
+            if (idx >= 0) {
+              const updated = tracker.invocations.slice();
+              updated[idx] = { ...updated[idx], files_touched: filesTouched };
+              await writeAgentTracker(paths.AGENT_TRACKER_FILE, { ...tracker, invocations: updated });
+            }
+          }
+        }
+        await updateRunParticipantContinuity(paths, input.args, output, taskHandles, subagentInvocation?.invocationID ?? null);
+        await updatePlanParticipantContinuity(paths, input.args, output);
         return;
       }
 
-      const agentType = pickString(input.args, ["subagent_type", "agent", "type"]);
-      if (!agentType) {
-        return;
+      if (isEditLikeTool(input.tool)) {
+        const targetPath = getTargetPath(input.args, projectRoot);
+        if (targetPath && !isNexusInternalPath(targetPath, projectRoot)) {
+          try {
+            const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
+            const matchedInvocation = tracker.invocations.find(
+              (inv) => inv.continuity?.child_session_id === sessionID && inv.status === "running"
+            );
+            if (matchedInvocation) {
+              await appendToolLogEntry(paths.TOOL_LOG_FILE, {
+                ts: new Date().toISOString(),
+                agent_id: matchedInvocation.invocation_id,
+                tool: input.tool,
+                file: targetPath
+              });
+            }
+          } catch {
+            // tool-log append failure must not block hook
+          }
+        }
       }
-      await markLatestTeamCompleted(paths.AGENT_TRACKER_FILE, agentType, output.output.slice(0, 500));
-      await updateRunParticipantContinuity(paths, input.args, output, taskHandles, subagentInvocation?.invocationID ?? null);
-      await updatePlanParticipantContinuity(paths, input.args, output);
     },
 
     "chat.message": async (_input: unknown, output: ChatOutput) => {
@@ -350,11 +326,10 @@ export function createHooks(ctx: PluginContext) {
 
       // Active agents
       try {
-        const raw = await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8");
-        const tracker = JSON.parse(raw) as Array<{ agent_name?: string; status?: string }>;
-        const active = tracker
-          .filter((a) => a.status === "running")
-          .map((a) => a.agent_name ?? "unknown");
+        const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
+        const active = tracker.invocations
+          .filter((inv) => inv.status === "running")
+          .map((inv) => inv.agent_type ?? "unknown");
         if (active.length > 0) {
           parts.push(`active agents: ${active.join(", ")}`);
         }
@@ -434,27 +409,6 @@ async function enforceTaskTeamPolicy(
   }
 }
 
-async function trackSubagentStart(args: Record<string, unknown>, trackerFile: string): Promise<void> {
-  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
-  if (!agentType) {
-    return;
-  }
-
-  const teamName = pickCoordinationLabel(args);
-  await appendAgentTracker(trackerFile, {
-    harness_id: HARNESS_ID,
-    agent_name: agentType,
-    agent_id: `${agentType}-${Date.now()}`,
-    resume_count: 0,
-    status: "running",
-    team_name: teamName ?? undefined,
-    coordination_label: teamName ?? undefined,
-    lead_agent: "lead",
-    purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined,
-    started_at: new Date().toISOString()
-  });
-}
-
 async function updatePlanParticipantContinuity(
   paths: ReturnType<typeof createNexusPaths>,
   args: Record<string, unknown>,
@@ -473,15 +427,14 @@ async function updatePlanParticipantContinuity(
   const handles = extractParticipantHandles(output.metadata);
   const continuityInvocationID = createPlanContinuityInvocationID(agentType);
   const coordinationLabel = pickCoordinationLabel(args) ?? undefined;
-  await registerStart(paths.ORCHESTRATION_CORE_FILE, {
+  await registerInvocationStart(paths.AGENT_TRACKER_FILE, {
     invocation_id: continuityInvocationID,
     agent_type: agentType,
     coordination_label: coordinationLabel,
     team_name: coordinationLabel,
     purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined
   });
-  await registerEnd(paths.ORCHESTRATION_CORE_FILE, {
-    invocation_id: continuityInvocationID,
+  await registerInvocationEnd(paths.AGENT_TRACKER_FILE, continuityInvocationID, {
     status: "completed",
     last_message: output.output.slice(0, 500),
     runtime_metadata: output.metadata,
@@ -518,15 +471,14 @@ async function updateRunParticipantContinuity(
 
   const coordinationLabel = pickCoordinationLabel(args) ?? undefined;
   const invocationID = existingInvocationID ?? createRunContinuityInvocationID(agentType, coordinationLabel);
-  await registerStart(paths.ORCHESTRATION_CORE_FILE, {
+  await registerInvocationStart(paths.AGENT_TRACKER_FILE, {
     invocation_id: invocationID,
     agent_type: agentType,
     coordination_label: coordinationLabel,
     team_name: coordinationLabel,
     purpose: pickString(args, ["description", "task", "prompt"]) ?? undefined
   });
-  await registerEnd(paths.ORCHESTRATION_CORE_FILE, {
-    invocation_id: invocationID,
+  await registerInvocationEnd(paths.AGENT_TRACKER_FILE, invocationID, {
     status: "completed",
     last_message: output.output.slice(0, 500),
     runtime_metadata: output.metadata,
@@ -563,7 +515,7 @@ async function injectRunContinuityForTask(
     return args;
   }
 
-  const continuity = await selectRunContinuityFromCore(paths.ORCHESTRATION_CORE_FILE, {
+  const continuity = await selectRunContinuityFromCore(paths.AGENT_TRACKER_FILE, {
     agent_type: agentType,
     coordination_label: pickCoordinationLabel(args) ?? undefined
   });
@@ -590,7 +542,7 @@ async function injectPlanContinuityForTask(
   }
 
   const continuity = await readPlanParticipantContinuityFromCore(
-    paths.ORCHESTRATION_CORE_FILE,
+    paths.AGENT_TRACKER_FILE,
     agentType
   );
   if (!continuity) {
@@ -727,18 +679,6 @@ function pickSessionID(input: unknown): string | null {
   }
 
   return null;
-}
-
-async function writeAuditEntry(
-  paths: ReturnType<typeof createNexusPaths>,
-  entry: Record<string, unknown>
-): Promise<void> {
-  const record: Record<string, unknown> = {
-    ts: new Date().toISOString(),
-    ...entry
-  };
-  await appendGlobalAuditLog(paths, record);
-  await appendSessionAuditLog(paths, typeof record.session_id === "string" ? record.session_id : null, record);
 }
 
 function registerSubagentInvocation(

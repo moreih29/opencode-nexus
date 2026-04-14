@@ -3,7 +3,7 @@
  *
  * Verifies the chain that auto-injects opencode native `task_id` into task tool args:
  *
- *   opencode-nexus/orchestration.json fixture
+ *   opencode-nexus/agent-tracker.json fixture
  *     → readPlanParticipantContinuityFromCore (plan-continuity-adapter)
  *     → buildPlanContinuityAdapterHints (with child_session_id fallback)
  *     → injectMissingPlanResumeArgs (preserves LLM-set task_id; uses opencode native naming)
@@ -124,13 +124,13 @@ console.log("[e2e-plan-resume-inject] unit regression");
   }
 }
 
-// 8. full chain on on-disk opencode-nexus/orchestration.json fixture
+// 8. full chain on on-disk opencode-nexus/agent-tracker.json fixture
 {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nexus-resume-test-"));
-  const filePath = path.join(tmpDir, "orchestration.json");
+  const filePath = path.join(tmpDir, "agent-tracker.json");
   const fixture = {
-    schema_version: 1,
-    updated_at: "2026-04-13T00:00:00.000Z",
+    harness_id: "opencode-nexus",
+    started_at: "2026-04-13T00:00:00.000Z",
     invocations: [
       {
         invocation_id: "test-1",
@@ -154,7 +154,7 @@ console.log("[e2e-plan-resume-inject] unit regression");
       { resume_task_id: hints.resume_task_id }
     );
     if (out.task_id === "ses_FIXTURE") {
-      p("full chain: opencode-nexus/orchestration.json → continuity → hints → inject");
+      p("full chain: opencode-nexus/agent-tracker.json → continuity → hints → inject");
     } else {
       f(`full chain: expected ses_FIXTURE, got ${JSON.stringify(out)}`);
     }
@@ -166,10 +166,10 @@ console.log("[e2e-plan-resume-inject] unit regression");
 // 9. absent agent returns null continuity
 {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nexus-resume-test-"));
-  const filePath = path.join(tmpDir, "orchestration.json");
+  const filePath = path.join(tmpDir, "agent-tracker.json");
   await fs.writeFile(
     filePath,
-    JSON.stringify({ schema_version: 1, updated_at: "2026-04-13T00:00:00.000Z", invocations: [] })
+    JSON.stringify({ harness_id: "opencode-nexus", started_at: "2026-04-13T00:00:00.000Z", invocations: [] })
   );
   try {
     const continuity = await readPlanParticipantContinuityFromCore(filePath, "architect");

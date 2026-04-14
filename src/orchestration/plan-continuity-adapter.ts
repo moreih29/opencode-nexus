@@ -1,5 +1,4 @@
-import { pickContinuityFromState } from "./core.js";
-import { readOrchestrationCoreState } from "./core-store.js";
+import { pickContinuityFromTrackerState, readAgentTracker } from "../shared/agent-tracker.js";
 import type { RunContinuityAdapterHints } from "./run-continuity-adapter.js";
 
 export interface PlanParticipantContinuity {
@@ -61,31 +60,52 @@ export async function readPlanParticipantContinuityFromCore(
   role: string
 ): Promise<PlanParticipantContinuity | null> {
   const normalizedRole = role.toLowerCase();
-  const state = await readOrchestrationCoreState(coreFilePath);
+  const tracker = await readAgentTracker(coreFilePath);
 
-  const selected =
-    pickContinuityFromState(state, {
+  const continuity =
+    pickContinuityFromTrackerState(tracker, {
       agent_type: normalizedRole,
       coordination_label: "plan-panel",
       prefer_running: true
     })
-    ?? pickContinuityFromState(state, {
+    ?? pickContinuityFromTrackerState(tracker, {
       agent_type: normalizedRole,
       prefer_running: true
     });
 
-  if (!selected) {
+  if (!continuity) {
     return null;
   }
 
-  const invocation = state.invocations.find((item) => item.invocation_id === selected.invocation_id);
+  const invocation = tracker.invocations.find((item) => {
+    if (item.agent_type.toLowerCase() !== normalizedRole) {
+      return false;
+    }
+    const c = item.continuity;
+    if (!c) {
+      return false;
+    }
+    if (continuity.child_session_id && c.child_session_id === continuity.child_session_id) {
+      return true;
+    }
+    if (continuity.child_task_id && c.child_task_id === continuity.child_task_id) {
+      return true;
+    }
+    if (continuity.resume_task_id && c.resume_task_id === continuity.resume_task_id) {
+      return true;
+    }
+    return false;
+  });
 
   return {
-    role: selected.agent_type,
-    task_id: selected.continuity.child_task_id ?? selected.continuity.resume_task_id ?? null,
-    session_id: selected.continuity.child_session_id ?? selected.continuity.resume_session_id ?? null,
+    role: normalizedRole,
+    task_id: continuity.child_task_id ?? continuity.resume_task_id ?? null,
+    session_id: continuity.child_session_id ?? continuity.resume_session_id ?? null,
     last_summary: invocation?.last_message ?? null,
     updated_at: invocation?.updated_at ?? null,
     source: "orchestration-core"
   };
 }
+
+// Alias for consumers that prefer the tracker-oriented name.
+export const readPlanParticipantContinuityFromTracker = readPlanParticipantContinuityFromCore;

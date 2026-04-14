@@ -120,24 +120,42 @@ export const PlanSidecarSchema = z.object({
   })
 });
 
-export const AgentTrackerItemSchema = z.object({
-  harness_id: z.string(),
-  agent_name: z.string(),
-  agent_id: z.string(),
-  started_at: z.string(),
-  resume_count: z.number(),
-  status: z.enum(["running", "completed"]),
-  last_resumed_at: z.string().optional(),
-  files_touched: z.array(z.string()).optional(),
-  stopped_at: z.string().optional(),
-  last_message: z.string().optional(),
-  team_name: z.string().optional(),
+export const InvocationContinuitySchema = z
+  .object({
+    child_session_id: z.string().optional(),
+    child_task_id: z.string().optional(),
+    resume_session_id: z.string().optional(),
+    resume_task_id: z.string().optional(),
+    resume_handles: z.record(z.string()).default({})
+  })
+  .transform((handles) => ({
+    ...handles,
+    resume_handles: handles.resume_handles ?? {}
+  }));
+
+export const InvocationSchema = z.object({
+  invocation_id: z.string(),
+  agent_id: z.string().optional(),
+  agent_type: z.string(),
   coordination_label: z.string().optional(),
-  lead_agent: z.string().optional(),
-  purpose: z.string().optional()
+  purpose: z.string().optional(),
+  status: z.enum(["running", "completed", "failed", "cancelled"]),
+  started_at: z.string(),
+  updated_at: z.string().optional(),
+  ended_at: z.string().optional(),
+  resume_count: z.number().optional(),
+  last_resumed_at: z.string().optional(),
+  last_message: z.string().optional(),
+  stopped_at: z.string().optional(),
+  continuity: InvocationContinuitySchema.optional(),
+  files_touched: z.array(z.string()).optional()
 });
 
-export const AgentTrackerSchema = z.array(AgentTrackerItemSchema);
+export const AgentTrackerSchema = z.object({
+  harness_id: z.string(),
+  started_at: z.string(),
+  invocations: z.array(InvocationSchema).default([])
+});
 
 export const InvocationLifecycleStatusSchema = z.enum(["running", "completed", "failed", "cancelled"]);
 
@@ -154,31 +172,6 @@ export const InvocationContinuityHandlesSchema = z
     resume_handles: handles.resume_handles ?? {}
   }));
 
-export const OrchestrationInvocationSchema = z
-  .object({
-    invocation_id: z.string(),
-    agent_type: z.string(),
-    status: InvocationLifecycleStatusSchema,
-    coordination_label: z.string().optional(),
-    team_name: z.string().optional(),
-    purpose: z.string().optional(),
-    continuity: InvocationContinuityHandlesSchema.default({}),
-    started_at: z.string(),
-    updated_at: z.string(),
-    ended_at: z.string().optional(),
-    last_message: z.string().optional()
-  })
-  .transform((invocation) => ({
-    ...invocation,
-    continuity: invocation.continuity ?? { resume_handles: {} }
-  }));
-
-export const OrchestrationCoreStateSchema = z.object({
-  schema_version: z.literal(1),
-  updated_at: z.string(),
-  invocations: z.array(OrchestrationInvocationSchema)
-});
-
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskItem = z.infer<typeof TaskItemSchema>;
 export type TasksFile = z.infer<typeof TasksFileSchema>;
@@ -187,11 +180,10 @@ export type PlanDiscussionEntry = z.infer<typeof PlanDiscussionEntrySchema>;
 export type PlanDiscussionKind = z.infer<typeof PlanDiscussionKindSchema>;
 export type PlanFile = z.infer<typeof PlanFileSchema>;
 export type PlanSidecar = z.infer<typeof PlanSidecarSchema>;
-export type AgentTrackerItem = z.infer<typeof AgentTrackerItemSchema>;
+export type Invocation = z.infer<typeof InvocationSchema>;
+export type AgentTracker = z.infer<typeof AgentTrackerSchema>;
 export type InvocationLifecycleStatus = z.infer<typeof InvocationLifecycleStatusSchema>;
 export type InvocationContinuityHandles = z.infer<typeof InvocationContinuityHandlesSchema>;
-export type OrchestrationInvocation = z.infer<typeof OrchestrationInvocationSchema>;
-export type OrchestrationCoreState = z.infer<typeof OrchestrationCoreStateSchema>;
 
 function normalizeDiscussionEntry(entry: string | PlanDiscussionEntry): PlanDiscussionEntry {
   if (typeof entry !== "string") {

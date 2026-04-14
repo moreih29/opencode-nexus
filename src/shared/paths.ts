@@ -24,10 +24,9 @@ export function createNexusPaths(projectRoot: string) {
     PLAN_FILE: path.join(STATE_ROOT, "plan.json"),
     PLAN_SIDECAR_FILE: path.join(HARNESS_NAMESPACE_ROOT, "plan.extension.json"),
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),
-    AGENT_TRACKER_FILE: path.join(STATE_ROOT, "agent-tracker.json"),
-    ORCHESTRATION_CORE_FILE: path.join(HARNESS_NAMESPACE_ROOT, "orchestration.json"),
-    ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts"),
-    AUDIT_LOGS_ROOT: path.join(HARNESS_NAMESPACE_ROOT, "audit")
+    AGENT_TRACKER_FILE: path.join(HARNESS_NAMESPACE_ROOT, "agent-tracker.json"),
+    TOOL_LOG_FILE: path.join(HARNESS_NAMESPACE_ROOT, "tool-log.jsonl"),
+    ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts")
   };
 }
 
