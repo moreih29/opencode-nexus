@@ -29,9 +29,9 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 |---|---|---|
 | nx-plan | [plan] | Structured planning — subagent-based analysis, deliberate decisions, produce execution plan |
 | nx-run | [run] | Execution — user-directed agent composition |
-| nx-init | /opencode-nexus:nx-init | Project onboarding — scan, mission, essentials, context generation |
-| nx-sync | [sync] | Context knowledge synchronization |
-| nx-setup | /opencode-nexus:nx-setup | Interactive Nexus configuration wizard |
+| nx-init | nx-init | Project onboarding — scan, mission, essentials, context generation |
+| nx-sync | nx-sync | Context knowledge synchronization |
+| nx-setup | nx-setup | Interactive Nexus configuration wizard |
 
 ### Tags
 
