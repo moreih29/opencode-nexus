@@ -7,8 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createNexusPaths } from "../dist/shared/paths.js";
 import { ensureNexusStructure } from "../dist/shared/state.js";
 import { nxPlanStart, nxPlanDecide, nxPlanStatus, nxPlanUpdate } from "../dist/tools/plan.js";
-import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "../dist/tools/task.js";
-import { nxHistorySearch } from "../dist/tools/history-search.js";
+import { nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate, nxHistorySearch } from "../dist/tools/task.js";
 import { nxArtifactWrite } from "../dist/tools/artifact.js";
 import { nxContext } from "../dist/tools/context.js";
 

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 
-import { NEXUS_AGENT_CATALOG } from "../dist/agents/catalog.js";
-import { NEXUS_SKILL_CATALOG } from "../dist/skills/catalog.js";
+import { AGENT_META } from "../dist/agents/generated/index.js";
+import { SKILL_META } from "../dist/skills/generated/index.js";
+const NEXUS_AGENT_CATALOG = Object.values(AGENT_META);
+const NEXUS_SKILL_CATALOG = Object.values(SKILL_META);
 import { buildNexusSystemPrompt } from "../dist/plugin/system-prompt.js";
 
 let passed = 0;

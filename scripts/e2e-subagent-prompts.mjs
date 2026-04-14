@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 
 import { AGENT_PROMPTS } from "../dist/agents/prompts.js";
-import { NEXUS_AGENT_CATALOG } from "../dist/agents/catalog.js";
+import { AGENT_META } from "../dist/agents/generated/index.js";
+const NEXUS_AGENT_CATALOG = Object.values(AGENT_META);
 import { NEXUS_PRIMARY_AGENT_ID, NEXUS_PRIMARY_PROMPT } from "../dist/agents/primary.js";
 import { createConfigHook } from "../dist/create-config.js";
 

@@ -1,18 +1,5 @@
-import assert from "node:assert/strict";
-
-import { nxDelegateTemplate } from "../dist/tools/delegation.js";
-
-const output = await nxDelegateTemplate.execute({
-  task: "Implement API endpoint",
-  current_state: "run phase execute",
-  target_files: ["src/api.ts"],
-  constraints: ["No schema break"],
-  acceptance: ["All tests pass"]
-});
-
-assert.match(output, /^TASK:/m);
-assert.match(output, /^CONTEXT:/m);
-assert.match(output, /^CONSTRAINTS:/m);
-assert.match(output, /^ACCEPTANCE:/m);
-
-console.log("e2e delegation passed");
+// DEPRECATED: nx_delegate_template tool was removed in the spec-alignment
+// refactor (commit 38ae9cb). Delegation payloads are now composed inline
+// by callers. This test has no subject to exercise; stubbed to exit 0.
+console.log("DEPRECATED: nx_delegate_template was removed — e2e-delegation.mjs is a no-op stub");
+process.exit(0);
