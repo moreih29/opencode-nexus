@@ -6563,6 +6563,87 @@
           "Revise nx-setup to use dynamic OpenCode discovery for language and model selection"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T13:52:31.032Z",
+      "branch": "nx-setup-role-models",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Update nx-setup provider-first model selection flow",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-14T13:51:12.292Z",
+          "context": "User wants nx-setup model selection to stop looking like it picks arbitrary models. The flow should first have the user choose a provider, then show as many models from that provider as practical in the question UI, truncating from the top only if the list is too long. Relevant files observed: .opencode/skills/nx-setup/SKILL.md, templates/skills/nx-setup/SKILL.md, src/skills/generated/nx-setup.ts, and potentially src/tools/setup.ts if discovery metadata needs to better support provider-first prompting.",
+          "approach": "Make the smallest coherent change that updates the canonical skill text, generated prompt, and any supporting setup discovery wording so nx-setup explicitly asks provider first, then lists many models from that provider via question-tool options with manual entry fallback. Keep behavior aligned across canonical and generated sources.",
+          "acceptance": "nx-setup instructions explicitly require provider selection before model selection, instruct showing a broad model list for the chosen provider via question options, and allow truncating only when the list is too long; canonical and generated prompt sources stay in sync.",
+          "risk": "Prompt/source drift between canonical and generated files could leave runtime behavior inconsistent."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T13:58:51.784Z",
+      "branch": "nx-setup-role-models",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Update nx-setup model flow",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "ephemeral",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-14T13:58:19.902Z",
+          "context": "User requested changing the nx-setup skill so Step 2 removes the custom model configuration option. Unified should use provider -> model flow once. Tiered should ask provider -> model separately for each tier.",
+          "approach": "Edit .opencode/skills/nx-setup/SKILL.md to remove custom option references, update the model assignment prompt and follow-up flow, and keep backend calls aligned with nx_setup.",
+          "acceptance": "Skill instructions only offer unified and tiered model assignment. Unified specifies one provider/model selection flow. Tiered specifies separate provider/model selection for each tier. Custom references are removed.",
+          "risk": "Low; documentation/workflow update only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T14:30:39.417Z",
+      "branch": "nx-setup-role-models",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Fix tiered nx-setup model selection flow",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-14T14:29:32.910Z",
+          "context": "The nx-setup skill currently instructs tiered model assignment with only one provider/model selection and calls nx_setup(scope, model_preset=\"tiered\", lead_model=...). The user identified that tiered should require two provider->model selections: one for nexus/HOW and one for DO/CHECK. The backend nx_setup tool supports additive group models via the models object.",
+          "approach": "Update the skill instructions so tiered explicitly runs two provider-first selection pipelines and then calls nx_setup using models={ nexus/high, how/high, do/standard, check/standard, unified/standard }. Keep changes minimal and consistent across the template and generated skill artifacts.",
+          "acceptance": "Tiered instructions require two provider->model selection flows, one for nexus/HOW and one for DO/CHECK. The documented nx_setup call for tiered uses explicit grouped models instead of a single lead_model. Template and generated skill files stay in sync.",
+          "risk": "Low; documentation/instruction drift if only one source file is updated."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"

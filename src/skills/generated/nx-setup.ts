@@ -50,11 +50,26 @@ Ask the user to choose a model configuration approach with the \`question\` tool
 >
 > 1. **unified** — same model for all agents (simple, consistent cost)
 > 2. **tiered** — high-capability for HOW + nexus, standard for DO + CHECK (quality where it matters)
-> 3. **custom** — specify per category (nexus, HOW, DO, CHECK) or per individual agent
 >
-> [1-3, default: 2]"
+> [1-2, default: 2]"
 
-For each approach, continue using the \`question\` tool for each follow-up choice. If you know a small candidate set of models, present them as selectable options and allow the tool's custom text path for manual entry. Recommend discovery-first: run \`opencode providers list\` to see connected providers, \`opencode debug config\` to inspect current setup, and \`opencode models <provider>\` to list available models. Point users to \`/connect\` to set up a provider first if none are connected. When a provider is connected, models follow the \`provider/model-id\` format (e.g., \`anthropic/claude-sonnet-4-5\`, \`openai/gpt-4o\`).
+For each approach, continue using the \`question\` tool for each follow-up choice. When the user needs to pick a model, always ask for the provider first, then ask for the model from that provider.
+
+For \`tiered\`, run that provider-first pipeline twice:
+
+1. select the high-capability provider and model for \`nexus\` + HOW
+2. select the standard provider and model for DO + CHECK
+
+Use a provider-first flow:
+
+1. Run \`opencode providers list\` to identify connected providers.
+2. If none are connected, ask which provider the user plans to use and point them to \`/connect\` if needed.
+3. Ask the user to choose one provider with the \`question\` tool.
+4. Run \`opencode models <provider>\` for the chosen provider.
+5. Show as many models from that provider as practical in the \`question\` tool options. If the list is too long, trim from the top of the returned list rather than collapsing to a tiny hand-picked subset.
+6. Keep the tool's custom text entry path available so the user can type a model manually.
+
+When a provider is connected, models should be shown in \`provider/model-id\` format (e.g., \`anthropic/claude-sonnet-4-5\`, \`openai/gpt-4o\`). Do not jump straight to arbitrary model suggestions when the provider has not been chosen yet.
 
 Call \`nx_setup\` with the resolved model configuration:
 
@@ -66,18 +81,6 @@ nx_setup(scope=<from step 1>, model_preset="unified", lead_model="<model>")
 **tiered** (HOW + nexus = high-capability, DO + CHECK = standard):
 \`\`\`
 nx_setup(scope=<from step 1>, model_preset="tiered", lead_model="<high-capability model>")
-\`\`\`
-
-**custom** (per-category or per-agent overrides):
-\`\`\`
-nx_setup(scope=<from step 1>, models={
-  "unified": "<fallback model>",
-  "nexus": "<nexus model or skip>",
-  "how": "<how model or skip>",
-  "do": "<do model or skip>",
-  "check": "<check model or skip>",
-  "agents": {"<agent-id>": "<model>", ...}
-})
 \`\`\`
 
 If the user skips, use \`model_preset="skip"\` — existing models in \`opencode.json\` remain unchanged.
