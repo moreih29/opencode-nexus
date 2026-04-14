@@ -1,18 +1,18 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.6.0 (bcde383b56308b86006babe73f87fed9222c0761)
+// Source: @moreih29/nexus-core@0.7.1 (d2da7dede9540a14bc5925904c2382795f383b1e)
 // Aggregates all skill prompts and metadata.
 
 import { PROMPT as nx_run_prompt, META as nx_run_meta } from './nx-run.js';
+import { PROMPT as nx_plan_prompt, META as nx_plan_meta } from './nx-plan.js';
 import { PROMPT as nx_sync_prompt, META as nx_sync_meta } from './nx-sync.js';
 import { PROMPT as nx_init_prompt, META as nx_init_meta } from './nx-init.js';
-import { PROMPT as nx_plan_prompt, META as nx_plan_meta } from './nx-plan.js';
 import { PROMPT as nx_setup_prompt, META as nx_setup_meta } from './nx-setup.js';
 
 export const SKILL_PROMPTS: Record<string, string> = {
   "nx-run": nx_run_prompt,
+  "nx-plan": nx_plan_prompt,
   "nx-sync": nx_sync_prompt,
   "nx-init": nx_init_prompt,
-  "nx-plan": nx_plan_prompt,
   "nx-setup": nx_setup_prompt,
 };
 
@@ -30,6 +30,13 @@ export const SKILL_META: Record<string, {
     trigger_display: "[run]",
     purpose: "Execution — user-directed agent composition",
   },
+  "nx-plan": {
+    id: "nx-plan",
+    name: "nx-plan",
+    description: "Structured multi-perspective analysis to decompose issues, align on decisions, and produce an enriched plan before execution. Plan only — does not execute.",
+    trigger_display: "[plan]",
+    purpose: "Structured planning — subagent-based analysis, deliberate decisions, produce execution plan",
+  },
   "nx-sync": {
     id: "nx-sync",
     name: "nx-sync",
@@ -43,13 +50,6 @@ export const SKILL_META: Record<string, {
     description: "Project onboarding — scan, mission, essentials, context generation",
     trigger_display: "/opencode-nexus:nx-init",
     purpose: "Project onboarding — scan, mission, essentials, context generation",
-  },
-  "nx-plan": {
-    id: "nx-plan",
-    name: "nx-plan",
-    description: "Structured multi-perspective analysis to decompose issues, align on decisions, and produce an enriched plan before execution. Plan only — does not execute.",
-    trigger_display: "[plan]",
-    purpose: "Structured planning — subagent-based analysis, deliberate decisions, produce execution plan",
   },
   "nx-setup": {
     id: "nx-setup",

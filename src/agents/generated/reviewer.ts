@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.6.0 (bcde383b56308b86006babe73f87fed9222c0761)
+// Source: @moreih29/nexus-core@0.7.1 (d2da7dede9540a14bc5925904c2382795f383b1e)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role

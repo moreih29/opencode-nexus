@@ -16,19 +16,27 @@ const MARKER_END = "<!-- NEXUS:END -->";
 export const nxSetup = tool({
   description: "Configure OpenCode Nexus files and inject the orchestration template",
   args: {
-    scope: z.enum(["project", "user"]).default("project"),
+    scope: z.enum(["project", "user"]).default("user"),
     profile: z.enum(["auto", "full", "minimal", "legacy-compat"]).default("auto"),
     install_plugin: z.boolean().default(true),
     init_after_setup: z.boolean().default(false),
     instructions_file: z.string().optional(),
-    agent_models: z.record(z.string(), z.string()).optional(),
-    model_preset: z.enum(["unified", "tiered", "budget", "skip"]).default("skip"),
+    permission_preset: z.enum(["permissive", "standard", "restrictive", "skip"]).default("skip"),
+    model_preset: z.enum(["unified", "tiered", "custom", "skip"]).default("skip"),
     lead_model: z.string().optional(),
-    permission_preset: z.enum(["permissive", "standard", "restrictive", "skip"]).default("skip")
+    agent_models: z.record(z.string(), z.string()).optional(),
+    models: z.object({
+      unified: z.string().optional(),
+      nexus: z.string().optional(),
+      how: z.string().optional(),
+      do: z.string().optional(),
+      check: z.string().optional(),
+      agents: z.record(z.string(), z.string()).optional()
+    }).optional()
   },
   async execute(args, context) {
     const root = context.worktree ?? context.directory;
-    const scope = args.scope ?? "project";
+    const scope = args.scope ?? "user";
     const profile = args.profile ?? "auto";
     const installPlugin = args.install_plugin ?? true;
     const initAfterSetup = args.init_after_setup ?? false;
@@ -57,8 +65,16 @@ export const nxSetup = tool({
       profile: resolvedProfile,
       selfHostedLocalPlugin: capabilities.localPluginShim
     });
+    const modelDiscovery = await detectModelDiscovery(next, targets.configFile);
 
-    const resolvedAgentModels = mergeAgentModels(next, args.agent_models as Record<string, string> | undefined, modelPreset, args.lead_model, Object.values(AGENT_META));
+    const resolvedAgentModels = mergeAgentModels(
+      next,
+      args.agent_models as Record<string, string> | undefined,
+      modelPreset,
+      args.lead_model,
+      args.models,
+      Object.values(AGENT_META)
+    );
     mergePermissionPreset(next, permissionPreset);
 
     await writeJsonFile(targets.configFile, next);
@@ -94,7 +110,9 @@ export const nxSetup = tool({
         modelConfiguration: {
           preset: modelPreset,
           leadModel: args.lead_model ?? null,
-          agentModels: resolvedAgentModels
+          agentModels: resolvedAgentModels,
+          additiveModels: args.models ?? null,
+          discovery: modelDiscovery
         },
         permissionPreset
       },
@@ -108,6 +126,125 @@ async function readTemplate(): Promise<string> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const templatePath = path.resolve(currentDir, "../../templates/nexus-section.md");
   return fs.readFile(templatePath, "utf8");
+}
+
+async function detectModelDiscovery(config: Record<string, unknown>, configFile: string) {
+  const configuredProviders = readConfiguredProviders(config);
+  const authProviders = await readAuthenticatedProviders();
+  const availableProviders = uniqueStrings([...authProviders, ...configuredProviders]);
+  const configuredModels = readConfiguredModels(config);
+
+  return {
+    recommendedScope: "user",
+    configFile,
+    availableProviders,
+    authenticatedProviders: authProviders,
+    configuredProviders,
+    configuredModels,
+    recommendation:
+      availableProviders.length > 0
+        ? `Recommend models from connected providers first: ${availableProviders.join(", ")}. Use \`opencode models <provider>\` to inspect concrete options.`
+        : "No connected providers detected from config/auth state. Ask the user which provider they use or point them to `/connect` before recommending models."
+  };
+}
+
+function readConfiguredProviders(config: Record<string, unknown>): string[] {
+  const provider = toRecord(config.provider);
+  const enabledProviders = toStringArray(config.enabled_providers);
+  const disabledProviders = new Set(toStringArray(config.disabled_providers));
+  const fromProviderConfig = Object.keys(provider).filter((id) => !disabledProviders.has(id));
+  return uniqueStrings([...enabledProviders.filter((id) => !disabledProviders.has(id)), ...fromProviderConfig]);
+}
+
+async function readAuthenticatedProviders(): Promise<string[]> {
+  const authPath = path.join(os.homedir(), ".local", "share", "opencode", "auth.json");
+  if (!(await fileExists(authPath))) {
+    return [];
+  }
+
+  try {
+    const auth = await readJsonFile<unknown>(authPath, {});
+    return extractProviderIds(auth);
+  } catch {
+    return [];
+  }
+}
+
+function extractProviderIds(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return uniqueStrings(value.flatMap((entry) => extractProviderIds(entry)));
+  }
+
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const record = value as Record<string, unknown>;
+  const discovered = new Set<string>();
+  const directProvider = firstNonEmptyString(record.provider, record.providerID, record.id);
+  if (directProvider && isProviderIdCandidate(directProvider)) {
+    discovered.add(directProvider);
+  }
+
+  for (const [key, nested] of Object.entries(record)) {
+    if (isProviderIdCandidate(key) && nested && typeof nested === "object") {
+      discovered.add(key);
+    }
+    for (const nestedId of extractProviderIds(nested)) {
+      discovered.add(nestedId);
+    }
+  }
+
+  return [...discovered];
+}
+
+function readConfiguredModels(config: Record<string, unknown>): string[] {
+  const agent = toRecord(config.agent);
+  const models = new Set<string>();
+
+  const rootModel = asString(config.model);
+  const smallModel = asString(config.small_model);
+  if (rootModel) {
+    models.add(rootModel);
+  }
+  if (smallModel) {
+    models.add(smallModel);
+  }
+
+  for (const entry of Object.values(agent)) {
+    const model = asString(toRecord(entry).model);
+    if (model) {
+      models.add(model);
+    }
+  }
+
+  return [...models];
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))].sort();
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = asString(value);
+    if (text) {
+      return text;
+    }
+  }
+  return undefined;
+}
+
+function isProviderIdCandidate(value: string): boolean {
+  return /^[a-z0-9][a-z0-9._-]*$/i.test(value) && !value.includes("/") && !value.startsWith("http");
 }
 
 async function readEntrypointSkillTemplate(name: "nx-init" | "nx-sync" | "nx-setup" | "nx-plan" | "nx-run"): Promise<string> {
@@ -212,38 +349,39 @@ function mergeSetupConfig(input: {
 function mergeAgentModels(
   config: Record<string, unknown>,
   explicitModels: Record<string, string> | undefined,
-  preset: "unified" | "tiered" | "budget" | "skip",
+  preset: "unified" | "tiered" | "custom" | "skip",
   leadModel: string | undefined,
+  additiveModels: { unified?: string; nexus?: string; how?: string; do?: string; check?: string; agents?: Record<string, string> } | undefined,
   catalog: { id: string; category: string; model: string }[]
 ): Record<string, string> {
   const agent = toRecord(config.agent);
   const resolved: Record<string, string> = {};
 
-  if (preset !== "skip") {
-    const nexusAgent = toRecord(agent.nexus);
-    const defaultModel =
-      leadModel ??
-      (typeof nexusAgent.model === "string" && nexusAgent.model.trim().length > 0 ? nexusAgent.model : undefined);
+  const groupModels = resolveGroupModels(preset, leadModel, additiveModels);
+  const hasGroupModels = groupModels.unified || groupModels.nexus || groupModels.how || groupModels.do || groupModels.check;
 
+  if (hasGroupModels) {
     for (const profile of catalog) {
-      let model: string | undefined;
-
-      if (preset === "unified") {
-        model = defaultModel;
-      } else if (preset === "tiered") {
-        model = profile.category === "how" ? defaultModel : defaultModel;
-      } else if (preset === "budget") {
-        model = profile.category === "how" ? defaultModel : defaultModel;
-      }
-
+      const model = resolveModelForAgent(profile, groupModels);
       if (model) {
         resolved[profile.id] = model;
       }
+    }
+
+    if (groupModels.nexus) {
+      const nexusEntry = toRecord(agent.nexus);
+      agent.nexus = { ...nexusEntry, model: groupModels.nexus };
     }
   }
 
   if (explicitModels) {
     for (const [id, model] of Object.entries(explicitModels)) {
+      resolved[id] = model;
+    }
+  }
+
+  if (additiveModels?.agents) {
+    for (const [id, model] of Object.entries(additiveModels.agents)) {
       resolved[id] = model;
     }
   }
@@ -259,6 +397,78 @@ function mergeAgentModels(
 
   config.agent = agent;
   return resolved;
+}
+
+type GroupModels = {
+  unified: string | undefined;
+  nexus: string | undefined;
+  how: string | undefined;
+  do: string | undefined;
+  check: string | undefined;
+};
+
+function toStandardModel(model: string): string {
+  if (model.includes("gpt-5")) {
+    return model.replace(/gpt-5[^(-]*/i, "gpt-4o");
+  }
+  if (model.includes("claude-sonnet-4-5")) {
+    return model.replace(/claude-sonnet-4-5[^(-]*/i, "claude-haiku-4-5");
+  }
+  if (model.includes("claude-3-5")) {
+    return model.replace(/claude-3-5[^(-]*/i, "claude-haiku-4");
+  }
+  if (model.includes("gpt-4")) {
+    return model.replace(/gpt-4[^(-]*/i, "gpt-4o-mini");
+  }
+  return model;
+}
+
+function resolveGroupModels(
+  preset: "unified" | "tiered" | "custom" | "skip",
+  leadModel: string | undefined,
+  additiveModels: { unified?: string; nexus?: string; how?: string; do?: string; check?: string; agents?: Record<string, string> } | undefined
+): GroupModels {
+  if (additiveModels) {
+    const unified = additiveModels.unified ?? leadModel;
+    return {
+      unified,
+      nexus: additiveModels.nexus ?? unified,
+      how: additiveModels.how ?? unified,
+      do: additiveModels.do ?? unified,
+      check: additiveModels.check ?? unified
+    };
+  }
+
+  if (preset === "skip" || !leadModel) {
+    return { unified: undefined, nexus: undefined, how: undefined, do: undefined, check: undefined };
+  }
+
+  if (preset === "unified") {
+    return { unified: leadModel, nexus: leadModel, how: leadModel, do: leadModel, check: leadModel };
+  }
+
+  if (preset === "tiered") {
+    const standardModel = toStandardModel(leadModel);
+    return { unified: standardModel, nexus: leadModel, how: leadModel, do: standardModel, check: standardModel };
+  }
+
+  return { unified: undefined, nexus: undefined, how: undefined, do: undefined, check: undefined };
+}
+
+function resolveModelForAgent(
+  profile: { id: string; category: string; model: string },
+  groupModels: GroupModels
+): string | undefined {
+  if (profile.category === "how") {
+    return groupModels.how;
+  }
+  if (profile.category === "do") {
+    return groupModels.do;
+  }
+  if (profile.category === "check") {
+    return groupModels.check;
+  }
+  return groupModels.unified;
 }
 
 function mergePermissionPreset(

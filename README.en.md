@@ -43,14 +43,24 @@ Then run the setup entrypoint inside your project:
 Use nx-setup to configure this repository for opencode-nexus.
 ```
 
-This entrypoint routes to the canonical `nx_setup` tool.
+This entrypoint routes to the canonical `nx_setup` tool, which handles two key setup decisions:
 
-`nx_setup` now supports setup profiles.
+**Scope** — choose project level (`./opencode.json`) or user level (`~/.config/opencode/opencode.json`).
 
-- `auto` default: adds the package plugin in normal projects, but prefers the local plugin shim and skips package plugin registration in self-hosting repositories.
-- `full`: merge package plugin and instructions
-- `minimal`: instruction-focused minimal setup
-- `legacy-compat`: keep legacy package plugin registration behavior
+**Model assignment** — Nexus has 9 subagents across three categories. Choose an approach that fits your budget and quality needs:
+
+| Approach | nexus + HOW | DO + CHECK |
+|---|---|---|
+| `unified` | same model everywhere | same model everywhere |
+| `tiered` | high-capability | standard |
+| `budget` | high-capability | budget |
+| `custom` | per-category or per-agent overrides | per-category or per-agent overrides |
+
+After setup, you can initialize project knowledge with an optional follow-up:
+
+```text
+Use nx-init to scan this project and create initial Nexus knowledge.
+```
 
 When the plugin injects config, the preferred default primary is `nexus` instead of `build`. `nexus` is the Nexus-aware orchestration lead that prioritizes state, task discipline, and delegation.
 

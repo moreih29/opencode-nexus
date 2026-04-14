@@ -6136,6 +6136,433 @@
           "created_at": "2026-04-14T08:50:18.000Z"
         }
       ]
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T12:55:46.252Z",
+      "branch": "nx-setup-role-models",
+      "plan": {
+        "id": 32,
+        "topic": "oh-my-openagent installation.md의 LLM 설치 유도 방식 분석 및 opencode-nexus 적용 방향",
+        "attendees": [
+          {
+            "role": "lead",
+            "name": "OpenCode",
+            "joined_at": "2026-04-14T10:47:48.650Z"
+          }
+        ],
+        "issues": [
+          {
+            "id": 1,
+            "title": "installation.md의 실제 역할과 구성 요소를 우리 기준으로 어떻게 해석할지",
+            "status": "decided",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "oh-my-openagent의 installation.md는 사람용 설치문서라기보다 LLM 세션용 절차 스크립트다. 장점은 human/LLM 분리, raw-source fidelity 의식, 설치를 인터뷰형 플로우로 정리한 점이다. 단점은 설치/모델카탈로그/auth/tutorial/마케팅이 한 문서에 과도하게 섞여 drift와 scope creep를 만든다는 점이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-14T10:54:52.348Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "우리 플러그인은 이미 nx-setup/nx-init라는 canonical backend를 갖고 있고, 과거 결정도 thin alias entrypoint + nx_* tool 단일 실행 경로 유지였다. 따라서 같은 아이디어를 적용하더라도 '거대한 installation.md'를 복제하기보다, README나 짧은 install prompt가 nx-setup을 호출하게 하고 실제 절차와 상태 변경은 skill/tool이 담당하게 하는 편이 아키텍처적으로 맞다.",
+                "kind": "research",
+                "recorded_at": "2026-04-14T10:54:52.352Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "oh-my-openagent에서 재사용할 패턴은 'LLM-friendly setup entry prompt'와 'human/LLM 경로 분리'까지다. opencode-nexus는 installation.md 중심 구조를 채택하지 않고, 짧은 진입 문구가 nx-setup/nx-init 같은 canonical backend를 호출하게 하는 thin-entrypoint 구조를 유지한다. 설치 관련 세부 로직, 상태 변경, 후속 가이드는 문서보다 skill/tool에 두는 것이 맞다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-14T10:54:56.560Z"
+              }
+            ],
+            "decision": "oh-my-openagent에서 재사용할 패턴은 'LLM-friendly setup entry prompt'와 'human/LLM 경로 분리'까지다. opencode-nexus는 installation.md 중심 구조를 채택하지 않고, 짧은 진입 문구가 nx-setup/nx-init 같은 canonical backend를 호출하게 하는 thin-entrypoint 구조를 유지한다. 설치 관련 세부 로직, 상태 변경, 후속 가이드는 문서보다 skill/tool에 두는 것이 맞다.",
+            "task_refs": [],
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "opencode-nexus에 적용할 때 어떤 표면(문서/skill/setup flow)을 채택하는 게 맞는지",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "사용자 의도는 setup을 거대한 온보딩이 아니라 '지금 이 플러그인을 세팅하는 최소 스킬'로 좁히는 것이다. 여기서 핵심 결정 축은 1) 설치 scope(project/user), 2) nexus primary 및 subagent 모델 배치다. permission/MCP/knowledge-init는 부차적이다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-14T10:54:40.650Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "opencode-nexus의 setup surface는 '이 플러그인을 지금 사용 가능하게 만드는 최소 세팅 스킬'로 좁힌다. setup의 필수 질문은 (1) 설치 scope(project/user), (2) 모델 배치이다. 모델 배치는 최소한 nexus primary, HOW, DO, CHECK 네 그룹을 표현할 수 있어야 하며, 현재 nx_setup의 preset-only 동작으로는 부족하므로 backend를 그룹별 모델 지정이 가능하도록 확장하는 방향이 적절하다. permission preset은 setup의 핵심 범위에서 제외하고 sane default(standard)를 기본으로 둔다. MCP(context7)와 knowledge initialization(nx-init)은 setup 완료 후 제안하는 optional follow-up으로 유지한다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-14T10:54:45.569Z"
+              }
+            ],
+            "decision": "opencode-nexus의 setup surface는 '이 플러그인을 지금 사용 가능하게 만드는 최소 세팅 스킬'로 좁힌다. setup의 필수 질문은 (1) 설치 scope(project/user), (2) 모델 배치이다. 모델 배치는 최소한 nexus primary, HOW, DO, CHECK 네 그룹을 표현할 수 있어야 하며, 현재 nx_setup의 preset-only 동작으로는 부족하므로 backend를 그룹별 모델 지정이 가능하도록 확장하는 방향이 적절하다. permission preset은 setup의 핵심 범위에서 제외하고 sane default(standard)를 기본으로 둔다. MCP(context7)와 knowledge initialization(nx-init)은 setup 완료 후 제안하는 optional follow-up으로 유지한다.",
+            "task_refs": [
+              3
+            ],
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 3,
+            "title": "nx-setup 최소 질문 플로우와 backend schema 구체화",
+            "status": "tasked",
+            "discussion": [
+              {
+                "speaker": "lead",
+                "message": "구체 설계 방향은 setup을 3-core + optional follow-up 흐름으로 재구성하는 것이다. 핵심 질문은 scope와 model assignment이며, 모델은 preset 이름보다 역할 그룹(nexus primary / HOW / DO / CHECK) 중심으로 표현하는 편이 더 직접적이다. context7 추가와 nx-init 실행은 setup 말미의 optional 후속 단계로 둔다.",
+                "kind": "summary",
+                "recorded_at": "2026-04-14T12:33:12.802Z"
+              },
+              {
+                "speaker": "lead",
+                "message": "nx-setup의 최종 설계는 scope + role-group model assignment를 중심으로 한다. 질문 플로우는 (1) project/user scope, (2) 모델 전략(unified/grouped/custom), (3) 필요 시 nexus/HOW/DO/CHECK 그룹 모델 선택, 이후 optional로 context7 추가 여부와 project-scope일 때 nx-init 실행 여부를 묻는 구조가 적절하다. backend는 additive한 models schema({ unified?, how?, do?, check?, agents? })를 도입하고, 기존 model_preset/lead_model/agent_models는 normalize 단계에서 새 schema로 번역해 하위 호환을 유지한다. permission preset은 기본 standard를 유지하되 setup의 주 질문 플로우에서는 제거한다.",
+                "kind": "decision",
+                "recorded_at": "2026-04-14T12:33:21.013Z"
+              }
+            ],
+            "decision": "nx-setup의 최종 설계는 scope + role-group model assignment를 중심으로 한다. 질문 플로우는 (1) project/user scope, (2) 모델 전략(unified/grouped/custom), (3) 필요 시 nexus/HOW/DO/CHECK 그룹 모델 선택, 이후 optional로 context7 추가 여부와 project-scope일 때 nx-init 실행 여부를 묻는 구조가 적절하다. backend는 additive한 models schema({ unified?, how?, do?, check?, agents? })를 도입하고, 기존 model_preset/lead_model/agent_models는 normalize 단계에서 새 schema로 번역해 하위 호환을 유지한다. permission preset은 기본 standard를 유지하되 setup의 주 질문 플로우에서는 제거한다.",
+            "task_refs": [
+              1,
+              2,
+              4,
+              5,
+              6
+            ],
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "외부 문서(oh-my-openagent installation.md)를 확인한 결과, 이 설치 가이드는 단순 인간용 문서가 아니라 LLM 에이전트에게 직접 주입할 절차 문서로 설계되어 있다. 핵심 특징은 1) raw GitHub 문서를 curl로 그대로 읽게 강제, 2) 사용자의 구독/인증 상태를 질문해 non-interactive 설치 플래그를 결정, 3) 설치 후 doctor/auth/tutorial/광고까지 포함한 end-to-end 세션 스크립트, 4) plugin/opencode.json/config rename compatibility 안내까지 한 문서에 포함하는 점이다. 반면 현재 opencode-nexus는 README와 nx-setup/nx-init thin entrypoint를 통해 온보딩한다. 저장소 조사 결과 일반 사용자 플로우는 opencode.json에 plugin/instructions를 추가한 뒤 'Use nx-setup' -> 'Use nx-init'을 LLM에 지시하는 방식이며, self-hosting 저장소인 본 repo는 .opencode/plugins/opencode-nexus.js local shim + bun run build 경로를 사용한다. nx_setup 도구는 project/user scope, model preset, permission preset, MCP config, optional init_after_setup를 지원하고 opencode.json/AGENTS.md/skill files를 canonical backend로 갱신한다. 과거 히스토리에는 discoverability 개선을 위해 nx-init/nx-setup/nx-sync를 slash-like entrypoint로 유지하되 canonical execution path는 nx_* tool로 고정한다는 결정이 이미 존재한다.",
+        "created_at": "2026-04-14T10:47:48.650Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Extend nx_setup backend for role-group model assignment",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "reuse-preferred",
+          "plan_issue": 3,
+          "deps": [],
+          "created_at": "2026-04-14T12:35:54.699Z",
+          "updated_at": "2026-04-14T12:42:05.055Z",
+          "context": "Current nx_setup supports scope/profile/model_preset/lead_model/agent_models, but mergeAgentModels applies leadModel across all categories. The agreed design is to make setup center on scope plus role-group model assignment for nexus primary, HOW, DO, and CHECK while keeping backward compatibility.",
+          "approach": "Add an additive models schema to nx_setup args, normalize legacy model_preset/lead_model/agent_models into the new representation, and update mergeAgentModels to apply unified, nexus, how, do, check, then per-agent overrides in order.",
+          "acceptance": "nx_setup accepts group-based model input, writes the expected agent.model entries into opencode.json for nexus/HOW/DO/CHECK, and preserves compatibility for existing callers using legacy model args.",
+          "risk": "Migration ambiguity around old budget/tiered semantics could create surprising defaults if translation behavior is not explicit."
+        },
+        {
+          "id": 2,
+          "title": "Rewrite nx-setup skill flow to minimal setup questions",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "reuse-preferred",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-14T12:37:02.299Z",
+          "updated_at": "2026-04-14T12:43:22.804Z",
+          "context": "The current nx-setup skill asks about scope, model preset, permissions, MCP, and knowledge initialization. The new product direction is a smaller setup skill focused on immediate plugin setup decisions rather than broad onboarding. Backend semantics are being updated to support role-group models.",
+          "approach": "Update the nx-setup skill content so the main flow asks for scope, model strategy, and role-group model choices, then offers context7 and nx-init as optional follow-ups. Remove permission preset from the main question flow and keep the backend tool as the canonical executor.",
+          "acceptance": "The skill prompt presents a concise setup interview centered on scope and role-group model selection, with context7 and init clearly marked as optional post-steps.",
+          "risk": "Prompt/docs drift can occur if the skill is updated before backend support is implemented or if generated sources are not regenerated consistently."
+        },
+        {
+          "id": 3,
+          "title": "Refresh quick-start docs for thin setup entrypoint",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "reuse-preferred",
+          "plan_issue": 2,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-14T12:37:02.316Z",
+          "updated_at": "2026-04-14T12:43:22.871Z",
+          "context": "The docs currently point users to nx-setup and nx-init, but the quick-start framing should better reflect the decision to keep installation guidance thin and route behavior through canonical setup/init tools. Backend and skill content are being updated accordingly.",
+          "approach": "Update Quick Start and related user-facing setup docs so they describe nx-setup as the minimal setup entrypoint for scope and model assignment, avoid installation.md-style sprawl, and keep nx-init as a separate optional next step.",
+          "acceptance": "Docs clearly communicate the thin-entrypoint approach, the scope/model focus of setup, and the separation between setup and later initialization/tuning.",
+          "risk": "If docs are updated without examples that match actual tool behavior, onboarding confusion remains."
+        },
+        {
+          "id": 4,
+          "title": "Add regression coverage for new setup model semantics",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "reuse-preferred",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-14T12:37:02.389Z",
+          "updated_at": "2026-04-14T12:55:39.064Z",
+          "context": "Changing nx_setup schema and merge behavior affects opencode.json output and could break self-hosting or legacy setup flows. Verification needs to cover both new group-based semantics and legacy translation behavior after backend and prompt/docs updates land.",
+          "approach": "Add or update tests around nx_setup to verify scope handling, self-hosting profile detection, group-based model assignment, and translation of legacy model args into final agent.model entries.",
+          "acceptance": "Automated coverage demonstrates that new models schema works, legacy callers still resolve predictably, and self-hosting safeguards remain intact.",
+          "risk": "Existing tests may encode current buggy preset behavior, requiring careful updates rather than blind replacement."
+        },
+        {
+          "id": 5,
+          "title": "Align setup prompts/docs and add regression tests",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "reuse-preferred",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-14T12:43:35.451Z",
+          "updated_at": "2026-04-14T12:49:36.164Z",
+          "context": "Backend support for role-group models exists, but the current skill/docs text still references legacy setup calls in places and runtime-facing prompt sources may be inconsistent. Regression coverage also still needs implementation.",
+          "approach": "Update the setup prompt/doc sources that users and runtime consume so they consistently describe scope plus models-based setup, then add or update automated tests covering grouped models and legacy behavior.",
+          "acceptance": "Setup prompt/docs consistently reflect the new models flow, and automated tests cover grouped models plus legacy compatibility semantics.",
+          "risk": "Duplicated prompt sources can drift if not updated together."
+        },
+        {
+          "id": 6,
+          "title": "Fix tiered and budget setup semantics to match docs",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "reuse-preferred",
+          "plan_issue": 3,
+          "deps": [
+            5
+          ],
+          "created_at": "2026-04-14T12:52:05.865Z",
+          "updated_at": "2026-04-14T12:55:23.253Z",
+          "context": "Tester found that docs/prompt describe tiered as nexus+HOW high-capability with DO+CHECK standard, but implementation still applies leadModel everywhere for tiered. Budget mode also fails to down-tier documented Claude 4.5 examples. Regression tests currently encode the old implementation rather than the intended contract.",
+          "approach": "Update src/tools/setup.ts so tiered and budget semantics match the documented setup contract, including a practical down-tier mapping for Claude 4.5 examples, and update setup regression tests to assert the intended contract.",
+          "acceptance": "tiered assigns high-capability to nexus+HOW and standard/budget to DO+CHECK as documented; budget down-tiers documented examples predictably; regression tests enforce the intended contract.",
+          "risk": "Model down-tier mapping is heuristic and may not cover every provider family equally."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 6,
+        "decisionCount": 3,
+        "hadLoopDetection": true,
+        "reopenCount": 0,
+        "blockedTransitions": 1,
+        "cycleTopics": [
+          "oh-my-openagent installation.md의 LLM 설치 유도 방식 분석 및 opencode-nexus 적용 방향"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T13:20:52.423Z",
+      "branch": "nx-setup-role-models",
+      "plan": {
+        "id": 33,
+        "topic": "Revise nx-setup skill and setup flow",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Change nx-setup recommendation so global/user scope is the default recommendation instead of project scope",
+            "status": "decided",
+            "decision": "`nx-setup` should recommend `scope=\"user\"` as the default path because OpenCode merges global config before project config, so project-level overrides remain available without giving up a machine-wide baseline. The flow should still expose `project` for repository-specific wiring, but the prompt, examples, and recommendation text should switch from project-first to user/global-first."
+          },
+          {
+            "id": 2,
+            "title": "Make nx-setup responses follow the user's language rather than the prompt language",
+            "status": "decided",
+            "decision": "`nx-setup` should mirror the user's language for all interactive responses. The canonical skill prompt may remain in English, but it must explicitly instruct the agent to ask questions, explain recommendations, summarize results, and present next steps in the user's language unless the user requests another language."
+          },
+          {
+            "id": 3,
+            "title": "Replace fixed model recommendations with provider-aware recommendations based on connected/configured OpenCode providers",
+            "status": "decided",
+            "decision": "Model recommendations should become provider-aware. Preferred discovery order: `opencode providers list` for authenticated providers, `opencode debug config` for resolved provider/model state, then `opencode models <provider>` for concrete candidate models. If discovery fails, the setup flow should ask which provider the user uses instead of showing fixed Anthropic/OpenAI examples. The current `src/tools/setup.ts` fallback logic based on hardcoded string rewrites should no longer be the primary recommendation mechanism."
+          },
+          {
+            "id": 4,
+            "title": "Correct nx-setup MCP guidance to match OpenCode's actual MCP configuration and integration flow",
+            "status": "decided",
+            "decision": "The skill's MCP guidance must be updated to the current OpenCode MCP schema and recommended Context7 integration flow. Local MCP uses `type: \"local\"` with `command: [..]`; remote MCP uses `type: \"remote\"` with `url`. For Context7 specifically, the current docs recommend the remote server at `https://mcp.context7.com/mcp`, optionally with `headers.CONTEXT7_API_KEY`. The existing `type: \"npx\"` plus separate `args` example in `nx-setup` is stale and should be removed or replaced."
+          }
+        ],
+        "research_summary": "Current `nx-setup` guidance is stale in several places. The skill prompt still recommends `project` scope by default, uses fixed model examples, and shows an outdated Context7 MCP config. Actual `nx_setup` implementation in `src/tools/setup.ts` already supports both scopes, model presets, and installs skill entrypoints, but model selection logic is hardcoded around string replacements (`toStandardModel`, `toBudgetModel`) and does not inspect the user's configured or authenticated providers. OpenCode docs confirm config precedence (global before project), provider credentials are discoverable via `opencode providers list`, resolved config via `opencode debug config`, models via `opencode models [provider]`, and MCP config requires local servers to use `type: \"local\"` with `command` as an array or remote servers to use `type: \"remote\"` with `url`. The current skill's Context7 example uses `type: \"npx\"` and split `command`/`args`, which does not match the current MCP docs.",
+        "created_at": "2026-04-14T13:11:00.378Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Revise nx-setup skill prompts and setup logic",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-14T13:13:52.814Z",
+          "context": "User requested implementing all decided changes for nx-setup. Relevant files include `.opencode/skills/nx-setup/SKILL.md`, `templates/skills/nx-setup/SKILL.md`, `src/skills/generated/nx-setup.ts`, `src/tools/setup.ts`, and any related tests. Existing worktree is dirty, so preserve unrelated edits. Goals: recommend user/global scope by default, explicitly mirror user language, make model recommendation flow/provider discovery provider-aware, and correct MCP/Context7 guidance to current OpenCode behavior.",
+          "approach": "Inspect current nx-setup prompt/template and setup tool implementation, make minimal changes that align interactive guidance and tool behavior, preserve generated/canonical relationships, and update tests if present. Avoid reverting unrelated local changes.",
+          "acceptance": "- nx-setup prompt/template recommends `user` scope by default while still supporting `project`\n- nx-setup prompt explicitly instructs responses in the user's language\n- setup flow or guidance uses provider-aware discovery instead of fixed model examples as the primary recommendation path\n- MCP/Context7 guidance matches current OpenCode docs (`type: \"remote\"`/`url` for Context7, valid local MCP syntax if mentioned)\n- Relevant generated/template/test files are updated consistently",
+          "risk": "Generated files and templates may already have in-progress local edits; engineer must preserve unrelated changes and keep canonical/generated consistency."
+        },
+        {
+          "id": 2,
+          "title": "Verify nx-setup changes",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "ephemeral",
+          "plan_issue": 4,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-14T13:13:52.820Z",
+          "context": "Verification for nx-setup changes after engineer implementation. Focus on acceptance criteria for prompt/template/setup logic consistency and any updated tests/build checks.",
+          "approach": "Inspect the final diff for targeted files and run focused verification commands or tests relevant to setup/template behavior. Report PASS/FAIL against acceptance criteria and highlight any residual risks.",
+          "acceptance": "- All engineer task acceptance criteria are satisfied\n- Any updated automated checks for setup/template behavior pass\n- No stale MCP example or fixed provider recommendation remains in targeted nx-setup files",
+          "risk": "Repository has unrelated local modifications; verification should isolate targeted files and relevant checks."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "Revise nx-setup skill and setup flow"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T13:24:33.685Z",
+      "branch": "nx-setup-role-models",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Enforce interactive question prompts in nx-setup skill",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "lead",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-14T13:23:06.905Z",
+          "context": "User requested that nx-setup must ask setup questions using OpenCode's interactive question mechanism rather than free-form chat. Likely relevant file is src/skills/generated/nx-setup.ts and any generation/template source that feeds it.",
+          "approach": "Inspect nx-setup generated prompt and generation source, make minimal prompt changes instructing mandatory use of the question tool with selectable options for every setup question, then verify by reading the resulting prompt content.",
+          "acceptance": "nx-setup skill prompt explicitly requires use of OpenCode interactive question UI for setup questions and forbids free-form chat questions when a discrete choice is being requested.",
+          "risk": "Changing only generated output may be overwritten later if a template/source also exists; need to update canonical source if present."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T13:27:26.877Z",
+      "branch": "nx-setup-role-models",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Add context7 MCP config",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "nexus",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-14T13:27:13.068Z",
+          "context": "User chose project-scope nx-setup and opted into optional context7 MCP addition.",
+          "approach": "Add the minimal `mcp.context7` remote server block to project `opencode.json` without changing existing agent assignments.",
+          "acceptance": "`opencode.json` contains the context7 MCP server block and remains valid JSON.",
+          "risk": "Low risk; one-file config edit only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-14T13:40:45.296Z",
+      "branch": "nx-setup-role-models",
+      "plan": {
+        "id": 34,
+        "topic": "Revise nx-setup to use dynamic OpenCode discovery for language and model selection",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Define a reliable language-handling strategy for nx-setup when OpenCode has no confirmed language setting surface",
+            "status": "decided",
+            "decision": "No product change for language handling. The current nx-setup prompt instruction to mirror the user's language is sufficient, and the observed English response is plausibly explained by the user invoking setup immediately without prior conversational language signal. Do not add config-based or heuristic language detection at this time; continue treating the current user message language as the operative signal when present."
+          },
+          {
+            "id": 2,
+            "title": "Redesign nx-setup model selection to use CLI-discovered providers/models and remove redundant preset choices",
+            "status": "decided",
+            "decision": "Remove `budget` from both the user-facing nx-setup flow and the nx_setup backend contract. The setup model choices should become `unified`, `tiered`, `custom`, and `skip` only. Also change model recommendation/discovery to be provider-aware and discovery-first: prefer `opencode providers list` to identify authenticated providers, `opencode debug config` to inspect resolved current model/provider state, and `opencode models <provider>` to fetch concrete candidate models before showing recommendations. If discovery cannot produce a useful recommendation, then ask the user which provider they use instead of presenting fixed model examples."
+          }
+        ],
+        "research_summary": "Repository and CLI research show three relevant facts. First, the current nx-setup skill already says 'Always respond in the user's language', but the runtime behavior still depends on the model following that prompt; there is no verified OpenCode language/locale config surfaced by `opencode debug config`, and repo searches found no dedicated language setting logic in `src/tools/setup.ts` or related docs. Second, the current skill presents both `tiered` and `budget`, but in practice the backend semantics are close enough that the distinction is weak from a user-facing setup perspective; simplifying the choice is reasonable if we keep additive custom/group-based overrides. Third, OpenCode CLI can dynamically inspect provider/model state today: `opencode providers list` reports authenticated providers, `opencode debug config` shows resolved config including current agent models and plugin scope, and `opencode models <provider>` lists available models for a provider. This means provider/model recommendations can be made CLI-aware, while language handling likely needs a prompt/runtime policy rather than a config lookup.",
+        "created_at": "2026-04-14T13:31:58.703Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Remove budget preset and update setup discovery guidance",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [],
+          "created_at": "2026-04-14T13:37:10.816Z",
+          "context": "Implement plan issue 2 on branch feat/nx-setup-role-models. Current nx_setup still accepts model_preset='budget', generated/template skill text still presents budget as a choice, and tests cover budget behavior. We already verified OpenCode CLI supports `opencode providers list`, `opencode debug config`, and `opencode models <provider>` for dynamic provider/model discovery. Relevant files include src/tools/setup.ts, templates/skills/nx-setup/SKILL.md, src/skills/generated/nx-setup.ts, .opencode/skills/nx-setup/SKILL.md, and scripts/e2e-setup-template.mjs.",
+          "approach": "Remove budget from the backend contract and related branching logic, keep unified/tiered/custom/skip, and update setup guidance to recommend provider-aware discovery-first model selection using the verified OpenCode CLI commands. Update tests and any generated/runtime-facing prompt copies consistently. Keep changes minimal and scoped to nx-setup behavior.",
+          "acceptance": "- nx_setup no longer accepts or references a budget preset in code paths, schema, or returned modelConfiguration preset semantics\n- nx-setup skill/template text no longer presents budget as a user-facing option and instead recommends discovery-first model selection using `opencode providers list`, `opencode debug config`, and `opencode models <provider>`\n- setup-related tests are updated to reflect the new contract and pass\n- No stale budget references remain in targeted runtime-facing/setup files",
+          "risk": "Moderate: removing a preset can affect tests and prompt/template consistency; avoid unrelated cleanup."
+        },
+        {
+          "id": 2,
+          "title": "Verify nx-setup contract and tests after budget removal",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-14T13:37:16.894Z",
+          "context": "After engineer completes the nx-setup changes, verify that budget is removed from backend and user-facing setup content, and that setup tests reflect the new discovery-first guidance. Likely verification target includes setup-related tests or checks around scripts/e2e-setup-template.mjs plus spot-checks of prompt/template files.",
+          "approach": "Review the changed files and run the smallest relevant automated verification that proves the nx_setup contract and setup prompt/test updates are coherent. Report PASS/FAIL with any findings.",
+          "acceptance": "- Verification confirms there is no remaining active budget preset path in nx_setup and setup-facing prompts/tests\n- Relevant automated setup verification passes, or failures are reported with concrete findings",
+          "risk": "Low to moderate depending on test coverage and any generated-file sync issues."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Revise nx-setup to use dynamic OpenCode discovery for language and model selection"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"
