@@ -1,10 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { NEXUS_AGENT_CATALOG } from "../dist/agents/catalog.js";
-import { NEXUS_SKILL_CATALOG } from "../dist/skills/catalog.js";
-import { SKILL_PROMPTS } from "../dist/skills/generated/index.js";
+import { AGENT_META } from "../dist/agents/generated/index.js";
+import { SKILL_META, SKILL_PROMPTS } from "../dist/skills/generated/index.js";
 import { NEXUS_TAGS } from "../dist/shared/tags.js";
+
+const NEXUS_AGENT_CATALOG = Object.values(AGENT_META);
+const NEXUS_SKILL_CATALOG = Object.values(SKILL_META);
 
 const root = process.cwd();
 const outDir = path.join(root, "templates");
@@ -13,7 +15,7 @@ const outFile = path.join(outDir, "nexus-section.md");
 await fs.mkdir(outDir, { recursive: true });
 
 const agents = NEXUS_AGENT_CATALOG.map((a) => `| ${a.name} | ${a.category.toUpperCase()} | ${a.description} | ${a.id} |`).join("\n");
-const skills = NEXUS_SKILL_CATALOG.map((s) => `| ${s.id} | ${s.trigger} | ${s.purpose} |`).join("\n");
+const skills = NEXUS_SKILL_CATALOG.map((s) => `| ${s.id} | ${s.trigger_display} | ${s.purpose} |`).join("\n");
 const tags = NEXUS_TAGS.map((t) => `| ${t.tag} | ${t.purpose} |`).join("\n");
 
 const content = [
@@ -87,7 +89,7 @@ const GENERATED_SKILL_IDS = Object.keys(SKILL_PROMPTS).filter(
 );
 
 for (const skillId of GENERATED_SKILL_IDS) {
-  const catalog = NEXUS_SKILL_CATALOG.find((s) => s.id === skillId);
+  const catalog = SKILL_META[skillId];
   if (!catalog) {
     console.warn(`  [warn] SKILL_PROMPTS has "${skillId}" but no catalog entry — skipping`);
     continue;
