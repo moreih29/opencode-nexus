@@ -12,6 +12,8 @@ import { AGENT_META } from "../agents/generated/index.js";
 const z = tool.schema;
 const MARKER_START = "<!-- NEXUS:START -->";
 const MARKER_END = "<!-- NEXUS:END -->";
+const DEFAULT_BUILTIN_AGENT_IDS = ["general", "explore"] as const;
+const DEFAULT_BUILTIN_AGENT_ID_SET = new Set<string>(DEFAULT_BUILTIN_AGENT_IDS);
 
 export const nxSetup = tool({
   description: "Configure OpenCode Nexus files and inject the orchestration template",
@@ -359,12 +361,19 @@ function mergeAgentModels(
 
   const groupModels = resolveGroupModels(preset, leadModel, additiveModels);
   const hasGroupModels = groupModels.unified || groupModels.nexus || groupModels.how || groupModels.do || groupModels.check;
+  const standardTierModel = resolveStandardTierModel(groupModels);
 
   if (hasGroupModels) {
     for (const profile of catalog) {
       const model = resolveModelForAgent(profile, groupModels);
       if (model) {
         resolved[profile.id] = model;
+      }
+    }
+
+    if (standardTierModel) {
+      for (const id of DEFAULT_BUILTIN_AGENT_IDS) {
+        resolved[id] = standardTierModel;
       }
     }
 
@@ -388,15 +397,24 @@ function mergeAgentModels(
 
   for (const [id, model] of Object.entries(resolved)) {
     const catalogEntry = catalog.find((p) => p.id === id);
-    if (!catalogEntry) {
+    if (catalogEntry) {
+      const existing = toRecord(agent[id]);
+      agent[id] = { ...existing, mode: "subagent", model };
       continue;
     }
-    const existing = toRecord(agent[id]);
-    agent[id] = { ...existing, mode: "subagent", model };
+
+    if (DEFAULT_BUILTIN_AGENT_ID_SET.has(id)) {
+      const existing = toRecord(agent[id]);
+      agent[id] = { ...existing, model };
+    }
   }
 
   config.agent = agent;
   return resolved;
+}
+
+function resolveStandardTierModel(groupModels: GroupModels): string | undefined {
+  return groupModels.do ?? groupModels.check ?? groupModels.unified;
 }
 
 type GroupModels = {

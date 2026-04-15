@@ -49,7 +49,7 @@ Ask the user to choose a model configuration approach with the \`question\` tool
 > "How would you like to assign models?
 >
 > 1. **unified** — same model for all agents (simple, consistent cost)
-> 2. **tiered** — high-capability for HOW + nexus, standard for DO + CHECK (quality where it matters)
+> 2. **tiered** — high-capability for \`nexus\` + HOW, standard for DO + CHECK + built-in defaults (quality where it matters)
 >
 > [1-2, default: 2]"
 
@@ -59,6 +59,12 @@ For \`tiered\`, run that provider-first pipeline twice:
 
 1. select the high-capability provider and model for \`nexus\` + HOW
 2. select the standard provider and model for DO + CHECK
+
+Then explain built-in defaults clearly:
+
+- default built-in setup surface: \`general\` and \`explore\` only
+- default behavior: both inherit the standard tier model
+- optional override: ask whether the user wants different models for \`general\` and/or \`explore\`
 
 Use a provider-first flow:
 
@@ -71,17 +77,42 @@ Use a provider-first flow:
 
 When a provider is connected, models should be shown in \`provider/model-id\` format (e.g., \`anthropic/claude-sonnet-4-5\`, \`openai/gpt-4o\`). Do not jump straight to arbitrary model suggestions when the provider has not been chosen yet.
 
-Call \`nx_setup\` with the resolved model configuration:
+Call \`nx_setup\` with the resolved model configuration. Use \`models\` as the canonical shape.
 
 **unified** (same model everywhere):
 \`\`\`
-nx_setup(scope=<from step 1>, model_preset="unified", lead_model="<model>")
+nx_setup(scope=<from step 1>, model_preset="unified", models={ unified: "<model>" })
 \`\`\`
 
-**tiered** (HOW + nexus = high-capability, DO + CHECK = standard):
+**tiered** (\`nexus\` + HOW = high-capability, DO + CHECK = standard):
 \`\`\`
-nx_setup(scope=<from step 1>, model_preset="tiered", lead_model="<high-capability model>")
+nx_setup(
+  scope=<from step 1>,
+  model_preset="tiered",
+  models={
+    nexus: "<high-capability model>",
+    how: "<high-capability model>",
+    do: "<standard model>",
+    check: "<standard model>"
+  }
+)
 \`\`\`
+
+If the user wants optional built-in overrides, include:
+
+\`\`\`
+models={
+  ...,
+  agents: {
+    general: "<optional override>",
+    explore: "<optional override>"
+  }
+}
+\`\`\`
+
+Do not include hidden/system built-ins (\`compaction\`, \`title\`, \`summary\`) in the default model flow. Do not surface disabled \`build\`/\`plan\` in this step.
+
+\`lead_model\` remains a backward-compatibility fallback only. Do not present it as the primary setup path.
 
 If the user skips, use \`model_preset="skip"\` — existing models in \`opencode.json\` remain unchanged.
 

@@ -255,6 +255,44 @@ async function setupWithModels(ctx, modelArgs) {
   assert.equal(config.agent.tester?.model, "openai/gpt-4o-mini");           // check category
 }
 
+// Test: built-in general/explore inherit standard tier from canonical models
+{
+  const r = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-models-builtins-default-"));
+  const { config } = await setupWithModels(makeCtx(r), {
+    model_preset: "skip",
+    models: {
+      nexus: "anthropic/claude-sonnet-4-5",
+      how: "anthropic/claude-sonnet-4-5",
+      do: "anthropic/claude-haiku-4-5",
+      check: "anthropic/claude-haiku-4-5"
+    }
+  });
+  assert.equal(config.agent.general?.model, "anthropic/claude-haiku-4-5");
+  assert.equal(config.agent.explore?.model, "anthropic/claude-haiku-4-5");
+  assert.equal(config.agent.build, undefined);
+  assert.equal(config.agent.plan, undefined);
+}
+
+// Test: models.agents can explicitly override built-in general/explore
+{
+  const r = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-models-builtins-override-"));
+  const { config } = await setupWithModels(makeCtx(r), {
+    model_preset: "skip",
+    models: {
+      nexus: "anthropic/claude-sonnet-4-5",
+      how: "anthropic/claude-sonnet-4-5",
+      do: "anthropic/claude-haiku-4-5",
+      check: "anthropic/claude-haiku-4-5",
+      agents: {
+        general: "openai/gpt-4.1-mini",
+        explore: "openai/gpt-4.1"
+      }
+    }
+  });
+  assert.equal(config.agent.general?.model, "openai/gpt-4.1-mini");
+  assert.equal(config.agent.explore?.model, "openai/gpt-4.1");
+}
+
 // Test: models.agents highest-precedence override
 {
   const r = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-models-agents-override-"));
