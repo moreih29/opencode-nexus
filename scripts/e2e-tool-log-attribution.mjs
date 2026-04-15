@@ -44,11 +44,16 @@ await hooks["tool.execute.before"](
 console.log("[experiment] child edit before task completion");
 await hooks["tool.execute.after"](
   {
-    tool: "write",
-    args: { filePath: path.join(root, "src", "before-end.ts") },
+    tool: "apply_patch",
+    args: {
+      patchText: `*** Begin Patch
+*** Add File: src/before-end.ts
++export const before = true;
+*** End Patch`
+    },
     sessionID: "ses-child-1"
   },
-  { title: "write", output: "ok", metadata: {} }
+  { title: "apply_patch", output: "ok", metadata: {} }
 );
 
 let toolLog = await readToolLogLines();
@@ -81,11 +86,16 @@ assert.deepEqual(
 console.log("[experiment] child edit after task completion");
 await hooks["tool.execute.after"](
   {
-    tool: "write",
-    args: { filePath: path.join(root, "src", "after-end.ts") },
+    tool: "apply_patch",
+    args: {
+      patchText: `*** Begin Patch
+*** Add File: src/after-end.ts
++export const after = true;
+*** End Patch`
+    },
     sessionID: "ses-child-1"
   },
-  { title: "write", output: "ok", metadata: {} }
+  { title: "apply_patch", output: "ok", metadata: {} }
 );
 
 toolLog = await readToolLogLines();

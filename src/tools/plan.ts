@@ -7,7 +7,7 @@ import {
 } from "../orchestration/plan-continuity-adapter.js";
 import { collectHowRolesFromPlan } from "../shared/plan-how-panel.js";
 import { createNexusPaths } from "../shared/paths.js";
-import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
+import { readJsonFile, updateJsonFileLocked } from "../shared/json-store.js";
 import { fileExists } from "../shared/state.js";
 import {
   PlanFileSchema,
@@ -28,35 +28,38 @@ export const nxPlanStart = tool({
       throw new Error("research_summary is required");
     }
     const paths = createNexusPaths(context.worktree ?? context.directory);
-
-    if (await fileExists(paths.PLAN_FILE)) {
-      const existing = await readJsonFile<PlanFile | null>(paths.PLAN_FILE, null);
-      if (existing) {
+    const plan = await updateJsonFileLocked<PlanFile | null>(paths.PLAN_FILE, null, async (existingRaw) => {
+      const existingParsed = existingRaw ? PlanFileSchema.safeParse(existingRaw) : null;
+      if (existingParsed?.success) {
         await appendHistory(paths.HISTORY_FILE, {
           completed_at: new Date().toISOString(),
           branch: "carry-over",
-          plan: existing
+          plan: existingParsed.data
         });
       }
+
+      const now = new Date().toISOString();
+      const nextPlan: PlanFile = {
+        id: await nextPlanId(paths.HISTORY_FILE),
+        topic: args.topic,
+        issues: Array.isArray(args.issues)
+          ? args.issues.map((title, idx) => ({
+              id: idx + 1,
+              title,
+              status: "pending" as const
+            }))
+          : [],
+        research_summary: args.research_summary,
+        created_at: now
+      };
+
+      return PlanFileSchema.parse(nextPlan);
+    });
+
+    if (!plan) {
+      throw new Error("Failed to create plan session");
     }
 
-    const now = new Date().toISOString();
-    const plan: PlanFile = {
-      id: await nextPlanId(paths.HISTORY_FILE),
-      topic: args.topic,
-      issues: Array.isArray(args.issues)
-        ? args.issues.map((title, idx) => ({
-            id: idx + 1,
-            title,
-            status: "pending" as const
-          }))
-        : [],
-      research_summary: args.research_summary,
-      created_at: now
-    };
-
-    PlanFileSchema.parse(plan);
-    await writeJsonFile(paths.PLAN_FILE, plan);
     return JSON.stringify({ created: true, plan_id: plan.id, topic: args.topic, issueCount: plan.issues.length });
   }
 });
@@ -203,63 +206,65 @@ export const nxPlanUpdate = tool({
     if (!(await fileExists(paths.PLAN_FILE))) {
       throw new Error("No active plan session");
     }
-    const plan = PlanFileSchema.parse(await readJsonFile<PlanFile>(paths.PLAN_FILE, {} as PlanFile));
-
     let result: Record<string, unknown> = {};
+    await updateJsonFileLocked<PlanFile>(paths.PLAN_FILE, {} as PlanFile, (raw) => {
+      const plan = PlanFileSchema.parse(raw);
 
-    if (args.action === "add") {
-      if (!args.title) {
-        throw new Error("title is required for add");
+      if (args.action === "add") {
+        if (!args.title) {
+          throw new Error("title is required for add");
+        }
+        const nextId = (plan.issues.length > 0 ? Math.max(...plan.issues.map((i) => i.id)) : 0) + 1;
+        const added = {
+          id: nextId,
+          title: args.title,
+          status: "pending" as const
+        };
+        plan.issues.push(added);
+        result = { added: true, issue: { id: added.id, title: added.title, status: added.status } };
       }
-      const nextId = (plan.issues.length > 0 ? Math.max(...plan.issues.map(i => i.id)) : 0) + 1;
-      const added = {
-        id: nextId,
-        title: args.title,
-        status: "pending" as const
-      };
-      plan.issues.push(added);
-      result = { added: true, issue: { id: added.id, title: added.title, status: added.status } };
-    }
 
-    if (args.action === "remove") {
-      if (!args.issue_id) {
-        throw new Error("issue_id is required for remove");
+      if (args.action === "remove") {
+        if (!args.issue_id) {
+          throw new Error("issue_id is required for remove");
+        }
+        const removed = plan.issues.find((item) => item.id === args.issue_id);
+        if (!removed) {
+          throw new Error(`Issue ${args.issue_id} not found`);
+        }
+        plan.issues = plan.issues.filter((issue) => issue.id !== args.issue_id);
+        result = { removed: true, issue: { id: removed.id } };
       }
-      const removed = plan.issues.find((item) => item.id === args.issue_id);
-      if (!removed) {
-        throw new Error(`Issue ${args.issue_id} not found`);
-      }
-      plan.issues = plan.issues.filter((issue) => issue.id !== args.issue_id);
-      result = { removed: true, issue: { id: removed.id } };
-    }
 
-    if (args.action === "edit") {
-      if (!args.issue_id || !args.title) {
-        throw new Error("issue_id and title are required for edit");
+      if (args.action === "edit") {
+        if (!args.issue_id || !args.title) {
+          throw new Error("issue_id and title are required for edit");
+        }
+        const issue = plan.issues.find((item) => item.id === args.issue_id);
+        if (!issue) {
+          throw new Error(`Issue ${args.issue_id} not found`);
+        }
+        issue.title = args.title;
+        result = { edited: true, issue: { id: issue.id, title: issue.title } };
       }
-      const issue = plan.issues.find((item) => item.id === args.issue_id);
-      if (!issue) {
-        throw new Error(`Issue ${args.issue_id} not found`);
-      }
-      issue.title = args.title;
-      result = { edited: true, issue: { id: issue.id, title: issue.title } };
-    }
 
-    if (args.action === "reopen") {
-      if (!args.issue_id) {
-        throw new Error("issue_id is required for reopen");
+      if (args.action === "reopen") {
+        if (!args.issue_id) {
+          throw new Error("issue_id is required for reopen");
+        }
+        const issue = plan.issues.find((item) => item.id === args.issue_id);
+        if (!issue) {
+          throw new Error(`Issue ${args.issue_id} not found`);
+        }
+        issue.status = "pending";
+        issue.decision = undefined;
+        issue.summary = undefined;
+        result = { reopened: true, issue: { id: issue.id, status: issue.status } };
       }
-      const issue = plan.issues.find((item) => item.id === args.issue_id);
-      if (!issue) {
-        throw new Error(`Issue ${args.issue_id} not found`);
-      }
-      issue.status = "pending";
-      issue.decision = undefined;
-      issue.summary = undefined;
-      result = { reopened: true, issue: { id: issue.id, status: issue.status } };
-    }
 
-    await writeJsonFile(paths.PLAN_FILE, plan);
+      return plan;
+    });
+
     return JSON.stringify(result);
   }
 });
@@ -278,26 +283,32 @@ export const nxPlanDecide = tool({
     if (!(await fileExists(paths.PLAN_FILE))) {
       throw new Error("No active plan session");
     }
-    const plan = await readPlan(paths.PLAN_FILE);
-    const issue = plan.issues.find((item) => item.id === args.issue_id);
+    let remaining: number[] = [];
+    let allDecided = false;
 
-    if (!issue) {
-      throw new Error(`issue not found: ${args.issue_id}`);
-    }
+    await updateJsonFileLocked<PlanFile>(paths.PLAN_FILE, {} as PlanFile, (raw) => {
+      const plan = PlanFileSchema.parse(raw);
+      const issue = plan.issues.find((item) => item.id === args.issue_id);
 
-    issue.status = "decided";
-    issue.decision = args.decision;
-    if (args.how_agents !== undefined) issue.how_agents = args.how_agents;
-    if (args.how_summary !== undefined) issue.how_summary = args.how_summary;
-    if (args.how_agent_ids !== undefined) issue.how_agent_ids = args.how_agent_ids;
+      if (!issue) {
+        throw new Error(`issue not found: ${args.issue_id}`);
+      }
 
-    await writeJsonFile(paths.PLAN_FILE, plan);
+      issue.status = "decided";
+      issue.decision = args.decision;
+      if (args.how_agents !== undefined) issue.how_agents = args.how_agents;
+      if (args.how_summary !== undefined) issue.how_summary = args.how_summary;
+      if (args.how_agent_ids !== undefined) issue.how_agent_ids = args.how_agent_ids;
 
-    const allDecided = plan.issues.every((item) => item.status === "decided");
+      allDecided = plan.issues.every((item) => item.status === "decided");
+      remaining = plan.issues.filter((i) => i.status === "pending").map((i) => i.id);
+      return plan;
+    });
+
     return JSON.stringify({
       decided: true,
       allComplete: allDecided,
-      remaining: plan.issues.filter((i) => i.status === "pending").map((i) => i.id)
+      remaining
     });
   }
 });

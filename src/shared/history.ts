@@ -1,4 +1,4 @@
-import { readJsonFile, writeJsonFile } from "./json-store.js";
+import { readJsonFile, updateJsonFileLocked } from "./json-store.js";
 
 export const HISTORY_SCHEMA_VERSION = "0.5";
 
@@ -17,10 +17,14 @@ interface HistoryFile {
 }
 
 export async function appendHistory(historyFile: string, cycle: HistoryCycle): Promise<void> {
-  const history = await readJsonFile<HistoryFile>(historyFile, { cycles: [] });
-  history.schema_version = HISTORY_SCHEMA_VERSION;
-  history.cycles.push({ schema_version: HISTORY_SCHEMA_VERSION, ...cycle });
-  await writeJsonFile(historyFile, history);
+  await updateJsonFileLocked<HistoryFile>(historyFile, { cycles: [] }, (history) => {
+    const cycles = Array.isArray(history.cycles) ? history.cycles : [];
+    return {
+      ...history,
+      schema_version: HISTORY_SCHEMA_VERSION,
+      cycles: [...cycles, { schema_version: HISTORY_SCHEMA_VERSION, ...cycle }]
+    };
+  });
 }
 
 export async function nextPlanId(historyFile: string): Promise<number> {

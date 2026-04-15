@@ -408,11 +408,13 @@ export function createHooks(ctx: PluginContext) {
 function isEditLikeTool(toolName: string): boolean {
   // Sourced from nexus-core capability `no_file_edit` via capability-map.yml resolution.
   // Generated into prompts.generated.ts — keeps opencode-nexus in sync with nexus-core.
-  return NO_FILE_EDIT_TOOLS.includes(toolName);
+  return NO_FILE_EDIT_TOOLS.includes(toolName) || toolName === "apply_patch";
 }
 
 function getTargetPath(args: Record<string, unknown>, projectRoot: string): string | null {
-  const candidates = [args.filePath, args.path, args.file_path].filter((v): v is string => typeof v === "string");
+  const candidates = [args.filePath, args.path, args.file_path, extractTargetPathFromPatchText(args)].filter(
+    (v): v is string => typeof v === "string"
+  );
   if (candidates.length === 0) {
     return null;
   }
@@ -422,6 +424,15 @@ function getTargetPath(args: Record<string, unknown>, projectRoot: string): stri
     return picked;
   }
   return path.join(projectRoot, picked);
+}
+
+function extractTargetPathFromPatchText(args: Record<string, unknown>): string | null {
+  const patchText = args.patchText;
+  if (typeof patchText !== "string") {
+    return null;
+  }
+  const firstFileHeader = patchText.match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m);
+  return firstFileHeader?.[1]?.trim() || null;
 }
 
 

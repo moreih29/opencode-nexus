@@ -1,4 +1,4 @@
-import { readJsonFile, writeJsonFile } from "./json-store.js";
+import { readJsonFile, updateJsonFileLocked, writeJsonFile } from "./json-store.js";
 import { HARNESS_ID } from "./paths.js";
 import { AgentTrackerSchema, type AgentTracker, type Invocation, type InvocationContinuityHandles } from "./schema.js";
 
@@ -198,9 +198,7 @@ export async function registerInvocationStart(
   filePath: string,
   invocation: RegisterInvocationStartInput
 ): Promise<void> {
-  const tracker = await readAgentTracker(filePath);
-  const next = applyInvocationStart(tracker, invocation);
-  await writeAgentTracker(filePath, next);
+  await updateStoredTracker(filePath, (tracker) => applyInvocationStart(tracker, invocation));
 }
 
 export async function registerInvocationEnd(
@@ -208,9 +206,15 @@ export async function registerInvocationEnd(
   invocation_id: string,
   patch: RegisterInvocationEndInput
 ): Promise<void> {
-  const tracker = await readAgentTracker(filePath);
-  const next = applyInvocationEnd(tracker, invocation_id, patch);
-  await writeAgentTracker(filePath, next);
+  await updateStoredTracker(filePath, (tracker) => applyInvocationEnd(tracker, invocation_id, patch));
+}
+
+async function updateStoredTracker(filePath: string, mutator: (tracker: AgentTracker) => AgentTracker): Promise<void> {
+  await updateJsonFileLocked<unknown>(filePath, null, (raw) => {
+    const parsed = AgentTrackerSchema.safeParse(raw);
+    const tracker = parsed.success ? parsed.data : createEmptyAgentTracker();
+    return mutator(tracker);
+  });
 }
 
 export function createDelegationTrackerRegistrar(filePath: string): DelegationTrackerRegistrar {

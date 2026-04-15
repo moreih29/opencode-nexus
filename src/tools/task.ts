@@ -5,7 +5,7 @@ import { NEXUS_PRIMARY_AGENT_ID } from "../agents/primary.js";
 import { appendHistory, type HistoryCycle } from "../shared/history.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
 import { createNexusPaths } from "../shared/paths.js";
-import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
+import { readJsonFile, updateJsonFileLocked } from "../shared/json-store.js";
 import { fileExists } from "../shared/state.js";
 import { TasksFileSchema, type TaskItem, type TasksFile } from "../shared/schema.js";
 
@@ -51,35 +51,38 @@ export const nxTaskAdd = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const now = new Date().toISOString();
+    let id = 0;
 
-    const tasksFile = await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] });
-    const id = (tasksFile.tasks.length > 0 ? Math.max(...tasksFile.tasks.map(t => t.id)) : 0) + 1;
-    const task: TaskItem = {
-      id,
-      title: args.title,
-      status: "pending",
-      owner: args.owner,
-      owner_agent_id: args.owner_agent_id,
-      owner_reuse_policy: args.owner_reuse_policy,
-      plan_issue: args.plan_issue,
-      deps: args.deps,
-      created_at: now,
-      context: args.context,
-      approach: args.approach,
-      acceptance: args.acceptance,
-      risk: args.risk
-    };
+    await updateJsonFileLocked<TasksFile>(paths.TASKS_FILE, { tasks: [] }, (raw) => {
+      const tasksFile = TasksFileSchema.parse(raw);
+      id = (tasksFile.tasks.length > 0 ? Math.max(...tasksFile.tasks.map((t) => t.id)) : 0) + 1;
+      const task: TaskItem = {
+        id,
+        title: args.title,
+        status: "pending",
+        owner: args.owner,
+        owner_agent_id: args.owner_agent_id,
+        owner_reuse_policy: args.owner_reuse_policy,
+        plan_issue: args.plan_issue,
+        deps: args.deps,
+        created_at: now,
+        context: args.context,
+        approach: args.approach,
+        acceptance: args.acceptance,
+        risk: args.risk
+      };
 
-    if (args.goal !== undefined) {
-      tasksFile.goal = args.goal;
-    }
-    if (args.decisions !== undefined) {
-      tasksFile.decisions = [...(tasksFile.decisions ?? []), ...args.decisions];
-    }
+      if (args.goal !== undefined) {
+        tasksFile.goal = args.goal;
+      }
+      if (args.decisions !== undefined) {
+        tasksFile.decisions = [...(tasksFile.decisions ?? []), ...args.decisions];
+      }
 
-    tasksFile.tasks.push(task);
-    TasksFileSchema.parse(tasksFile);
-    await writeJsonFile(paths.TASKS_FILE, tasksFile);
+      tasksFile.tasks.push(task);
+      TasksFileSchema.parse(tasksFile);
+      return tasksFile;
+    });
 
     const planActive = await fileExists(paths.PLAN_FILE);
     const linkageNote = planActive && !args.plan_issue ? " Link this task to its plan issue with plan_issue when possible." : "";
@@ -89,13 +92,13 @@ export const nxTaskAdd = tool({
         task: {
           id,
           title: args.title,
-          status: task.status,
-          owner: task.owner ?? null,
-          owner_agent_id: task.owner_agent_id ?? null,
-          owner_reuse_policy: task.owner_reuse_policy ?? null,
-          deps: task.deps ?? [],
-          plan_issue: task.plan_issue ?? null,
-          created_at: task.created_at
+          status: "pending",
+          owner: args.owner ?? null,
+          owner_agent_id: args.owner_agent_id ?? null,
+          owner_reuse_policy: args.owner_reuse_policy ?? null,
+          deps: args.deps ?? [],
+          plan_issue: args.plan_issue ?? null,
+          created_at: now
         },
         message: `Added task ${id}: ${args.title}${linkageNote}`
       },
@@ -153,19 +156,23 @@ export const nxTaskUpdate = tool({
     if (!(await fileExists(paths.TASKS_FILE))) {
       throw new Error("tasks.json not found");
     }
-    const tasksFile = TasksFileSchema.parse(await readJsonFile<TasksFile>(paths.TASKS_FILE, { tasks: [] }));
-    const task = tasksFile.tasks.find((item) => item.id === args.id);
+    let updatedTitle = "";
+    await updateJsonFileLocked<TasksFile>(paths.TASKS_FILE, { tasks: [] }, (raw) => {
+      const tasksFile = TasksFileSchema.parse(raw);
+      const task = tasksFile.tasks.find((item) => item.id === args.id);
 
-    if (!task) {
-      throw new Error(`Task id ${args.id} not found`);
-    }
+      if (!task) {
+        throw new Error(`Task id ${args.id} not found`);
+      }
 
-    task.status = args.status;
-    await writeJsonFile(paths.TASKS_FILE, tasksFile);
+      task.status = args.status;
+      updatedTitle = task.title;
+      return tasksFile;
+    });
 
     return JSON.stringify(
       {
-        task: { id: args.id, title: task.title, status: args.status },
+        task: { id: args.id, title: updatedTitle, status: args.status },
         note: args.note ?? null,
         message: args.note ? `Updated ${args.id} -> ${args.status} (${args.note})` : `Updated ${args.id} -> ${args.status}`
       },

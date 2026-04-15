@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { runWithFileLock } from "./json-store.js";
 
 export interface ToolLogEntry {
   ts: string;
@@ -9,7 +10,9 @@ export interface ToolLogEntry {
 }
 
 export async function appendToolLogEntry(filePath: string, entry: ToolLogEntry): Promise<void> {
-  await fs.appendFile(filePath, JSON.stringify(entry) + "\n", "utf8");
+  await runWithFileLock(filePath, async () => {
+    await fs.appendFile(filePath, JSON.stringify(entry) + "\n", "utf8");
+  });
 }
 
 export async function readToolLog(filePath: string): Promise<ToolLogEntry[]> {
@@ -32,7 +35,9 @@ export async function readToolLog(filePath: string): Promise<ToolLogEntry[]> {
 }
 
 export async function resetToolLog(filePath: string): Promise<void> {
-  await fs.writeFile(filePath, "", "utf8");
+  await runWithFileLock(filePath, async () => {
+    await fs.writeFile(filePath, "", "utf8");
+  });
 }
 
 export async function aggregateFilesForAgent(filePath: string, agentId: string): Promise<string[]> {
