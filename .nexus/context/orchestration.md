@@ -49,9 +49,9 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 |---|---|---|
 | `nx-plan` | `[plan]` | 구조화된 플래닝 및 결정 기록 |
 | `nx-run` | `[run]` | 실행 파이프라인 (intake → design → execute → verify → complete) |
-| `nx-init` | `nx-init` | 온보딩 — 코어 구조 및 기반 지식 초기화 |
-| `nx-sync` | `nx-sync` | 태스크 사이클 완료 후 코어 지식 동기화 |
-| `nx-setup` | `nx-setup` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
+| `nx-init` | `skill({ name: "nx-init" })` | 온보딩 — 코어 구조 및 기반 지식 초기화 |
+| `nx-sync` | `[sync]` | 태스크 사이클 완료 후 코어 지식 동기화 |
+| `nx-setup` | `skill({ name: "nx-setup" })` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
 
 ### 스킬 이중 delivery — Option D (A-leg + B-leg)
 

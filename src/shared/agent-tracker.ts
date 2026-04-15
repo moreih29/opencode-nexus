@@ -126,7 +126,7 @@ export function applyInvocationStart(
   if (existingIndex >= 0) {
     const existing = tracker.invocations[existingIndex];
     invocation.started_at = existing.started_at;
-    invocation.status = existing.status === "running" ? "running" : existing.status;
+    invocation.status = existing.status;
     invocation.continuity = mergeContinuity(existing.continuity, continuity);
     invocation.last_message = existing.last_message;
     nextInvocations[existingIndex] = invocation;
@@ -262,10 +262,10 @@ export function pickContinuityFromTrackerState(
   }
 
   candidates.sort((left, right) => {
-    const leftRunning = left.status === "running" ? 1 : 0;
-    const rightRunning = right.status === "running" ? 1 : 0;
-    if (preferRunning && leftRunning !== rightRunning) {
-      return rightRunning - leftRunning;
+    const leftActive = isInvocationActive(left.status) ? 1 : 0;
+    const rightActive = isInvocationActive(right.status) ? 1 : 0;
+    if (preferRunning && leftActive !== rightActive) {
+      return rightActive - leftActive;
     }
     return getInvocationTimestamp(right) - getInvocationTimestamp(left);
   });
@@ -301,10 +301,10 @@ export function buildDelegationPlanFromTracker(
   });
 
   candidates.sort((left, right) => {
-    const leftRunning = left.status === "running" ? 1 : 0;
-    const rightRunning = right.status === "running" ? 1 : 0;
-    if (preferRunning && leftRunning !== rightRunning) {
-      return rightRunning - leftRunning;
+    const leftActive = isInvocationActive(left.status) ? 1 : 0;
+    const rightActive = isInvocationActive(right.status) ? 1 : 0;
+    if (preferRunning && leftActive !== rightActive) {
+      return rightActive - leftActive;
     }
     return getInvocationTimestamp(right) - getInvocationTimestamp(left);
   });
@@ -448,8 +448,12 @@ export async function summarizeCoordinationGroups(filePath: string): Promise<Gro
 export async function hasRunningTeam(filePath: string, team_name: string): Promise<boolean> {
   const tracker = await readAgentTracker(filePath);
   return tracker.invocations.some(
-    (inv) => inv.status === "running" && inv.coordination_label === team_name
+    (inv) => isInvocationActive(inv.status) && inv.coordination_label === team_name
   );
+}
+
+export function isInvocationActive(status: Invocation["status"]): boolean {
+  return status === "running";
 }
 
 // ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pip
 import { isKnownNexusAgent } from "../orchestration/team-policy.js";
 import { SKILL_META } from "../skills/prompts.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
-import { readAgentTracker, registerInvocationEnd, registerInvocationStart, writeAgentTracker } from "../shared/agent-tracker.js";
+import { isInvocationActive, readAgentTracker, registerInvocationEnd, registerInvocationStart, writeAgentTracker } from "../shared/agent-tracker.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
 import { aggregateFilesForAgent, appendToolLogEntry, resetToolLog } from "../shared/tool-log.js";
@@ -225,7 +225,7 @@ export function createHooks(ctx: PluginContext) {
           try {
             const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
             const matchedInvocation = tracker.invocations.find(
-              (inv) => inv.continuity?.child_session_id === sessionID && inv.status === "running"
+              (inv) => inv.continuity?.child_session_id === sessionID && isInvocationActive(inv.status)
             );
             if (matchedInvocation) {
               await appendToolLogEntry(paths.TOOL_LOG_FILE, {
@@ -321,7 +321,7 @@ export function createHooks(ctx: PluginContext) {
       try {
         const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
         const active = tracker.invocations
-          .filter((inv) => inv.status === "running")
+          .filter((inv) => isInvocationActive(inv.status))
           .map((inv) => inv.agent_type ?? "unknown");
         if (active.length > 0) {
           parts.push(`active agents: ${active.join(", ")}`);

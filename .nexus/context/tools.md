@@ -7,8 +7,8 @@
 - **언어**: TypeScript 5.6
 - **모듈 형식**: ESM (`"type": "module"`)
 - **빌드 출력**: `tsc -p tsconfig.json` → `dist/index.js`
-- **런타임 의존성**: `zod ^3.23.8` (스키마 검증)
-- **개발 의존성**: `@opencode-ai/plugin` (tool 팩토리, 컨텍스트 타입), `@types/node`
+- **런타임 의존성**: `@ast-grep/napi ^0.42.0` (AST 검색/치환), `zod ^3.23.8` (스키마 검증)
+- **개발 의존성**: `@moreih29/nexus-core ^0.8.0` (에이전트/스킬 canonical source), `@opencode-ai/plugin` (tool 팩토리, 컨텍스트 타입), `@types/node ^22.10.1`, `typescript ^5.6.3`, `yaml ^2.7.0`
 - **배포**: npm 공개 패키지 (`opencode-nexus`), `dist/`와 `templates/`만 포함
 
 플러그인은 `@opencode-ai/plugin`의 `tool()` 팩토리로 각 도구를 정의하며, OpenCode가 런타임에 MCP 서버로 노출한다. 모든 도구는 `context.worktree ?? context.directory`를 기준 경로로 사용한다.

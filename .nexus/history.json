@@ -7209,6 +7209,87 @@
           "Review agent-tracker lifecycle and purpose"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:46:20.744Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Sync .nexus/context docs with current repository state",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "nexus",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T03:43:54.061Z",
+          "context": "User requested [sync]. Recent changes affect skill metadata, runtime dependencies, and E2E/build workflow details in .nexus/context.",
+          "approach": "Compare changed source files and package metadata against current .nexus/context docs, then apply targeted documentation updates only where concrete drift exists.",
+          "acceptance": "Context docs accurately reflect current skill triggers, dependencies, tool/runtime facts, and E2E workflow/script inventory without rewriting unrelated sections.",
+          "risk": "Over-updating abstract context based on weak signals; avoid speculative edits and leave unchanged sections intact."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:51:20.028Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Track agent-tracker entries from initial subagent delegation",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "nexus",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T03:48:42.993Z",
+          "context": "User noticed agent-tracker entries appear only after subagent completion and asked to manage status from the first call under [run].",
+          "approach": "Adjust agent-tracker lifecycle schema and start registration so an invocation is appended immediately with a non-terminal state, then keep terminal transition on completion. Update affected readers/tests accordingly.",
+          "acceptance": "agent-tracker appends an invocation record before subagent completion with an explicit pre-completion status, existing completion logic still works, and relevant tests cover the lifecycle.",
+          "risk": "Changing lifecycle enum could break running-status filters; keep semantics narrow and update only affected comparisons."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T04:08:34.471Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align opencode tracker lifecycle to running-completed",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T04:06:26.317Z",
+          "context": "User requested [run] and wants opencode-nexus agent-tracker lifecycle to match claude-nexus: no pending state, only running -> completed. Current recent change introduced pending as the initial status.",
+          "approach": "Revert the pending lifecycle change narrowly: remove pending from schema/status helpers, restore applyInvocationStart to running, update active checks and the focused E2E expectation accordingly, then run build plus focused tracker test.",
+          "acceptance": "Agent tracker schema no longer includes pending, invocation start records running immediately, active logic remains correct, and build plus e2e-agent-tracker-core pass.",
+          "risk": "Leaving any pending-aware comparisons behind could create dead branches or mismatched active-state handling."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"

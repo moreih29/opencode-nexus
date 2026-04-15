@@ -24,7 +24,7 @@ state = tracker.applyInvocationStart(
 );
 {
   const inv = state.invocations.find((i) => i.invocation_id === "inv-a");
-  assert.equal(inv?.status, "running", "invocation start should mark invocation as running");
+  assert.equal(inv?.status, "running", "invocation start should append invocation in running status");
   assert.equal(state.invocations.length, 1, "invocation start should append invocation into state");
 }
 
