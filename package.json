@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": false,
   "type": "module",
   "description": "Nexus orchestration plugin for OpenCode",
@@ -36,7 +36,7 @@
   },
   "scripts": {
     "generate:prompts": "node scripts/generate-from-nexus-core.mjs",
-    "build": "bun run generate:prompts && tsc -p tsconfig.json",
+    "build": "rm -rf dist && bun run generate:prompts && tsc -p tsconfig.json",
     "check": "bun run generate:prompts && tsc -p tsconfig.json --noEmit",
     "generate:template": "bun run build && bun scripts/generate-template.mjs",
     "validate:conformance": "node scripts/validate-conformance.mjs",
