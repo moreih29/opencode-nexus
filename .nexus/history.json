@@ -7725,6 +7725,128 @@
           "claude-nexus 대비 opencode-nexus의 prompts/hooks/agents/skills 차이 비교 및 선택 논의"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T06:14:52.153Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Fix tool-log edit detection for apply_patch",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T06:11:25.632Z",
+          "context": "User asked under [run] to determine, based on live experiments, how to reliably capture required tool-log information and then fix the tool-log bug. Existing focused test scripts/e2e-tool-log-attribution.mjs defines intended behavior: child-session file edits must append to .nexus/state/opencode-nexus/tool-log.jsonl and later aggregate into agent-tracker files_touched. Live experiment showed spawned engineer agents using apply_patch created files, but tool-log.jsonl remained empty. Relevant files: src/plugin/hooks.ts, src/agents/generated/index.ts, scripts/e2e-tool-log-attribution.mjs, scripts/e2e-init-sync.mjs. Constraint: keep change minimal and preserve generated capability mapping as source-of-truth where possible.",
+          "approach": "Implement the smallest runtime fix so edit-like detection also recognizes OpenCode's actual file-edit tool name apply_patch in addition to generated capability-mapped names. Update focused tests to cover apply_patch-based logging, ideally by exercising both existing write behavior and real apply_patch alias behavior without broad refactors.",
+          "acceptance": "tool.execute.after treats apply_patch as an edit-like tool; focused e2e proves tool-log.jsonl gets an entry for apply_patch file edits and files_touched still aggregates by child session; build/check relevant tests pass.",
+          "risk": "Changing edit classification too broadly could affect edit gate enforcement or internal nexus path exemptions. Keep alias handling narrow and covered by focused tests."
+        },
+        {
+          "id": 2,
+          "title": "Verify tool-log attribution fix",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:11:25.638Z",
+          "context": "After the engineer task updates runtime edit detection, verify that tool-log captures child-session edits for apply_patch and that files_touched attribution still works. Relevant checks should focus on the existing attribution e2e and any directly related build/check commands.",
+          "approach": "Run targeted verification on the focused e2e plus relevant project checks needed to catch type/runtime regressions in the touched area. Report PASS/FAIL with findings, not code changes.",
+          "acceptance": "Verification explicitly states whether apply_patch now appends tool-log entries and whether files_touched attribution still passes for the focused scenario.",
+          "risk": "If task IDs are not sequential in this environment, dependency tracking may be approximate; verification should still clearly state what was run and what passed/failed."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T06:28:50.243Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Add locked JSON state update helper and adopt it in state mutations",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T06:17:00.290Z",
+          "context": "User asked under [run] to fix state-file write races that can drop information in tasks, plan, agent-tracker, and similar state files. Current code uses plain readJsonFile + mutate in memory + writeJsonFile across multiple modules. Evidence: src/shared/json-store.ts only provides raw read/write; src/tools/task.ts nxTaskAdd/nxTaskUpdate do unlocked read-modify-write; src/tools/plan.ts nxPlanStart/nxPlanUpdate/nxPlanDecide do unlocked read-modify-write; src/shared/history.ts appendHistory does unlocked read-modify-write; src/shared/agent-tracker.ts registerInvocationStart/registerInvocationEnd do unlocked read-modify-write. Need a common fix that prevents lost updates when concurrent operations target the same state file.",
+          "approach": "Implement a shared file-lock-backed JSON update helper in src/shared/json-store.ts that serializes read-modify-write for a target file, likely via per-file lockfiles with retry plus process-local queue if useful. Migrate agent-tracker, history append, task add/update, and plan start/update/decide to use the helper so IDs and appended records are computed under lock. Keep change minimal and focused on state mutation paths. Add focused tests that reproduce concurrent updates and prove no lost entries/duplicate IDs.",
+          "acceptance": "Concurrent updates to the same state JSON file no longer lose entries in agent-tracker/history/tasks/plan mutation paths. Focused tests cover at least agent-tracker and tasks/plan or history append race scenarios. Build and relevant tests pass.",
+          "risk": "Cross-file workflows like task close still span multiple files and may not become fully transactional; keep scope on per-file lost-update prevention unless a small safe improvement is obvious."
+        },
+        {
+          "id": 2,
+          "title": "Verify state-file race fix",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:17:00.378Z",
+          "context": "After the engineer adds locked JSON mutation handling, verify that concurrent state-file updates no longer lose data. Focus on the state files explicitly mentioned by the user: tasks, plan, agent-tracker, and related history append behavior if changed.",
+          "approach": "Run focused verification on new/updated race tests plus any necessary build/type checks. Report PASS/FAIL and residual risks, especially any remaining cross-file non-transactional behavior.",
+          "acceptance": "Verification explicitly demonstrates that the previously vulnerable same-file concurrent update paths no longer lose information.",
+          "risk": "Full multi-file transaction guarantees may remain out of scope; verification should distinguish same-file race prevention from broader workflow atomicity."
+        },
+        {
+          "id": 3,
+          "title": "Extend same-file locking to tool-log append/reset",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:24:57.654Z",
+          "context": "Follow-up to the state-file race fix. The current implementation added an in-process per-file lock queue for JSON read-modify-write updates, but src/shared/tool-log.ts still uses raw fs.appendFile/fs.writeFile without the shared per-file queue. User explicitly asked to include tool-log too if it is similar. Tool-log is append-only, but same-file races can still happen between appendToolLogEntry() and resetToolLog(), and ordering is better made deterministic under the same file queue approach.",
+          "approach": "Extend the shared file-mutation queue so tool-log append/reset also serialize by file path. Do this with the smallest shared helper addition possible (for example export generic locked file action or add locked append/write text helpers) and migrate src/shared/tool-log.ts to use it. Add/extend focused concurrency coverage to prove concurrent appends survive and reset/append ordering is serialized as intended.",
+          "acceptance": "tool-log append/reset use the same per-file serialization mechanism as other state-file mutations; focused tests cover concurrent tool-log appends and/or reset-vs-append ordering sufficiently to show no dropped lines under same-process concurrency; build and focused tests pass.",
+          "risk": "Keep scope to same-process same-file serialization; do not broaden into speculative cross-process locking unless necessary."
+        },
+        {
+          "id": 4,
+          "title": "Verify tool-log locking extension",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            3
+          ],
+          "created_at": "2026-04-15T06:24:57.765Z",
+          "context": "After tool-log append/reset are moved onto the shared same-file serialization layer, verify that focused concurrency coverage passes and the runtime still preserves tool-log lines under concurrent appends.",
+          "approach": "Run focused verification for the new tool-log race coverage plus existing state concurrency coverage as needed. Report PASS/FAIL and any residual risk, especially same-process vs cross-process scope.",
+          "acceptance": "Verification explicitly states whether concurrent tool-log append behavior is now serialized and whether focused tests pass.",
+          "risk": "The implementation may intentionally remain same-process only; verification should call that out rather than treating it as a bug if unchanged."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"
