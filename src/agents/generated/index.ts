@@ -1,24 +1,24 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.8.0 (254efc7d8f4f52e45b548706dd42389fdb9801b2)
+// Source: @moreih29/nexus-core@0.9.0 (ff5fb5de66dc2bf5f45dfba141901ccca7eb48e9)
 // Aggregates all agent prompts and metadata.
 
 import { PROMPT as architect_prompt, META as architect_meta } from './architect.js';
-import { PROMPT as reviewer_prompt, META as reviewer_meta } from './reviewer.js';
-import { PROMPT as strategist_prompt, META as strategist_meta } from './strategist.js';
 import { PROMPT as designer_prompt, META as designer_meta } from './designer.js';
-import { PROMPT as researcher_prompt, META as researcher_meta } from './researcher.js';
+import { PROMPT as reviewer_prompt, META as reviewer_meta } from './reviewer.js';
 import { PROMPT as engineer_prompt, META as engineer_meta } from './engineer.js';
+import { PROMPT as strategist_prompt, META as strategist_meta } from './strategist.js';
+import { PROMPT as researcher_prompt, META as researcher_meta } from './researcher.js';
 import { PROMPT as postdoc_prompt, META as postdoc_meta } from './postdoc.js';
 import { PROMPT as tester_prompt, META as tester_meta } from './tester.js';
 import { PROMPT as writer_prompt, META as writer_meta } from './writer.js';
 
 export const AGENT_PROMPTS: Record<string, string> = {
   "architect": architect_prompt,
-  "reviewer": reviewer_prompt,
-  "strategist": strategist_prompt,
   "designer": designer_prompt,
-  "researcher": researcher_prompt,
+  "reviewer": reviewer_prompt,
   "engineer": engineer_prompt,
+  "strategist": strategist_prompt,
+  "researcher": researcher_prompt,
   "postdoc": postdoc_prompt,
   "tester": tester_prompt,
   "writer": writer_prompt,
@@ -36,11 +36,11 @@ export const AGENT_META: Record<string, {
   resume_tier: string;
 }> = {
   "architect": architect_meta,
-  "reviewer": reviewer_meta,
-  "strategist": strategist_meta,
   "designer": designer_meta,
-  "researcher": researcher_meta,
+  "reviewer": reviewer_meta,
   "engineer": engineer_meta,
+  "strategist": strategist_meta,
+  "researcher": researcher_meta,
   "postdoc": postdoc_meta,
   "tester": tester_meta,
   "writer": writer_meta,
