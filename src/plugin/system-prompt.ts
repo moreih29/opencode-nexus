@@ -27,14 +27,16 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const modePlaybook = buildModePlaybook(mode);
   const skillKey = mode === "plan" ? "nx-plan" : mode === "run" ? "nx-run" : mode === "sync" ? "nx-sync" : null;
   const skillBody = skillKey !== null ? (SKILL_PROMPTS[skillKey] ?? null) : null;
-  const taskPipeline = [
-    "TASK PIPELINE (mandatory for file modifications):",
-    "1. Check active plan decisions first and preserve issue linkage when tasks come from a plan.",
-    "2. Register each execution unit with nx_task_add before editing files.",
-    "3. Keep edits scoped to active tasks only.",
-    "4. As each task completes, call nx_task_update.",
-    "5. When all tasks complete, verify, sync knowledge if needed, then close with nx_task_close."
-  ].join("\n");
+  const taskPipeline = mode === "run"
+    ? [
+        "TASK PIPELINE (mandatory for file modifications in run mode):",
+        "1. Check active plan decisions first and preserve issue linkage when tasks come from a plan.",
+        "2. Register each execution unit with nx_task_add before editing files.",
+        "3. Keep edits scoped to active tasks only.",
+        "4. As each task completes, call nx_task_update.",
+        "5. When all tasks complete, verify, sync knowledge if needed, then close with nx_task_close."
+      ].join("\n")
+    : null;
   const delegationPlaybook = [
     "DELEGATION PLAYBOOK:",
     "- HOW agents advise on approach, UX, research method, and strategy; they do not own implementation state.",
@@ -65,7 +67,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "<nexus>",
     "Role: You are operating under Nexus orchestration.",
     "Constraints:",
-    "- Enforce task pipeline for code changes.",
+    "- Enforce task pipeline for code changes in run mode.",
     "- Keep HOW agents in analysis/design lane; DO/CHECK execute and verify.",
     "- Prefer explicit state transitions over ad-hoc execution.",
     "- When the nexus primary is available, treat it as the preferred orchestration lead.",
@@ -85,7 +87,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Structure subagent delegation payloads with role, task, context, and constraints fields.",
     "- Setup/maintenance skills (nx-setup, nx-init, nx-sync) are called via skill() only when the user explicitly requests them or directly mentions the need. Do not invoke them proactively without user instruction.",
     modePlaybook,
-    taskPipeline,
+    ...(taskPipeline ? [taskPipeline] : []),
     delegationPlaybook,
     outputContracts,
     legacyMapping,
@@ -119,6 +121,7 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
         "- When a follow-up targets a prior HOW participant, prefer nx_plan_followup. It packages resume hints into delegation-ready guidance; fall back to nx_plan_resume when you only need raw continuity details.",
         "- Check nx_context or nx_plan_status for followupReady roles before deciding whether to resume an existing HOW participant or start fresh.",
         "- Discuss one issue at a time and compare options with trade-offs before recording a decision.",
+      "- Before asking for a decision, present a comparison table with pros, cons, trade-offs, and a recommendation.",
       "- Present options with pros, cons, trade-offs, and a recommendation before seeking a decision.",
       "- Record final decisions with [d] and nx_plan_decide.",
       "- Offer [run] only after all issues are decided and gaps are checked."

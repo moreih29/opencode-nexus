@@ -16,13 +16,16 @@ const hooks = createHooks({ directory: root, worktree: root, state: createPlugin
 const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 
-const naturalMeet = { parts: [{ type: "text", text: "회의로 먼저 방향을 정하자" }] };
-await hooks["chat.message"]({ sessionID: "s1" }, naturalMeet);
-assert.equal(naturalMeet.parts.length, 1);
+async function systemMessagesFor(sessionID, text) {
+  await hooks["chat.message"]({ sessionID }, { parts: [{ type: "text", text }] });
+  const output = { system: [] };
+  await hooks["experimental.chat.system.transform"]({ sessionID }, output);
+  return output.system;
+}
 
-const taggedMeet = { parts: [{ type: "text", text: "[plan] 방향을 먼저 정하자" }] };
-await hooks["chat.message"]({ sessionID: "s1-tag" }, taggedMeet);
-assert.equal(taggedMeet.parts.length, 1);
+function includesLine(messages, pattern) {
+  return messages.some((line) => pattern.test(line));
+}
 
 await fs.writeFile(
   paths.PLAN_FILE,
@@ -40,17 +43,14 @@ await fs.writeFile(
   "utf8"
 );
 
-const planReminder = { parts: [{ type: "text", text: "계속 진행하자" }] };
-await hooks["chat.message"]({ sessionID: "s2" }, planReminder);
-assert.equal(planReminder.parts.length, 1);
+const planReminder = await systemMessagesFor("s2", "계속 진행하자");
+assert.ok(includesLine(planReminder, /Plan .*active/i), "plan-state notice should be injected for active plan");
 
-const attendeePrompt = { parts: [{ type: "text", text: "아키텍트 참석시켜" }] };
-await hooks["chat.message"]({ sessionID: "s3" }, attendeePrompt);
-assert.equal(attendeePrompt.parts.length, 1);
+const attendeePrompt = await systemMessagesFor("s3", "아키텍트 참석시켜");
+assert.ok(includesLine(attendeePrompt, /Attendee request detected/i), "attendee notice should be injected");
 
-const decidePrompt = { parts: [{ type: "text", text: "[d] 이걸로 결정하자" }] };
-await hooks["chat.message"]({ sessionID: "s3b" }, decidePrompt);
-assert.equal(decidePrompt.parts.length, 1);
+const decidePrompt = await systemMessagesFor("s3b", "[d] 이걸로 결정하자");
+assert.ok(includesLine(decidePrompt, /Decision tag detected/i), "decision notice should be injected in decide mode");
 
 await fs.unlink(paths.PLAN_FILE);
 await fs.writeFile(
@@ -73,12 +73,53 @@ await fs.writeFile(
   "utf8"
 );
 
-const taskReminder = { parts: [{ type: "text", text: "다음 작업 이어서 하자" }] };
-await hooks["chat.message"]({ sessionID: "s4" }, taskReminder);
-assert.equal(taskReminder.parts.length, 1);
+const taskReminder = await systemMessagesFor("s4", "다음 작업 이어서 하자");
+assert.ok(includesLine(taskReminder, /Active task cycle detected/i), "task-cycle notice should be injected in idle mode");
 
-const runPrompt = { parts: [{ type: "text", text: "[run] 구현 계속해" }] };
-await hooks["chat.message"]({ sessionID: "s5" }, runPrompt);
-assert.equal(runPrompt.parts.length, 1);
+const runPrompt = await systemMessagesFor("s5", "[run] 구현 계속해");
+assert.ok(includesLine(runPrompt, /Active tasks:/i), "run-mode active-cycle notice should be injected");
+
+await fs.writeFile(
+  paths.TASKS_FILE,
+  JSON.stringify(
+    {
+      tasks: [
+        {
+          id: 2,
+          title: "Done",
+          status: "completed",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const runCompleted = await systemMessagesFor("s6", "[run] 마무리하자");
+assert.ok(includesLine(runCompleted, /All tasks completed/i), "completed-open run notice should be injected");
+
+await fs.unlink(paths.TASKS_FILE);
+await fs.writeFile(
+  paths.PLAN_FILE,
+  JSON.stringify(
+    {
+      id: 2,
+      topic: "All complete plan",
+      attendees: [{ role: "lead", name: "Lead", joined_at: new Date().toISOString() }],
+      issues: [{ id: 1, title: "Finalized", status: "decided", discussion: [] }],
+      created_at: new Date().toISOString()
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const allCompletePlan = await systemMessagesFor("s7", "계획 다 끝났어");
+assert.ok(includesLine(allCompletePlan, /allComplete/i), "allComplete plan notice should be injected");
+assert.ok(includesLine(allCompletePlan, /Step 7/i), "allComplete notice should hand off to Step 7");
+assert.ok(includesLine(allCompletePlan, /nx_task_add/i), "allComplete notice should require nx_task_add");
 
 console.log("e2e hook notices passed");

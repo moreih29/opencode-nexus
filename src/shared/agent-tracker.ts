@@ -23,6 +23,20 @@ export interface RegisterInvocationEndInput {
   continuity?: Partial<InvocationContinuity>;
 }
 
+export interface DelegationTrackerStartInput extends Omit<RegisterInvocationStartInput, "invocation_id"> {
+  invocation_id?: string;
+  invocation_id_prefix?: string;
+}
+
+export interface DelegationTrackerEndInput extends RegisterInvocationEndInput {
+  invocation_id: string;
+}
+
+export interface DelegationTrackerRegistrar {
+  start(input: DelegationTrackerStartInput): Promise<{ invocation_id: string }>;
+  end(input: DelegationTrackerEndInput): Promise<void>;
+}
+
 export interface ContinuityQuery {
   agent_type?: string;
   coordination_label?: string;
@@ -197,6 +211,27 @@ export async function registerInvocationEnd(
   const tracker = await readAgentTracker(filePath);
   const next = applyInvocationEnd(tracker, invocation_id, patch);
   await writeAgentTracker(filePath, next);
+}
+
+export function createDelegationTrackerRegistrar(filePath: string): DelegationTrackerRegistrar {
+  return {
+    async start(input: DelegationTrackerStartInput): Promise<{ invocation_id: string }> {
+      const { invocation_id_prefix, ...startInput } = input;
+      const invocationID =
+        normalizeOptional(startInput.invocation_id) ??
+        createDelegationInvocationID(startInput.agent_type, invocation_id_prefix);
+      await registerInvocationStart(filePath, {
+        ...startInput,
+        invocation_id: invocationID
+      });
+      return { invocation_id: invocationID };
+    },
+
+    async end(input: DelegationTrackerEndInput): Promise<void> {
+      const { invocation_id, ...patch } = input;
+      await registerInvocationEnd(filePath, invocation_id, patch);
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +514,14 @@ function getInvocationTimestamp(invocation: Invocation): number {
   const candidate = invocation.ended_at ?? invocation.updated_at ?? invocation.started_at;
   const value = Date.parse(candidate);
   return Number.isFinite(value) ? value : -1;
+}
+
+function createDelegationInvocationID(agentType: string, prefix?: string): string {
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).slice(2, 8);
+  const normalizedPrefix = normalizeOptional(prefix) ?? "delegation";
+  const normalizedAgent = normalizeOptional(agentType)?.toLowerCase() ?? "unknown";
+  return `${normalizedPrefix}-${normalizedAgent}-${timestamp}-${nonce}`;
 }
 
 function normalizeOptional(value: string | undefined): string | undefined {

@@ -107,10 +107,18 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 | 출력 | 조건 |
 |------|------|
-| `editsAllowed` | empty 또는 active일 때만 true |
+| `editsAllowed` | **idle**, empty, 또는 active일 때 true (태스크 없는 상태에서는 편집 제한 없음) |
 | `canCloseCycle` | completed-open일 때만 true |
 | `shouldTriggerQa` | canCloseCycle이고 Tester 트리거 신호 존재 |
 | `nextGuidanceKey` | 다음 행동 지침 키 |
+
+### 차등 종료 집행 (Differentiated Exit Enforcement)
+
+| 태스크 사이클 상태 | 종료 동작 |
+|-------------------|----------|
+| `active` | 하드 블록 — 명시적 종료 방지, 완료/정리 필요 |
+| `completed-open` | 원샷 소프트 블록/경고 — 사용자 확인 후 종료 가능 |
+| `none` / `empty` / `idle` | 제한 없음 |
 
 ### Tester 자동 트리거
 
@@ -135,7 +143,8 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 - `plan.json`은 canonical하고 플랫폼 중립. OpenCode HOW 패널 연속성은 `plan.json`(participants) + `.nexus/state/opencode-nexus/agent-tracker.json`(runtime resume handles/summary) 조합에서 파생된다.
 - `agent-tracker.json`은 durable history가 아니라 세션 범위의 ephemeral runtime continuity/observability state다. 없거나 비어 있어도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
-- tracker reset 경계는 명시적 세션 lifecycle 훅(`session.created`)이다. 일반 ensure/setup/init/sync 경로는 tracker를 초기화하지 않는다.
+- **tracker reset 경계는 명시적 primary session lifecycle 훅(`session.created`)으로 단일화**되어 있다. 일반 ensure/setup/init/sync 경로는 tracker를 초기화하지 않는다.
+- `tool-log.jsonl`의 `files_touched`는 세션 스코프에서 추적되며, 자식 세션 연속성이 확정된 후 소급 적용(retroactive attribution)된다.
 - Claude ↔ OpenCode 전환은 canonical-first handoff로 취급. 동시 공동 편집이 아님.
 
 #### HOW 패널 연속성 절차 (HOW-panel Continuity)

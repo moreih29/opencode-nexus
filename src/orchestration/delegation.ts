@@ -1,3 +1,8 @@
+import {
+  createDelegationTrackerRegistrar,
+  type DelegationTrackerRegistrar
+} from "../shared/agent-tracker.js";
+
 export interface DelegationInput {
   task: string;
   currentState: string;
@@ -30,4 +35,8 @@ export function buildDelegationTemplate(input: DelegationInput): string {
     "ACCEPTANCE:",
     acceptance
   ].join("\n");
+}
+
+export function createDelegationLifecycleRegistrar(agentTrackerFilePath: string): DelegationTrackerRegistrar {
+  return createDelegationTrackerRegistrar(agentTrackerFilePath);
 }

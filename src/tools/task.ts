@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
+import { NEXUS_PRIMARY_AGENT_ID } from "../agents/primary.js";
 import { appendHistory, type HistoryCycle } from "../shared/history.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
 import { createNexusPaths } from "../shared/paths.js";
@@ -180,6 +181,11 @@ export const nxTaskClose = tool({
     archive: z.boolean().default(true)
   },
   async execute(args, context) {
+    const callerAgent = resolveCallerAgentFromToolContext(context);
+    if (callerAgent && callerAgent !== NEXUS_PRIMARY_AGENT_ID) {
+      throw new Error(`nx_task_close is Nexus-lead only. Caller "${callerAgent}" is not allowed.`);
+    }
+
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const plan = await readJsonFile<Record<string, unknown> | null>(paths.PLAN_FILE, null);
     const tasks = await readJsonFile<TasksFile | null>(paths.TASKS_FILE, null);
@@ -266,6 +272,35 @@ async function readCurrentBranch(projectRoot: string): Promise<string> {
 
 function isOpenCodeSessionID(value: string): boolean {
   return value.startsWith("ses_");
+}
+
+function resolveCallerAgentFromToolContext(context: unknown): string | null {
+  if (!context || typeof context !== "object") {
+    return null;
+  }
+  const caller = pickNestedString(context as Record<string, unknown>, ["agent", "agent_id", "agentID", "agentId", "role"]);
+  return caller ? caller.toLowerCase() : null;
+}
+
+function pickNestedString(source: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  for (const value of Object.values(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
+    const nested = pickNestedString(value as Record<string, unknown>, keys);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
 }
 
 async function evaluatePipelineSnapshot(snapshot: PipelineEvaluatorSnapshot): Promise<PipelineEvaluatorResult> {

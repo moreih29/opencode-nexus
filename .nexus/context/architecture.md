@@ -56,7 +56,11 @@ OpenCode 런타임
 
 훅 구현체와 시스템 프롬프트 빌더.
 
-- `hooks.ts`: 6개 훅 — `event`(세션 초기화), `tool.execute.before`(가드레일), `tool.execute.after`(완료 처리), `chat.message`(프롬프트 저장), `command.execute.before`(종료 경고), `experimental.chat.system.transform`(모드 감지·시스템 프롬프트 주입). `system.transform` 훅은 Option D B-leg 역할을 담당: `[plan]`/`[run]`/`[sync]` 태그 감지 시 해당 모드의 `SKILL_PROMPTS[mode]` 본문을 `<nexus-skill id="...">` 블록으로 시스템 프롬프트에 삽입한다. `manual_only` 스킬은 B-leg 주입 대상에서 제외되며, 모든 모드에서 수동 실행 안내(manual_only nudge)가 별도로 포함된다.
+- `hooks.ts`: 6개 훅 — `event`(세션 초기화), `tool.execute.before`(가드레일), `tool.execute.after`(완료 처리), `chat.message`(프롬프트 저장), `command.execute.before`(종료 경고), `experimental.chat.system.transform`(모드 감지·시스템 프롬프트 주입). 
+  - `tool.execute.before`: 편집류 도구(edit-like tools)에 대해 **태스크 사이클 상태에 따른 차등 가드레일**을 적용한다. `idle` 모드(태스크 없음) 또는 `free` 편집 모드에서는 차단하지 않으며, `completed-open` 상태에서만 보호(block/warning)가 작동한다.
+  - `tool.execute.after`: 도구 실행 완료 후 **미완료 소유자 태스크 경고**를 추가한다. 실행된 도구의 소유자(owner)와 일치하는 태스크가 `pending` 또는 `in_progress` 상태로 남아 있으면, 해당 태스크 목록을 경고 메시지에 포함시킨다.
+  - `command.execute.before`: 종료 명령 시 **차등 종료 집행**을 수행한다. 활성 태스크 사이클(`active`)에서는 하드 블록, 완료-대기 상태(`completed-open`)에서는 원샷 소프트 블록/경고를 표시한다.
+  - `experimental.chat.system.transform`: Option D B-leg 역할을 담당하며, 현재 모드와 태스크 사이클 상태를 기반으로 **동적 상태 알림(buildStatefulNotice)**을 생성하여 시스템 프롬프트에 주입한다. `[plan]`/`[run]`/`[sync]` 태그 감지 시 해당 모드의 `SKILL_PROMPTS[mode]` 본문을 `<nexus-skill id="...">` 블록으로 삽입하고, 모든 태스크 완료 시(Step 7) 태스크 생성 핸드오프 메시지를 포함한다. `manual_only` 스킬은 B-leg 주입 대상에서 제외되며, 모든 모드에서 수동 실행 안내(manual_only nudge)가 별도로 포함된다. plan 모드에서는 결정 요청 전 pros/cons/trade-offs 비교 표와 권고안 제시가 필요하다.
 - `system-prompt.ts`: `buildNexusSystemPrompt()`가 현재 모드, 에이전트 목록, 스킬 목록을 조합하여 `<nexus>` 블록 형태 시스템 프롬프트 생성.
 
 ### shared
@@ -65,8 +69,8 @@ OpenCode 런타임
 
 - `paths.ts`: `.nexus/` 하위 모든 파일 경로를 `createNexusPaths(projectRoot)`로 집중 관리.
 - `state.ts`: `.nexus/` 디렉터리 초기화(비파괴), 태스크 요약.
-- `audit-log.ts`: 세션별·서브에이전트별·글로벌 감사 로그 기록.
-- `agent-tracker.ts`: 세션 범위의 runtime continuity/observability 상태 추적 (`agent-tracker.json`).
+- `audit-log.ts`: 세션별·서브에이전트별·글로벌 감사 로그 기록. `tool-log.jsonl`의 `files_touched`는 세션 스코프에서 추적되며, 자식 세션 연속성이 확정된 후 소급 적용(retroactive attribution)된다.
+- `agent-tracker.ts`: 세션 범위의 runtime continuity/observability 상태 추적 (`agent-tracker.json`). 위임 추적은 `createDelegationTrackerRegistrar(filePath)` 팩토리로 생성된 registrar 객체를 통해 관리되며, hooks와 orchestration 모두에서 이 추상화를 사용한다. **Reset 경계는 primary session lifecycle 훅(`session.created`)으로 단일화되어 있으며**, ensure/setup/init/sync 경로에서는 tracker를 초기화하지 않는다.
 - `plan-sidecar.ts`: Plan 세션의 OpenCode 사이드카 동기화.
 - `tag-parser.ts`: 프롬프트에서 `[plan]`, `[run]`, `[d]`, `[rule]` 태그 감지.
 - `schema.ts`, `json-store.ts`, `markdown.ts`, `history.ts`: 공통 타입, JSON 스토어, 마크다운, 히스토리 관리.
