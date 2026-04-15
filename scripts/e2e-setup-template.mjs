@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { createConfigHook } from "../dist/create-config.js";
+import { createNexusPaths } from "../dist/shared/paths.js";
 import { nxSetup } from "../dist/tools/setup.js";
 import { AGENT_META } from "../dist/agents/generated/index.js";
 
@@ -41,6 +42,41 @@ const agents = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
 assert.match(agents, /<!-- NEXUS:START -->/);
 assert.match(agents, /## Nexus Agent Orchestration/);
 assert.match(agents, /coordination label/);
+
+const lifecyclePaths = createNexusPaths(root);
+await fs.writeFile(
+  lifecyclePaths.AGENT_TRACKER_FILE,
+  JSON.stringify(
+    {
+      harness_id: "opencode-nexus",
+      started_at: "2000-01-01T00:00:00.000Z",
+      invocations: [
+        {
+          invocation_id: "setup-keep",
+          agent_type: "engineer",
+          status: "completed",
+          started_at: "2000-01-01T00:00:00.000Z",
+          ended_at: "2000-01-01T00:00:01.000Z"
+        }
+      ]
+    },
+    null,
+    2
+  ) + "\n",
+  "utf8"
+);
+await fs.writeFile(
+  lifecyclePaths.TOOL_LOG_FILE,
+  '{"ts":"2000-01-01T00:00:00.000Z","agent_id":"setup-keep","tool":"write","file":"AGENTS.md"}\n',
+  "utf8"
+);
+await nxSetup.execute({ scope: "project", install_plugin: false, init_after_setup: false }, ctx);
+const trackerAfterSetup = JSON.parse(await fs.readFile(lifecyclePaths.AGENT_TRACKER_FILE, "utf8"));
+assert.equal(trackerAfterSetup.started_at, "2000-01-01T00:00:00.000Z", "nxSetup should preserve tracker metadata");
+assert.equal(trackerAfterSetup.invocations.length, 1, "nxSetup should preserve existing tracker invocations");
+assert.equal(trackerAfterSetup.invocations[0].invocation_id, "setup-keep", "nxSetup should not wipe tracker entries");
+const toolLogAfterSetup = await fs.readFile(lifecyclePaths.TOOL_LOG_FILE, "utf8");
+assert.match(toolLogAfterSetup, /setup-keep/, "nxSetup should preserve existing tool-log content");
 
 const selfHostedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-self-host-"));
 await fs.mkdir(path.join(selfHostedRoot, ".opencode", "plugins"), { recursive: true });
@@ -217,6 +253,44 @@ async function setupWithModels(ctx, modelArgs) {
   assert.equal(config.agent.designer?.model, "anthropic/claude-haiku-4-5");   // how category
   assert.equal(config.agent.engineer?.model, "openai/gpt-4o-mini");          // do category
   assert.equal(config.agent.tester?.model, "openai/gpt-4o-mini");           // check category
+}
+
+// Test: built-in general/explore inherit standard tier from canonical models
+{
+  const r = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-models-builtins-default-"));
+  const { config } = await setupWithModels(makeCtx(r), {
+    model_preset: "skip",
+    models: {
+      nexus: "anthropic/claude-sonnet-4-5",
+      how: "anthropic/claude-sonnet-4-5",
+      do: "anthropic/claude-haiku-4-5",
+      check: "anthropic/claude-haiku-4-5"
+    }
+  });
+  assert.equal(config.agent.general?.model, "anthropic/claude-haiku-4-5");
+  assert.equal(config.agent.explore?.model, "anthropic/claude-haiku-4-5");
+  assert.equal(config.agent.build, undefined);
+  assert.equal(config.agent.plan, undefined);
+}
+
+// Test: models.agents can explicitly override built-in general/explore
+{
+  const r = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-models-builtins-override-"));
+  const { config } = await setupWithModels(makeCtx(r), {
+    model_preset: "skip",
+    models: {
+      nexus: "anthropic/claude-sonnet-4-5",
+      how: "anthropic/claude-sonnet-4-5",
+      do: "anthropic/claude-haiku-4-5",
+      check: "anthropic/claude-haiku-4-5",
+      agents: {
+        general: "openai/gpt-4.1-mini",
+        explore: "openai/gpt-4.1"
+      }
+    }
+  });
+  assert.equal(config.agent.general?.model, "openai/gpt-4.1-mini");
+  assert.equal(config.agent.explore?.model, "openai/gpt-4.1");
 }
 
 // Test: models.agents highest-precedence override

@@ -15,16 +15,17 @@ const hooks = createHooks({ directory: root, worktree: root });
 const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 
-let blocked = false;
+let allowedWithoutTasks = false;
 try {
   await hooks["tool.execute.before"](
     { tool: "write" },
     { args: { filePath: path.join(root, "src", "a.ts") } }
   );
+  allowedWithoutTasks = true;
 } catch {
-  blocked = true;
+  allowedWithoutTasks = false;
 }
-assert.equal(blocked, true, "write should be blocked without tasks.json");
+assert.equal(allowedWithoutTasks, true, "write should be allowed when no task cycle exists");
 
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 await hooks["tool.execute.before"](

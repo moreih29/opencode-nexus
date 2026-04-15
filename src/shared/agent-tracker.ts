@@ -1,4 +1,4 @@
-import { readJsonFile, writeJsonFile } from "./json-store.js";
+import { readJsonFile, updateJsonFileLocked, writeJsonFile } from "./json-store.js";
 import { HARNESS_ID } from "./paths.js";
 import { AgentTrackerSchema, type AgentTracker, type Invocation, type InvocationContinuityHandles } from "./schema.js";
 
@@ -21,6 +21,20 @@ export interface RegisterInvocationEndInput {
   last_message?: string;
   runtime_metadata?: unknown;
   continuity?: Partial<InvocationContinuity>;
+}
+
+export interface DelegationTrackerStartInput extends Omit<RegisterInvocationStartInput, "invocation_id"> {
+  invocation_id?: string;
+  invocation_id_prefix?: string;
+}
+
+export interface DelegationTrackerEndInput extends RegisterInvocationEndInput {
+  invocation_id: string;
+}
+
+export interface DelegationTrackerRegistrar {
+  start(input: DelegationTrackerStartInput): Promise<{ invocation_id: string }>;
+  end(input: DelegationTrackerEndInput): Promise<void>;
 }
 
 export interface ContinuityQuery {
@@ -126,7 +140,7 @@ export function applyInvocationStart(
   if (existingIndex >= 0) {
     const existing = tracker.invocations[existingIndex];
     invocation.started_at = existing.started_at;
-    invocation.status = existing.status === "running" ? "running" : existing.status;
+    invocation.status = existing.status;
     invocation.continuity = mergeContinuity(existing.continuity, continuity);
     invocation.last_message = existing.last_message;
     nextInvocations[existingIndex] = invocation;
@@ -184,9 +198,7 @@ export async function registerInvocationStart(
   filePath: string,
   invocation: RegisterInvocationStartInput
 ): Promise<void> {
-  const tracker = await readAgentTracker(filePath);
-  const next = applyInvocationStart(tracker, invocation);
-  await writeAgentTracker(filePath, next);
+  await updateStoredTracker(filePath, (tracker) => applyInvocationStart(tracker, invocation));
 }
 
 export async function registerInvocationEnd(
@@ -194,9 +206,36 @@ export async function registerInvocationEnd(
   invocation_id: string,
   patch: RegisterInvocationEndInput
 ): Promise<void> {
-  const tracker = await readAgentTracker(filePath);
-  const next = applyInvocationEnd(tracker, invocation_id, patch);
-  await writeAgentTracker(filePath, next);
+  await updateStoredTracker(filePath, (tracker) => applyInvocationEnd(tracker, invocation_id, patch));
+}
+
+async function updateStoredTracker(filePath: string, mutator: (tracker: AgentTracker) => AgentTracker): Promise<void> {
+  await updateJsonFileLocked<unknown>(filePath, null, (raw) => {
+    const parsed = AgentTrackerSchema.safeParse(raw);
+    const tracker = parsed.success ? parsed.data : createEmptyAgentTracker();
+    return mutator(tracker);
+  });
+}
+
+export function createDelegationTrackerRegistrar(filePath: string): DelegationTrackerRegistrar {
+  return {
+    async start(input: DelegationTrackerStartInput): Promise<{ invocation_id: string }> {
+      const { invocation_id_prefix, ...startInput } = input;
+      const invocationID =
+        normalizeOptional(startInput.invocation_id) ??
+        createDelegationInvocationID(startInput.agent_type, invocation_id_prefix);
+      await registerInvocationStart(filePath, {
+        ...startInput,
+        invocation_id: invocationID
+      });
+      return { invocation_id: invocationID };
+    },
+
+    async end(input: DelegationTrackerEndInput): Promise<void> {
+      const { invocation_id, ...patch } = input;
+      await registerInvocationEnd(filePath, invocation_id, patch);
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -262,10 +301,10 @@ export function pickContinuityFromTrackerState(
   }
 
   candidates.sort((left, right) => {
-    const leftRunning = left.status === "running" ? 1 : 0;
-    const rightRunning = right.status === "running" ? 1 : 0;
-    if (preferRunning && leftRunning !== rightRunning) {
-      return rightRunning - leftRunning;
+    const leftActive = isInvocationActive(left.status) ? 1 : 0;
+    const rightActive = isInvocationActive(right.status) ? 1 : 0;
+    if (preferRunning && leftActive !== rightActive) {
+      return rightActive - leftActive;
     }
     return getInvocationTimestamp(right) - getInvocationTimestamp(left);
   });
@@ -301,10 +340,10 @@ export function buildDelegationPlanFromTracker(
   });
 
   candidates.sort((left, right) => {
-    const leftRunning = left.status === "running" ? 1 : 0;
-    const rightRunning = right.status === "running" ? 1 : 0;
-    if (preferRunning && leftRunning !== rightRunning) {
-      return rightRunning - leftRunning;
+    const leftActive = isInvocationActive(left.status) ? 1 : 0;
+    const rightActive = isInvocationActive(right.status) ? 1 : 0;
+    if (preferRunning && leftActive !== rightActive) {
+      return rightActive - leftActive;
     }
     return getInvocationTimestamp(right) - getInvocationTimestamp(left);
   });
@@ -448,8 +487,12 @@ export async function summarizeCoordinationGroups(filePath: string): Promise<Gro
 export async function hasRunningTeam(filePath: string, team_name: string): Promise<boolean> {
   const tracker = await readAgentTracker(filePath);
   return tracker.invocations.some(
-    (inv) => inv.status === "running" && inv.coordination_label === team_name
+    (inv) => isInvocationActive(inv.status) && inv.coordination_label === team_name
   );
+}
+
+export function isInvocationActive(status: Invocation["status"]): boolean {
+  return status === "running";
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +518,14 @@ function getInvocationTimestamp(invocation: Invocation): number {
   const candidate = invocation.ended_at ?? invocation.updated_at ?? invocation.started_at;
   const value = Date.parse(candidate);
   return Number.isFinite(value) ? value : -1;
+}
+
+function createDelegationInvocationID(agentType: string, prefix?: string): string {
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).slice(2, 8);
+  const normalizedPrefix = normalizeOptional(prefix) ?? "delegation";
+  const normalizedAgent = normalizeOptional(agentType)?.toLowerCase() ?? "unknown";
+  return `${normalizedPrefix}-${normalizedAgent}-${timestamp}-${nonce}`;
 }
 
 function normalizeOptional(value: string | undefined): string | undefined {

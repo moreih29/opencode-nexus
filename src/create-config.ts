@@ -35,7 +35,7 @@ export function createConfigHook() {
         mode: "subagent",
         model: meta.model,
         prompt: AGENT_PROMPTS[meta.id],
-        tools: buildToolPolicy(meta.disallowedTools as string[])
+        tools: buildSubagentToolPolicy(meta.disallowedTools as string[])
       };
     }
 
@@ -57,11 +57,13 @@ export function createConfigHook() {
   };
 }
 
-function buildToolPolicy(disallowedTools: string[]): Record<string, boolean> {
+function buildSubagentToolPolicy(disallowedTools: string[]): Record<string, boolean> {
   const policy: Record<string, boolean> = {};
   for (const toolName of disallowedTools) {
     policy[toolName] = false;
   }
+  policy.task = false;
+  policy.nx_task_close = false;
   return policy;
 }
 

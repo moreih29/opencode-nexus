@@ -22,6 +22,7 @@ await fs.writeFile(
         {
           id: "task-run-1",
           title: "Run continuity",
+          context: "Resume engineer continuity",
           status: "in_progress",
           owner: "engineer",
           plan_issue: 1,
@@ -70,20 +71,9 @@ await hooks["tool.execute.after"](
 
 const beforeInjected = { args: { ...initialArgs } };
 await hooks["tool.execute.before"]({ tool: "task" }, beforeInjected);
-assert.equal(beforeInjected.args.resume_task_id, "core-task-old", "before hook should inject task handle from core");
-assert.equal(
-  beforeInjected.args.resume_session_id,
-  "core-session-old",
-  "before hook should inject session handle from core"
-);
-assert.deepEqual(
-  beforeInjected.args.resume_handles,
-  {
-    thread: "thread-old",
-    cursor: "cursor-old"
-  },
-  "before hook should forward resume handles from core when absent"
-);
+assert.equal(beforeInjected.args.resume_task_id, undefined, "before hook should not auto-inject resume task");
+assert.equal(beforeInjected.args.resume_session_id, undefined, "before hook should not auto-inject resume session");
+assert.equal(beforeInjected.args.resume_handles, undefined, "before hook should not auto-inject resume handles");
 
 const explicitArgs = {
   ...initialArgs,
@@ -154,10 +144,10 @@ const beforeDifferentTeam = {
 await hooks["tool.execute.before"]({ tool: "task" }, beforeDifferentTeam);
 assert.equal(
   beforeDifferentTeam.args.resume_task_id,
-  "core-task-old",
-  "team label should remain grouping policy; continuity falls back by agent"
+  undefined,
+  "team label should remain optional metadata; no continuity auto-injection occurs"
 );
-assert.equal(beforeDifferentTeam.args.resume_session_id, "core-session-old");
+assert.equal(beforeDifferentTeam.args.resume_session_id, undefined);
 
 const beforeOtherAgent = {
   args: {
@@ -188,11 +178,10 @@ async function inspectState(paths, label) {
       inv.continuity?.child_session_id === "core-session-old" &&
       inv.continuity?.resume_handles?.thread === "thread-old"
   );
-  assert.ok(injectedInvocation, "agent tracker should have invocation with injected continuity args");
+  assert.ok(injectedInvocation, "agent tracker should still capture observed continuity from runtime metadata");
 
   console.log(`[inspect:${label}] agent-tracker`);
   console.log(JSON.stringify(tracker, null, 2));
   console.log(`[inspect:${label}] tool-log`);
   console.log(toolLog);
 }
-

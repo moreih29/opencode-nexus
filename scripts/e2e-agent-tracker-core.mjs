@@ -8,6 +8,11 @@ assert.equal(typeof tracker.applyInvocationEnd, "function", "agent-tracker must 
 assert.equal(typeof tracker.pickContinuityFromTrackerState, "function", "agent-tracker must export pickContinuityFromTrackerState");
 assert.equal(typeof tracker.buildDelegationPlanFromTracker, "function", "agent-tracker must export buildDelegationPlanFromTracker");
 assert.equal(typeof tracker.createEmptyAgentTracker, "function", "agent-tracker must export createEmptyAgentTracker");
+assert.equal(
+  typeof tracker.createDelegationTrackerRegistrar,
+  "function",
+  "agent-tracker must export createDelegationTrackerRegistrar"
+);
 
 let state = tracker.createEmptyAgentTracker("2026-04-02T00:00:00.000Z");
 
@@ -24,7 +29,7 @@ state = tracker.applyInvocationStart(
 );
 {
   const inv = state.invocations.find((i) => i.invocation_id === "inv-a");
-  assert.equal(inv?.status, "running", "invocation start should mark invocation as running");
+  assert.equal(inv?.status, "running", "invocation start should append invocation in running status");
   assert.equal(state.invocations.length, 1, "invocation start should append invocation into state");
 }
 

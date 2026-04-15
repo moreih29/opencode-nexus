@@ -22,6 +22,7 @@ await fs.writeFile(
         {
           id: "task-run-persist-1",
           title: "Run continuity persistence",
+          context: "Keep latest continuity handles",
           status: "in_progress",
           owner: "engineer",
           plan_issue: 1,
@@ -64,8 +65,8 @@ await hooksA["tool.execute.after"](
 
 const beforeOld = { args: { ...args } };
 await hooksA["tool.execute.before"]({ tool: "task" }, beforeOld);
-assert.equal(beforeOld.args.resume_task_id, "task-old", "before should use older continuity first");
-assert.equal(beforeOld.args.resume_session_id, "session-old", "before should use older continuity first");
+assert.equal(beforeOld.args.resume_task_id, undefined, "before should not auto-inject older continuity");
+assert.equal(beforeOld.args.resume_session_id, undefined, "before should not auto-inject older continuity");
 
 await hooksA["tool.execute.after"](
   { tool: "task", args: beforeOld.args },
@@ -88,8 +89,8 @@ await hooksA["tool.execute.after"](
 const hooksB = createHooks({ directory: root, worktree: root, state: createPluginState() });
 const beforeNew = { args: { ...args } };
 await hooksB["tool.execute.before"]({ tool: "task" }, beforeNew);
-assert.equal(beforeNew.args.resume_task_id, "task-new", "later before should use newer continuity task handle");
-assert.equal(beforeNew.args.resume_session_id, "session-new", "later before should use newer continuity session handle");
+assert.equal(beforeNew.args.resume_task_id, undefined, "later before should not auto-inject newer continuity");
+assert.equal(beforeNew.args.resume_session_id, undefined, "later before should not auto-inject newer continuity");
 
 const tracker = JSON.parse(await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8"));
 const latest = tracker.invocations

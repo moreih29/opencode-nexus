@@ -67,8 +67,8 @@ README가 현재 구현과 맞는지 확인:
 
 ### 6. Release Gate
 
-`.nexus/rules/release.md`의 모든 항목을 확인한다.
-이 파일이 배포 가능 여부의 canonical 기준이다.
+위 1-5단계 자체가 배포 가능 여부의 canonical 기준이다.
+별도 `.nexus/rules/` 릴리즈 규칙 파일은 유지하지 않는다.
 
 ### 7. Summary
 

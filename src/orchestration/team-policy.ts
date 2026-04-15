@@ -5,11 +5,8 @@ export function isKnownNexusAgent(agentType: string): boolean {
 }
 
 export function requiresTeamInRunMode(agentType: string): boolean {
-  const agent = Object.values(AGENT_META).find((a) => a.id === agentType.toLowerCase());
-  if (!agent) {
-    return false;
-  }
-  return agent.category === "do" || agent.category === "check";
+  void agentType;
+  return false;
 }
 
 export function canJoinPlanWithoutTeam(role: string): boolean {

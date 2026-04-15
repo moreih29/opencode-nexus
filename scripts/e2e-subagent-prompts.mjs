@@ -131,4 +131,28 @@ let passed = 0;
   );
 }
 
+// Case 6: task and nx_task_close must be hidden from all subagents
+{
+  const hook = createConfigHook();
+  const config = {};
+  await hook(config);
+
+  for (const id of EXPECTED_SUBAGENT_IDS) {
+    const entry = config.agent[id];
+    assert.equal(
+      entry?.tools?.task,
+      false,
+      `[6] config.agent["${id}"].tools.task should be false`
+    );
+    assert.equal(
+      entry?.tools?.nx_task_close,
+      false,
+      `[6] config.agent["${id}"].tools.nx_task_close should be false`
+    );
+  }
+
+  passed++;
+  console.log(`PASS [6] all ${EXPECTED_SUBAGENT_IDS.length} subagents disallow task and nx_task_close`);
+}
+
 console.log(`\n✓ e2e-subagent-prompts.mjs: ${passed} cases passed`);

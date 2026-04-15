@@ -1,5 +1,5 @@
 import type { AgentTracker, InvocationContinuityHandles, InvocationLifecycleStatus } from "../shared/schema.js";
-import { pickContinuityFromTrackerState, readAgentTracker } from "../shared/agent-tracker.js";
+import { isInvocationActive, pickContinuityFromTrackerState, readAgentTracker } from "../shared/agent-tracker.js";
 
 // Local definition replacing the old ContinuitySelection from orchestration/core.ts.
 export interface ContinuitySelection {
@@ -133,10 +133,10 @@ function pickContinuitySelectionFromTracker(
   });
 
   candidates.sort((left, right) => {
-    const leftRunning = left.status === "running" ? 1 : 0;
-    const rightRunning = right.status === "running" ? 1 : 0;
-    if (preferRunning && leftRunning !== rightRunning) {
-      return rightRunning - leftRunning;
+    const leftActive = isInvocationActive(left.status) ? 1 : 0;
+    const rightActive = isInvocationActive(right.status) ? 1 : 0;
+    if (preferRunning && leftActive !== rightActive) {
+      return rightActive - leftActive;
     }
     const leftTs = Date.parse(left.ended_at ?? left.updated_at ?? left.started_at);
     const rightTs = Date.parse(right.ended_at ?? right.updated_at ?? right.started_at);

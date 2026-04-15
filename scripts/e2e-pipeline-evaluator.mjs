@@ -66,22 +66,6 @@ const scenarios = [
     }
   },
   {
-    name: "active cycle: blocked",
-    snapshot: {
-      hasTasksFile: true,
-      hasTaskCycle: true,
-      tasks: [{ id: "t-blocked", status: "blocked" }],
-      qaTriggerReasons: []
-    },
-    expected: {
-      taskCycleState: "active",
-      editsAllowed: true,
-      canCloseCycle: false,
-      shouldTriggerQa: false,
-      nextGuidanceKey: "resolve_blocked_tasks"
-    }
-  },
-  {
     name: "completed-open cycle",
     snapshot: {
       hasTasksFile: true,

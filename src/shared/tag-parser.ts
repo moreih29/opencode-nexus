@@ -108,7 +108,7 @@ export function buildTagNotice(mode: NexusTagMode): string | null {
   }
 
   if (mode === "plan") {
-    return "[nexus] Plan mode detected. Research first, then use nx_plan_start to open a session and nx_plan_decide to record decisions.";
+    return "[nexus] Plan mode detected. Research first, then use nx_plan_start to open a session. Before asking for a decision, present a comparison table with pros, cons, trade-offs, and a recommendation; then use nx_plan_decide.";
   }
   if (mode === "run") {
     return "[nexus] Run mode detected. Follow nx_task_add -> nx_task_update -> nx_task_close around all file edits.";

@@ -1,11 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
-import { readPlanParticipantContinuityFromCore } from "../orchestration/plan-continuity-adapter.js";
+import { readPlanParticipantSnapshotFromCore } from "../orchestration/plan-continuity-adapter.js";
 import { summarizeCoordinationGroups } from "../shared/agent-tracker.js";
-import { readPlanSidecar } from "../shared/plan-sidecar.js";
+import { collectHowRolesFromPlan } from "../shared/plan-how-panel.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile } from "../shared/json-store.js";
+import { PlanFileSchema, type PlanFile } from "../shared/schema.js";
 import { fileExists, readTasksSummary } from "../shared/state.js";
 
 export const nxContext = tool({
@@ -15,35 +16,35 @@ export const nxContext = tool({
     const root = context.worktree ?? context.directory;
     const paths = createNexusPaths(root);
 
-    const [hasPlan, hasTasks, tasksSummary, branch, plan, planSidecar, coordinationGroups, tasksFile] = await Promise.all([
+    const [hasPlan, hasTasks, tasksSummary, branch, planRaw, coordinationGroups, tasksFile] = await Promise.all([
       fileExists(paths.PLAN_FILE),
       fileExists(paths.TASKS_FILE),
       readTasksSummary(paths.TASKS_FILE),
       readCurrentBranch(root),
-      readJsonFile<{ topic?: string; issues?: Array<{ id?: number; title?: string; status?: string }> } | null>(paths.PLAN_FILE, null),
-      readPlanSidecar(paths.PLAN_SIDECAR_FILE),
+      readJsonFile<PlanFile | null>(paths.PLAN_FILE, null),
       summarizeCoordinationGroups(paths.AGENT_TRACKER_FILE),
       readJsonFile<{ goal?: string; decisions?: string[] } | null>(paths.TASKS_FILE, null)
     ]);
+    const planParse = planRaw ? PlanFileSchema.safeParse(planRaw) : null;
+    const plan = planParse?.success ? planParse.data : null;
 
     const activeMode = hasPlan ? "plan" : hasTasks ? "team" : null;
     const goal = typeof tasksFile?.goal === "string" ? tasksFile.goal : null;
     const decisions = Array.isArray(tasksFile?.decisions) ? tasksFile.decisions : [];
     const currentIssue = plan?.issues?.find((issue: { status?: string }) => issue.status === "discussing") ?? plan?.issues?.find((issue: { status?: string }) => issue.status === "pending") ?? null;
-    const mergedParticipants = planSidecar
-      ? await Promise.all(
-          planSidecar.panel.participants.map(async (participant: { role: string; last_summary?: string | null }) => {
-            const coreParticipant = await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, participant.role);
+    const panelRoles = plan ? collectHowRolesFromPlan(plan) : [];
+    const mergedParticipants = await Promise.all(
+      panelRoles.map(async (role) => {
+        const coreParticipant = await readPlanParticipantSnapshotFromCore(paths.AGENT_TRACKER_FILE, role);
 
-            return {
-              role: participant.role,
-              task_id: coreParticipant?.task_id ?? null,
-              session_id: coreParticipant?.session_id ?? null,
-              last_summary: coreParticipant?.last_summary ?? participant.last_summary ?? null
-            };
-          })
-        )
-      : [];
+        return {
+          role,
+          task_id: coreParticipant?.task_id ?? null,
+          session_id: coreParticipant?.session_id ?? null,
+          last_summary: coreParticipant?.last_summary ?? null
+        };
+      })
+    );
 
     return JSON.stringify(
       {
@@ -54,12 +55,12 @@ export const nxContext = tool({
         decisions,
         planTopic: typeof plan?.topic === "string" ? plan.topic : null,
         currentIssue,
-        handoff: planSidecar
+        handoff: hasPlan
           ? {
-              policy: planSidecar.handoff.policy,
-              canonicalReady: planSidecar.handoff.canonical_ready,
+              policy: "canonical-first",
+              canonicalReady: true,
               panelMembership: {
-                roles: planSidecar.panel.participants.map((item: { role: string }) => item.role)
+                roles: panelRoles
               },
               resumability: {
                 participants: mergedParticipants
@@ -75,7 +76,7 @@ export const nxContext = tool({
             }
           : null,
         coordinationGroups,
-        tasksSummary: tasksSummary ?? { total: 0, pending: 0, in_progress: 0, completed: 0, blocked: 0 }
+        tasksSummary: tasksSummary ?? { total: 0, pending: 0, in_progress: 0, completed: 0 }
       },
       null,
       2

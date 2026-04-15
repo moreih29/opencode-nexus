@@ -4,6 +4,12 @@
   "instructions": ["AGENTS.md"],
   "default_agent": "nexus",
   "agent": {
+    "build": {
+      "disable": true
+    },
+    "plan": {
+      "disable": true
+    },
     "nexus": {
       "description": "Nexus-aware orchestration lead for meet, run, delegation, and verification workflows",
       "mode": "primary",

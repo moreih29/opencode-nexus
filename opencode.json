@@ -50,6 +50,12 @@
     "tester": {
       "mode": "subagent",
       "model": "opencode-go/minimax-m2.7"
+    },
+    "general": {
+      "model": "opencode-go/minimax-m2.7"
+    },
+    "explore": {
+      "model": "opencode-go/minimax-m2.7"
     }
   },
   "permission": {

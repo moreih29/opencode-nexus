@@ -6839,6 +6839,1218 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T01:48:19.095Z",
+      "branch": "main",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Merge current branch into main",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T01:48:07.071Z",
+          "context": "User requested merging the current branch chore/nexus-core-consuming-sync into main. Repository is clean, no active plan or task cycle exists.",
+          "approach": "Checkout main and perform a non-interactive merge from the current branch, then verify status and resulting HEAD.",
+          "acceptance": "main contains the commits from chore/nexus-core-consuming-sync and git status is clean or reports only expected branch state.",
+          "risk": "Merge conflicts or main moving unexpectedly; do not rewrite history."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T02:37:44.971Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 36,
+        "topic": "Refactor Nexus runtime contract and docs",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Remove `team_name` requirement and reliance from run-mode runtime and guidance",
+            "status": "decided",
+            "decision": "`team_name` will no longer be required for run-mode task spawning or documented as standard task-tool input. Existing parsing may remain only as optional compatibility metadata where harmless, but runtime success and continuity must not depend on it.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Remove run auto-resume injection / Claude-style continuity from OpenCode task spawning",
+            "status": "decided",
+            "decision": "Run-mode auto-resume injection will be removed rather than narrowed. OpenCode task spawning should not receive Claude-style resume fields or implicit continuity injection. Tracking can remain observational via agent-tracker, but spawning must work without injected continuity metadata.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Update generated skills/docs and context docs to current runtime state surfaces",
+            "status": "decided",
+            "decision": "Generated skills/docs, harness resume docs, and .nexus context docs are now aligned to the current runtime surfaces. Active continuity/storage references use plan.extension.json, agent-tracker.json, and tool-log.jsonl rather than orchestration.json or audit/; team_name is documented only as optional metadata.",
+            "how_agents": [
+              "engineer",
+              "writer",
+              "tester"
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Run targeted regressions and full verification for runtime and docs changes",
+            "status": "decided",
+            "decision": "Verification is complete. Targeted team-policy, run continuity, plan continuity, prompt generation, context, and full e2e checks passed after the final harness-docs correction. The runtime and documentation contract is now consistent with the intended OpenCode-native behavior.",
+            "how_agents": [
+              "tester"
+            ]
+          }
+        ],
+        "research_summary": "Architect analyzed opencode-nexus runtime and identified four confirmed problem areas: unnecessary `team_name` requirement in run mode, Claude-style run continuity/resume injection instead of OpenCode-native behavior, stale generated skill/docs referencing obsolete surfaces (`orchestration.json`, `audit/`), and run continuity injection causing spawn issues. Recommended strategy is to remove `team_name` as a runtime prerequisite, remove or heavily narrow run auto-injection (preferred: remove it), keep plan-mode continuity intact, update source-of-truth harness content and regenerate derived artifacts, then verify with targeted regressions plus project checks.",
+        "created_at": "2026-04-15T02:19:58.678Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Remove team_name requirement and run auto-resume injection",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T02:20:33.212Z",
+          "context": "Refactor opencode-nexus runtime so run-mode task spawning no longer requires `team_name`, and remove run auto-resume/Claude-style continuity injection from OpenCode task spawning. Architect recommendation: remove run auto-injection entirely as lowest-risk fix. Likely files include src/plugin/hooks.ts, src/orchestration/run-continuity-adapter.ts, src/orchestration/team-policy.ts, src/shared/agent-tracker.ts, src/shared/schema.ts, and impacted tests such as scripts/e2e-team-policy.mjs and run continuity tests.",
+          "approach": "Make the smallest contract-correct runtime change: stop enforcing team_name in run mode, remove or disable run continuity arg injection into task tool calls, and keep agent-tracker observational only. Update only runtime code and directly impacted tests in this task.",
+          "acceptance": "Run-mode task spawning no longer requires team_name; no run path injects resume_task_id/resume_session_id/resume_handles; impacted runtime tests are updated or added for the new contract.",
+          "risk": "Touches spawn/continuity hooks and may affect task correlation or tests if incomplete."
+        },
+        {
+          "id": 2,
+          "title": "Update generated skills and orchestration docs",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T02:20:33.218Z",
+          "context": "After runtime contract fixes, update source-of-truth prompt/docs inputs and regenerate outputs so generated content matches current runtime. Architect identified stale references to orchestration.json and audit/ in harness-content and generated skills/docs.",
+          "approach": "Edit source-of-truth docs/templates first, then regenerate derived skill/template artifacts and refresh any runtime-facing prompt text that still treats team_name as required.",
+          "acceptance": "Generated plan/run skills, templates, and AGENTS-related prompt surfaces no longer describe orchestration.json or audit/ as active state surfaces and no longer require team_name for run-mode spawning.",
+          "risk": "Generated outputs can drift if source and generated files are only partially updated."
+        },
+        {
+          "id": 3,
+          "title": "Sync .nexus context docs with runtime architecture",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T02:20:33.226Z",
+          "context": "Human-authored context docs under .nexus/context still describe stale orchestration surfaces. These should be aligned after runtime contract changes.",
+          "approach": "Update only the human-authored context docs that still describe deprecated orchestration storage or required team_name behavior.",
+          "acceptance": ".nexus/context docs describe current runtime surfaces and no longer claim orchestration.json/audit are active or that run mode requires team_name.",
+          "risk": "Low; mostly documentation drift cleanup."
+        },
+        {
+          "id": 4,
+          "title": "Verify runtime contract and docs regressions",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 4,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-15T02:20:33.235Z",
+          "context": "After runtime and docs updates, verify that the new contract is consistent and no regressions remain around run-mode spawning, plan continuity, docs generation, and tests.",
+          "approach": "Run targeted e2e scripts for team policy and continuity plus repository-wide checks. Report PASS/FAIL with findings by severity.",
+          "acceptance": "Targeted regressions relevant to removed team_name requirement and run auto-resume pass, and broader project checks succeed or failures are clearly isolated.",
+          "risk": "May expose hidden contract drift requiring follow-up fixes."
+        },
+        {
+          "id": 5,
+          "title": "Sync harness resume docs with runtime contract",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "tester-followup",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 3,
+          "deps": [
+            2,
+            3
+          ],
+          "created_at": "2026-04-15T02:34:28.979Z",
+          "context": "Tester found stale references in harness-docs/resume_invocation.md after runtime/doc refactor. The doc still mentions orchestration.json, audit/, and removed run continuity injection behavior.",
+          "approach": "Apply a minimal documentation fix limited to harness-docs/resume_invocation.md so it matches the current runtime: plan may auto-inject task_id, run does not auto-inject resume args, and current runtime surfaces are agent-tracker.json and tool-log.jsonl.",
+          "acceptance": "harness-docs/resume_invocation.md no longer references orchestration.json or audit/ as active runtime surfaces and no longer claims run-mode continuity auto-injection exists.",
+          "risk": "Low; documentation-only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 5,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "Refactor Nexus runtime contract and docs"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:22:41.221Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 37,
+        "topic": "Review whether plan.extension.json is necessary",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Whether to keep, shrink, or remove plan.extension.json",
+            "status": "decided",
+            "decision": "`plan.extension.json` is not required for correctness and will be removed. The system should derive plan follow-up and resumability from canonical `plan.json` plus `agent-tracker.json`, preserving current UX where needed through derived tracker summaries rather than a persisted sidecar.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Code review and architect analysis show `plan.extension.json` is currently a best-effort projection, not the source of truth for plan resumability. `src/orchestration/plan-continuity-adapter.ts` reads actual resumability from `agent-tracker.json`; `src/shared/plan-sidecar.ts` mainly duplicates HOW panel membership derived from `plan.json` and preserves fallback `last_summary` metadata. Current reads are in `src/tools/plan.ts` and `src/tools/context.ts`, but those outputs can be derived from canonical `plan.json` plus `agent-tracker.json`. Main migration risk is preserving summary-only follow-up suggestions without the sidecar.",
+        "created_at": "2026-04-15T02:56:26.390Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Derive plan continuity from plan.json and agent-tracker",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T02:59:54.105Z",
+          "context": "Plan #37 decided to remove plan.extension.json. Current plan tools and nx_context still read sidecar state for HOW panel membership and summary fallback, while resumability already comes from agent-tracker. Replace sidecar reads with derived data from canonical plan.json plus agent-tracker.json.",
+          "approach": "Refactor plan/status/context continuity helpers so panel membership comes from plan issues and follow-up/resume information comes from tracker-derived continuity. Preserve current output shape where practical.",
+          "acceptance": "nxPlanStatus, nxPlanResume, nxPlanFollowup, and nxContext work without reading plan.extension.json and still expose useful HOW follow-up information derived from canonical plan plus tracker.",
+          "risk": "Behavioral drift in follow-up suggestions or summary-only hints if derivation is incomplete."
+        },
+        {
+          "id": 2,
+          "title": "Remove plan sidecar write path and file/schema references",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T02:59:54.131Z",
+          "context": "After plan continuity behavior no longer depends on plan.extension.json, remove the sidecar implementation and its runtime wiring.",
+          "approach": "Delete sync/read helpers, remove PLAN_SIDECAR path usage, remove sidecar schema/types, and clean up hook/tool code that writes or references the file.",
+          "acceptance": "No runtime code writes or reads plan.extension.json; plan-sidecar implementation and schema references are removed or dead-code-free.",
+          "risk": "Residual references in tests, docs, or generated content could break build/test until cleaned."
+        },
+        {
+          "id": 3,
+          "title": "Verify sidecar removal end-to-end",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-15T02:59:54.142Z",
+          "context": "After runtime, tests, and docs are updated, validate that plan workflows still function and that no stale plan.extension.json contract remains.",
+          "approach": "Run targeted plan continuity/context/prompt tests plus broader checks. Review residual references to plan.extension.json and confirm expected behavior during plan lifecycle.",
+          "acceptance": "Targeted plan continuity and context tests pass, broader checks pass, and remaining references to plan.extension.json are either intentionally historical or removed.",
+          "risk": "Hidden assumptions in generated docs/tests or cleanup scripts may surface late."
+        },
+        {
+          "id": 4,
+          "title": "Update tests and docs for sidecar removal",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-15T03:00:11.710Z",
+          "context": "Current tests and docs mention plan.extension.json explicitly in runtime, context, harness docs, README, and generated skill content. These must be aligned after sidecar removal.",
+          "approach": "Update targeted e2e tests, harness docs, context docs, README, templates, and generated skill/doc outputs so continuity is described as derived from plan.json plus agent-tracker.json.",
+          "acceptance": "No active docs/tests describe plan.extension.json as part of the runtime contract; generated artifacts are refreshed and aligned.",
+          "risk": "Generated/source drift if source-of-truth files are not updated first."
+        },
+        {
+          "id": 5,
+          "title": "Remove stale skill backup files",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            4
+          ],
+          "created_at": "2026-04-15T03:21:46.877Z",
+          "context": "Final verification found stale `.bak` skill backup files under `.opencode/skills/` containing removed `plan.extension.json` references. They are not runtime-active but should be cleaned up to avoid confusion.",
+          "approach": "Delete the two stale backup files and re-run a minimal reference check.",
+          "acceptance": "The stale `.bak` files are removed and no active skill files reference plan.extension.json.",
+          "risk": "Low; backup-file cleanup only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 5,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Review whether plan.extension.json is necessary"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:40:39.780Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 38,
+        "topic": "Review agent-tracker lifecycle and purpose",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Decide the intended operating model for agent-tracker.json and whether current reset behavior is a bug",
+            "status": "decided",
+            "decision": "`agent-tracker.json` is a session-scoped runtime continuity/observability state, not durable invocation history. Reset behavior in `ensureNexusStructure()` is incorrect and should be removed. Tracker reset must occur only at explicit session lifecycle boundaries, while normal setup/init/sync paths should preserve the current tracker. Current consumers should continue treating tracker as ephemeral runtime state layered on top of canonical plan/task files.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Current opencode-nexus code uses `.nexus/state/opencode-nexus/agent-tracker.json` as runtime continuity/observability state, not canonical history. `src/shared/agent-tracker.ts` itself only appends or updates invocations by `invocation_id`; it does not delete entries. The observed 'entries appear and disappear' behavior comes from whole-file resets: `ensureNexusStructure()` resets the tracker (`src/shared/state.ts:14-27`), and that function is called from session initialization and also workflow/setup paths. `session.created` also calls `resetAgentTracker()` again directly (`src/plugin/hooks.ts:119-123`), so tracker resets twice on session start. Current consumers use tracker for plan follow-up continuity, context summaries, and active-agent snapshots, which fits an ephemeral runtime-state role better than durable history. The main problem is a lifecycle/design mismatch: the file looks persistent, but implementation resets it from overly broad code paths.",
+        "created_at": "2026-04-15T03:27:25.061Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Stop destructive tracker resets from ensure/setup paths",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T03:29:27.890Z",
+          "context": "Plan #38 decided that agent-tracker.json is session-scoped runtime state and must not be reset from generic ensure/setup/init/sync paths. Current code resets tracker inside ensureNexusStructure() and again on session.created, causing invocations to appear and disappear unexpectedly.",
+          "approach": "Refactor structure/setup helpers so they only ensure directories/files exist. Keep tracker reset only at explicit session lifecycle boundaries in hooks. Preserve runtime behavior otherwise.",
+          "acceptance": "ensureNexusStructure() is non-destructive; nx_init/nx_sync/nx_setup no longer wipe agent-tracker state; session.created remains the only runtime reset path unless another explicit lifecycle hook is intentionally added.",
+          "risk": "Changing initialization boundaries can expose assumptions in tests or startup behavior."
+        },
+        {
+          "id": 2,
+          "title": "Align tests and docs with agent-tracker lifecycle model",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T03:29:28.000Z",
+          "context": "After lifecycle behavior is corrected, tests and docs should describe agent-tracker as session-scoped runtime continuity state and stop implying it is durable invocation history or reset by generic ensure/setup flows.",
+          "approach": "Update targeted tests plus human/generated docs that describe agent-tracker semantics, reset boundaries, or lifecycle expectations.",
+          "acceptance": "Relevant tests pass with the new lifecycle, and active docs describe agent-tracker as ephemeral runtime continuity/observability state reset at session boundaries only.",
+          "risk": "Docs/generated drift if source-of-truth files are not updated first."
+        },
+        {
+          "id": 3,
+          "title": "Verify agent-tracker lifecycle end-to-end",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-15T03:29:43.160Z",
+          "context": "After lifecycle and docs/tests are updated, verify that tracker state persists across non-session operations, resets only at session boundaries, and still supports continuity/context features.",
+          "approach": "Run targeted lifecycle/continuity tests and broader checks. Review for remaining reset paths or stale contract statements.",
+          "acceptance": "Tracker no longer clears during non-session setup/init/sync paths, session-start reset behavior remains explicit, and relevant tests/checks pass.",
+          "risk": "Hidden code paths may still reset the tracker or rely on old semantics."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Review agent-tracker lifecycle and purpose"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:46:20.744Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Sync .nexus/context docs with current repository state",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "nexus",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T03:43:54.061Z",
+          "context": "User requested [sync]. Recent changes affect skill metadata, runtime dependencies, and E2E/build workflow details in .nexus/context.",
+          "approach": "Compare changed source files and package metadata against current .nexus/context docs, then apply targeted documentation updates only where concrete drift exists.",
+          "acceptance": "Context docs accurately reflect current skill triggers, dependencies, tool/runtime facts, and E2E workflow/script inventory without rewriting unrelated sections.",
+          "risk": "Over-updating abstract context based on weak signals; avoid speculative edits and leave unchanged sections intact."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:51:20.028Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Track agent-tracker entries from initial subagent delegation",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "nexus",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T03:48:42.993Z",
+          "context": "User noticed agent-tracker entries appear only after subagent completion and asked to manage status from the first call under [run].",
+          "approach": "Adjust agent-tracker lifecycle schema and start registration so an invocation is appended immediately with a non-terminal state, then keep terminal transition on completion. Update affected readers/tests accordingly.",
+          "acceptance": "agent-tracker appends an invocation record before subagent completion with an explicit pre-completion status, existing completion logic still works, and relevant tests cover the lifecycle.",
+          "risk": "Changing lifecycle enum could break running-status filters; keep semantics narrow and update only affected comparisons."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T04:08:34.471Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align opencode tracker lifecycle to running-completed",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T04:06:26.317Z",
+          "context": "User requested [run] and wants opencode-nexus agent-tracker lifecycle to match claude-nexus: no pending state, only running -> completed. Current recent change introduced pending as the initial status.",
+          "approach": "Revert the pending lifecycle change narrowly: remove pending from schema/status helpers, restore applyInvocationStart to running, update active checks and the focused E2E expectation accordingly, then run build plus focused tracker test.",
+          "acceptance": "Agent tracker schema no longer includes pending, invocation start records running immediately, active logic remains correct, and build plus e2e-agent-tracker-core pass.",
+          "risk": "Leaving any pending-aware comparisons behind could create dead branches or mismatched active-state handling."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T04:48:53.076Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 39,
+        "topic": "Diagnose stale task-pipeline prompting and unauthorized task_close behavior",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Why non-run flows still get task-pipeline prompting and guidance",
+            "status": "decided",
+            "decision": "Adopt claude-nexus-style run scoping for task pipeline guidance. Remove full task-pipeline instructions from global prompt layers and make detailed nx_task_add/nx_task_update/nx_task_close procedure run-mode-only. Specifically: system prompt should not always inject the TASK PIPELINE block or global 'enforce task pipeline for code changes' language; the nexus primary prompt should scope task-pipeline instructions to [run]; quick-start/onboarding text should stop advertising nx_task_close as a general step; and non-run/no-tag notices should not instruct task-pipeline actions, only optionally mention that a run cycle is open. Keep hard runtime enforcement state-driven via actual task-cycle files, but stop globally prompting task pipeline outside [run]."
+          },
+          {
+            "id": 2,
+            "title": "Why subagents can invoke nx_task_close even though only Nexus should close cycles",
+            "status": "decided",
+            "decision": "Enforce nx_task_close as Nexus-only at both policy and runtime layers. Subagents must not be able to see or call nx_task_close as part of their normal tool affordance, and any attempted invocation must still be rejected server-side unless the caller is the Nexus lead. Concretely: add nx_task_close to subagent-disallowed tool policy, update subagent guidance to state that cycle closure is lead-owned, and add a hard runtime guard in the task-close execution path or pre-execution hook that rejects non-Nexus callers regardless of prompt/tool configuration drift."
+          },
+          {
+            "id": 3,
+            "title": "Why architect subagent invocation did not appear in agent-tracker",
+            "status": "decided",
+            "decision": "Adopt a shared delegation-tracking registrar so agent-tracker covers both OpenCode-internal task-tool subagent spawns and lead-mediated external delegation. Do not treat the OpenCode task hook as the single source of truth, because OpenCode's plugin hook contract only observes in-runtime tool execution and cannot see external delegation paths. Instead, define agent-tracker's single logical source as a common tracking layer used by both paths: internal task-hook instrumentation will continue to record OpenCode task-based spawns, and external delegation entrypoints must call the same registrar for start/end lifecycle updates. Preserve invocation correlation semantics across both sources so the tracker remains a unified observability surface for all Nexus-mediated subagent work."
+          },
+          {
+            "id": 4,
+            "title": "Why plan-mode option discussions were not consistently presented as comparison tables",
+            "status": "decided",
+            "decision": "Handle plan-format drift with both operator discipline and consumer-side reminder reinforcement, without editing the canonical nexus-core nx-plan prompt body. Treat the immediate cause as lead response discipline drift: in interactive plan sessions, option discussions must start with a comparison table rather than prose. Reinforce this at the opencode-nexus consumer layer, following the claude-nexus pattern, by adding or strengthening plan-state reminder text that explicitly says to present a comparison table with pros/cons/trade-offs/recommendation before asking for a decision. Preserve nexus-core as the canonical source for the skill body; use harness-specific notices to improve compliance rather than forking the prompt content."
+          }
+        ],
+        "research_summary": "Researched prompt injection and task workflow enforcement paths. Found task-pipeline instructions are still injected globally outside run mode from multiple places: src/plugin/system-prompt.ts always appends a TASK PIPELINE block and a global constraint '- Enforce task pipeline for code changes' regardless of mode; src/agents/primary.ts tells the nexus primary 'For execution, use the task pipeline. Register tasks before file edits...' without run-mode scoping; src/plugin/hooks.ts adds onboarding/stateful notices that mention nx_task_close and active task-cycle resumption even when no [run] tag is present if tasks.json exists. For unauthorized task_close, subagent tool policy does not forbid nx_task_close: create-config.ts only blocks tools listed in AGENT_META.disallowedTools, and generated agent metadata disallows nx_task_add for many subagents but not nx_task_close for any. Generated subagent prompts also only forbid nx_task_add/nx_task_update in some roles, not nx_task_close. Finally, src/tools/task.ts nxTaskClose executes for any caller and hooks.ts only checks cycle state before nx_task_close, not caller identity, so any subagent that sees the tool can invoke it.",
+        "created_at": "2026-04-15T04:13:05.072Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Introduce shared delegation-tracking registrar for agent-tracker",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 3,
+          "deps": [],
+          "created_at": "2026-04-15T04:31:51.661Z",
+          "context": "Apply plan issue #3 decision. agent-tracker must cover both OpenCode task-tool subagent spawns and lead-mediated external delegation, using one logical tracking layer.",
+          "approach": "Refactor tracker registration around a shared registrar API that both internal task-hook instrumentation and external delegation entrypoints can call for start/end updates. Preserve existing correlation semantics where possible and keep tracker as unified observability surface.",
+          "acceptance": "There is a shared tracking layer used by internal task-hook path and external delegation path; architect-style external delegation can be recorded in agent-tracker; existing internal task-tool tracking continues to work.",
+          "risk": "Correlation semantics may regress if registrar integration is partial or mismatched."
+        },
+        {
+          "id": 2,
+          "title": "Scope task-pipeline guidance to run mode and strengthen plan comparison-table reminders",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T04:32:13.337Z",
+          "context": "Apply plan issue #1 and #4 decisions. Remove global task-pipeline instructions outside run mode, keep run-specific guidance, and add consumer-side plan reminder text for comparison tables without editing canonical nexus-core skill bodies.",
+          "approach": "Update global/system/primary prompt assembly and stateful notices so detailed nx_task_add/nx_task_update/nx_task_close guidance appears only in run mode. Keep non-run notices informational. Add explicit plan-state reminder to present comparison tables with pros/cons/trade-offs/recommendation before asking for a decision, mirroring claude-nexus consumer-side reinforcement.",
+          "acceptance": "Non-run system/onboarding/no-tag prompts no longer instruct task pipeline actions; run mode still provides detailed pipeline guidance; plan reminders explicitly mention comparison tables; canonical generated nx-plan prompt bodies remain untouched.",
+          "risk": "Over-removal could weaken run guidance or break existing tests relying on prompt fragments."
+        },
+        {
+          "id": 3,
+          "title": "Make nx_task_close Nexus-only in tool policy and runtime",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [],
+          "created_at": "2026-04-15T04:32:19.544Z",
+          "context": "Apply plan issue #2 decision. Subagents must not be able to see or successfully invoke nx_task_close; runtime must reject non-Nexus callers even if policy drifts.",
+          "approach": "Add nx_task_close to subagent-disallowed tool policy and update any subagent-facing guidance if needed. Add a hard runtime guard in task close execution or pre-execution hook that only allows the Nexus lead agent/session to close cycles.",
+          "acceptance": "Subagent configs no longer expose nx_task_close; attempts by non-Nexus callers are rejected at runtime; Nexus lead can still close cycles successfully.",
+          "risk": "Guarding by the wrong identity signal could block legitimate lead closes."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "Diagnose stale task-pipeline prompting and unauthorized task_close behavior"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T06:02:05.090Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 40,
+        "topic": "claude-nexus 대비 opencode-nexus의 prompts/hooks/agents/skills 차이 비교 및 선택 논의",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Prompt and skill source-of-truth and delivery strategy: generated TS + system injection vs generated Markdown/frontmatter + plugin skill directory",
+            "status": "decided",
+            "decision": "OpenCode harness 구조에 의해 generated TS + dual delivery(A-leg native skill install + B-leg system injection) 방식을 유지한다. Markdown/frontmatter 중심 전환은 하지 않는다. 다만 사람이 검토하기 쉬운 read-only mirror artifact 추가는 후속 개선 후보로 남긴다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Hook architecture and orchestration enforcement: distributed OpenCode hooks vs centralized Claude gate",
+            "status": "decided",
+            "decision": "OpenCode에서는 distributed hooks 구조를 유지한다. centralized gate 스타일로 재구성하지 않는다. 현재 우선순위는 사람이 읽기 쉬운 단일 진입점보다 코드 레벨에서의 책임 분리와 구조적 아름다움이다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Agent and skill harness adaptation differences: metadata, tool restrictions, invocation semantics, and knowledge injection",
+            "status": "decided",
+            "decision": "Agent/skill의 harness-local adaptation을 유지한다. Claude와의 메타데이터/행동 표면 정렬보다 OpenCode 런타임 contract에 맞는 로컬 적응을 우선한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Where opencode-nexus should intentionally align with claude-nexus vs stay harness-specific",
+            "status": "decided",
+            "decision": "런타임 동작 기준으로는 다음을 채택한다: (1) opencode-nexus의 고도화된 agent-tracker/continuity 모델은 유지, (2) nx_task_close의 Nexus-lead only 정책은 유지, (3) Claude의 SubagentStop 미완료 task 경고 패턴은 opencode에 부분 도입 검토, (4) task pipeline edit gate는 실제 run 사이클에 한정되도록 재검토한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 5,
+            "title": "agent-tracker가 예기치 않게 빈 배열로 reset되는 원인 추적: session.created 범위, subagent session lifecycle, fallback-empty overwrite 가능성",
+            "status": "decided",
+            "decision": "agent-tracker reset scope는 B안으로 결정한다. tracker는 단일 파일 모델을 유지하되, reset은 primary/lead session created에만 한정한다. child/subagent session created가 존재하더라도 전체 tracker를 비우지 않도록 가드한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 6,
+            "title": "tool-log/files_touched attribution 누락 여부 검증: child session edit가 invocation에 귀속되지 않는지 확인하고 수정 옵션 비교",
+            "status": "decided",
+            "decision": "tool-log/files_touched attribution은 B안으로 결정한다. file-edit events를 child session 기준으로 더 넓게 기록하고, task completion 시 child_session_id가 확정되면 그 세션의 과거 edit 로그를 retroactive join하여 agent-tracker invocation.files_touched를 채운다. 실시간 active invocation 매칭에 의존하지 않는다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 7,
+            "title": "task pipeline edit gate scope 검증: idle/free edit, run without tasks, completed-open cycle, active run cycle에서 edit-like tool 차단 범위 확인",
+            "status": "decided",
+            "decision": "task pipeline edit gate scope는 B안으로 결정한다. edit-like tool gate는 실제 run-cycle 관리에 한정하고, no tasks file 상태 자체를 edit 금지로 해석하지 않는다. completed-open cycle에 대한 차단은 유지하되, idle/free edit는 허용한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 8,
+            "title": "SubagentStop equivalent warning in OpenCode: tool.execute.after(task)에서 owner task 미완료 경고를 제공할지 결정",
+            "status": "decided",
+            "decision": "SubagentStop unfinished-task warning은 B안으로 결정한다. OpenCode에는 SubagentStop 훅이 없으므로 Claude 구현을 그대로 복제하지 않고, tool.execute.after(task) 시점에 owner task 미완료 여부를 검사해 equivalent warning/escalation을 제공한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 9,
+            "title": "stateful notice를 실제 system prompt 경로에 연결할지 결정",
+            "status": "decided",
+            "decision": "stateful notice는 B안으로 결정한다. buildStatefulNotice()를 dead helper로 두지 않고 experimental.chat.system.transform 경로에 실제 연결하여, 현재 plan/run/task state에 맞는 짧은 동적 notice를 고정 Nexus system prompt 앞에 주입한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 10,
+            "title": "stop/exit enforcement 강화: active cycle과 completed-open cycle에 차등 enforcement를 적용할지 결정",
+            "status": "decided",
+            "decision": "stop/exit enforcement는 D안으로 결정한다. active cycle에서는 exit-like command에 대해 hard block 수준의 강한 enforcement를 적용하고, completed-open cycle에서는 nx_task_close를 유도하는 강한 warning 또는 1회성 soft block을 사용한다. Claude의 Stop 훅을 그대로 복제하지 않고, OpenCode에서는 exit command guard를 강화하는 방향으로 구현한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 11,
+            "title": "plan skill의 Step 7(task generation) 이 실제 운영에서 누락된 원인 분석: allComplete 이후 tasks.json 생성/유도/전이 부족 이유 진단",
+            "status": "decided",
+            "decision": "plan skill의 Step 7(task generation) 누락 대응은 우선 B안으로 결정한다. interactive plan에서 nx_plan_decide 결과가 allComplete=true가 되면, plan completion 상태를 강하게 알리고 즉시 Step 7(task generation via nx_task_add)로 전이하라는 notice/system-level 유도를 추가한다. dedicated task-generation tool은 후속 개선 후보로 남긴다.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Compared opencode-nexus and claude-nexus across authoritative runtime surfaces. opencode-nexus uses build-time generated TS prompt catalogs (`src/agents/generated/*`, `src/skills/generated/*`) plus OpenCode hook/system-prompt injection (`src/plugin/hooks.ts`, `src/plugin/system-prompt.ts`) and installs native `.opencode/skills/*` files via `src/create-config.ts`. claude-nexus uses generated Markdown/frontmatter artifacts (`agents/*.md`, `skills/*/SKILL.md`) as runtime prompt assets, exposes skills through `.claude-plugin/plugin.json`, and centralizes runtime interception/sync/tag dispatch in `src/hooks/gate.ts`. Core prompt bodies mostly match because both consume `@moreih29/nexus-core`, but harness-specific transforms differ: Claude adds frontmatter, maxTurns, slash/manual invocation semantics, and harness-content enrichment; OpenCode adds TS metadata objects, tool policies, and `<nexus>` / `<nexus-skill>` system injection. Hook models differ substantially: OpenCode distributes behavior across typed hooks (`event`, `tool.execute.before/after`, `chat.message`, `command.execute.before`, `experimental.chat.system.transform`) with explicit runtime state files; Claude concentrates more orchestration inside `gate.ts` (Stop, PreToolUse, UserPromptSubmit, CLAUDE.md sync, task reminders, tag dispatch, subagent context injection). Both share tag ids and many planning rules, including comparison-table requirement before decisions, but differ in delivery path, trigger mechanism, and runtime constraints. Recent opencode changes also scope task-pipeline enforcement to run mode and make `nx_task_close` Nexus-lead only.",
+        "created_at": "2026-04-15T04:58:38.122Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Update architecture.md with delegation tracker abstraction",
+          "status": "completed",
+          "owner": "writer",
+          "created_at": "2026-04-15T04:53:15.456Z",
+          "context": "Updating .nexus/context/ documentation to match recent source changes: delegation tracker now uses createDelegationTrackerRegistrar factory pattern",
+          "approach": "Edit shared section to mention createDelegationTrackerRegistrar abstraction; edit hooks section to mention nx_task_close enforcement and plan mode comparison table requirement",
+          "acceptance": "architecture.md mentions createDelegationTrackerRegistrar and nx_task_close enforcement in hooks"
+        },
+        {
+          "id": 2,
+          "title": "Update tools.md with nx_task_close Nexus-lead restriction",
+          "status": "completed",
+          "owner": "writer",
+          "created_at": "2026-04-15T04:53:18.041Z",
+          "context": "Updating .nexus/context/ documentation to match recent source changes: nx_task_close is now Nexus-lead only at both hook and tool levels",
+          "approach": "Edit nx_task_close description to mention Nexus-lead restriction; add note to nx_plan_decide about comparison table requirement",
+          "acceptance": "tools.md nx_task_close entry notes it is Nexus-lead only; plan mode notes comparison table requirement"
+        },
+        {
+          "id": 3,
+          "title": "Agent tracker reset 재현 실험 추가 및 실행",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 5,
+          "deps": [],
+          "created_at": "2026-04-15T05:18:43.587Z",
+          "context": "Investigate unexpected empty agent-tracker.json by reproducing lifecycle behavior in a controlled script. Focus on whether session.created resets tracker after subagent activity and distinguish reset from parse-fallback overwrite.",
+          "approach": "Add a focused e2e diagnostic script that exercises createHooks with session.created and task lifecycle events, inspects tracker contents before/after each step, and prints evidence. Run the script after building to collect exact observations.",
+          "acceptance": "A repeatable script demonstrates tracker behavior with concrete before/after state and supports narrowing the root cause. Findings are summarized back to the user.",
+          "risk": "Synthetic event payloads may not perfectly match real OpenCode runtime events, so conclusions may still need one final live validation."
+        },
+        {
+          "id": 4,
+          "title": "Tool-log/files_touched 귀속 실험",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 6,
+          "deps": [],
+          "created_at": "2026-04-15T05:22:28.323Z",
+          "context": "Verify whether child-session file edits are correctly attributed into tool-log.jsonl and aggregated into agent-tracker files_touched during task lifecycle.",
+          "approach": "Add a focused diagnostic e2e script that simulates task start, child-session edit before task completion, and task completion, then inspects tool-log.jsonl and agent-tracker files_touched. Use it to determine whether current matching by child_session_id causes attribution loss.",
+          "acceptance": "Repeatable evidence shows whether tool-log attribution works or fails, with exact before/after state and code-path-based interpretation.",
+          "risk": "Synthetic hook payloads may differ from production payload ordering, but should still validate the current matching logic assumptions."
+        },
+        {
+          "id": 5,
+          "title": "Task pipeline edit gate scope 실험",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 7,
+          "deps": [],
+          "created_at": "2026-04-15T05:24:46.994Z",
+          "context": "Verify whether edit-like tool gating in hooks is limited to active run cycles or also blocks idle/free edits without a task cycle.",
+          "approach": "Add a focused e2e script that invokes tool.execute.before for an edit-like tool across four states: no tasks file, empty tasks file, active task cycle, and completed-open cycle. Capture pass/fail behavior and compare with desired run-only gating semantics.",
+          "acceptance": "Repeatable evidence shows the exact current gate scope and whether it over-blocks free edits outside run cycles.",
+          "risk": "Synthetic hook invocation may not include all runtime prompt context, but tool gating behavior is implemented directly in hook code and should be representative."
+        },
+        {
+          "id": 6,
+          "title": "Guard agent-tracker reset to primary session lifecycle only",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 5,
+          "deps": [],
+          "created_at": "2026-04-15T05:39:49.868Z",
+          "context": "Implement the decided fix for unexpected tracker wipes. The tracker should remain a single shared file, but reset only for primary/lead session.created boundaries, not child/subagent session creation.",
+          "approach": "Narrow the session.created reset path in plugin hooks using reliable primary-session discrimination. Preserve current tracker schema and continuity consumers. Extend the tracker reset experiment to cover the guarded case.",
+          "acceptance": "agent-tracker.json is not reset by child/subagent session creation; primary session creation still resets as intended; regression script covers both cases.",
+          "risk": "OpenCode event payload may not expose a stable primary/child signal, so the implementation may need a conservative fallback or a follow-up live validation."
+        },
+        {
+          "id": 7,
+          "title": "Retroactively attribute child-session file edits into files_touched",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 6,
+          "deps": [],
+          "created_at": "2026-04-15T05:39:49.981Z",
+          "context": "Current tool-log attribution misses both pre-completion and post-completion child edits. Implement the decided retroactive join strategy so files_touched is populated from session-scoped edit history after task completion reveals child_session_id.",
+          "approach": "Record file-edit events broadly by session, then on task completion join historical edit entries for the resolved child_session_id back into the matching tracker invocation and files_touched. Replace active-invocation-only matching with session-based reconciliation. Extend attribution experiments accordingly.",
+          "acceptance": "child edits performed before task completion are captured in files_touched after completion; session-based retroactive join works deterministically in regression tests.",
+          "risk": "Session-scoped logging may capture unrelated edits if child sessions are reused unexpectedly; aggregation must stay narrow and reproducible."
+        },
+        {
+          "id": 8,
+          "title": "Limit edit gate to real run-cycle management",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 7,
+          "deps": [],
+          "created_at": "2026-04-15T05:39:50.005Z",
+          "context": "Current edit gating blocks free edits when tasks.json is absent. Adjust hook enforcement so only real run-cycle states are gated, while preserving completed-open protection.",
+          "approach": "Remove task_cycle_required as a hard edit blocker, keep completed-open close-cycle enforcement, and update the evaluator/hook notices so idle or free edits are allowed without tasks.json. Refresh regression scripts for no-tasks, empty-tasks, active, and completed-open states.",
+          "acceptance": "no tasks file no longer blocks edit-like tools; active cycle behavior stays intact; completed-open still blocks edits until close or new cycle setup.",
+          "risk": "Changing gating semantics may expose assumptions in existing tests or prompt text that treated tasks.json absence as mandatory."
+        },
+        {
+          "id": 9,
+          "title": "Inject stateful notices and all-complete Step 7 handoff into system guidance",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 9,
+          "deps": [],
+          "created_at": "2026-04-15T05:39:50.012Z",
+          "context": "buildStatefulNotice currently exists as a dead helper, and plan completion does not strongly hand off into Step 7 task generation. Wire the dynamic notice path into system transform and strengthen plan-complete guidance.",
+          "approach": "Call buildStatefulNotice from experimental.chat.system.transform, prepend the returned notice before the fixed Nexus system prompt, and add explicit allComplete/Step 7 handoff messaging so interactive plan flows naturally into nx_task_add-based task generation.",
+          "acceptance": "dynamic plan/run/task notices appear in system prompt injection when relevant; allComplete plan state strongly instructs immediate Step 7 task generation; notice tests cover connected behavior.",
+          "risk": "Additional system text may create redundancy with the fixed Nexus prompt; messages must stay short and state-specific."
+        },
+        {
+          "id": 10,
+          "title": "Differentiate exit enforcement for active vs completed-open cycles",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 10,
+          "deps": [],
+          "created_at": "2026-04-15T05:39:50.016Z",
+          "context": "Current exit handling is warning-only. Implement the decided differentiated enforcement: stronger blocking for active cycles and softer but still strong handling for completed-open cycles.",
+          "approach": "Strengthen command.execute.before exit guard so active cycles are hard-blocked and completed-open cycles use a strong warning or one-shot soft block. Keep the implementation OpenCode-native rather than trying to reproduce Claude Stop semantics exactly.",
+          "acceptance": "exit-like commands are blocked during active cycles; completed-open cycles surface the softer closure-focused enforcement path; regression coverage reflects the split behavior.",
+          "risk": "OpenCode command hook capabilities may limit how strong a block can be expressed; UX should avoid trapping the user in an unrecoverable loop."
+        },
+        {
+          "id": 11,
+          "title": "Refresh Nexus context docs after runtime behavior changes land",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 4,
+          "deps": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "created_at": "2026-04-15T05:39:50.107Z",
+          "context": "These runtime fixes change effective orchestration behavior, prompt injection, lifecycle handling, and cycle enforcement. Core context docs should reflect the final implemented behavior.",
+          "approach": "Update the affected .nexus/context documents after code and tests settle, focusing on hooks, architecture, orchestration, and tools behavior that changed in this cycle.",
+          "acceptance": ".nexus/context docs reflect the implemented runtime semantics for tracker reset, tool-log attribution, edit gating, dynamic notices, unfinished-task warning, and exit enforcement.",
+          "risk": "Documenting before code settles can cause churn, so this task should remain sequenced after implementation and verification."
+        },
+        {
+          "id": 12,
+          "title": "Add task-after equivalent warning for unfinished owner tasks",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 8,
+          "deps": [],
+          "created_at": "2026-04-15T05:40:30.108Z",
+          "context": "OpenCode lacks a SubagentStop hook, but we still want equivalent warning behavior when a subagent finishes and owned tasks remain pending or in_progress.",
+          "approach": "At tool.execute.after(task), inspect tasks.json for owner-matched pending/in_progress tasks and inject an equivalent warning or escalation path. Reuse current owner semantics and keep the behavior OpenCode-native rather than Claude-parity literal.",
+          "acceptance": "when a subagent task returns while owner tasks remain incomplete, the lead receives a clear warning/escalation notice; no warning is emitted when owner work is fully complete.",
+          "risk": "Owner matching by agent type may be too coarse if multiple tasks share the same owner role; later refinement may need owner_agent_id or task linkage."
+        },
+        {
+          "id": 13,
+          "title": "Verify runtime regressions across tracker, gating, notice, and exit flows",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 10,
+          "deps": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            12
+          ],
+          "created_at": "2026-04-15T05:40:37.354Z",
+          "context": "The runtime behavior changes span hooks, state files, and system injection. Verification should cover the new lifecycle and guard semantics end to end.",
+          "approach": "Run and extend the focused e2e scripts for tracker reset, tool-log attribution, edit gate scope, stateful notice injection, unfinished-task warning, and exit enforcement. Confirm the new behavior matches the chosen decisions and report any residual ambiguity tied to live OpenCode payloads.",
+          "acceptance": "all targeted regression scripts pass and explicitly demonstrate the decided behaviors; any remaining live-runtime uncertainty is documented with precise scope.",
+          "risk": "Synthetic hook tests may still leave a small gap relative to real OpenCode session payloads, especially for primary/child session discrimination."
+        },
+        {
+          "id": 14,
+          "title": "Refresh Nexus context docs after runtime behavior changes land (corrected sequencing)",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "primary",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 4,
+          "deps": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            12,
+            13
+          ],
+          "created_at": "2026-04-15T05:40:47.750Z",
+          "context": "These runtime fixes change effective orchestration behavior, prompt injection, lifecycle handling, and cycle enforcement. Core context docs should reflect the final implemented behavior once code and verification settle.",
+          "approach": "Update the affected .nexus/context documents after implementation and tester verification, focusing on hooks, architecture, orchestration, and tools behavior that changed in this cycle.",
+          "acceptance": ".nexus/context docs reflect the implemented runtime semantics for tracker reset, tool-log attribution, edit gating, dynamic notices, unfinished-task warning, and exit enforcement.",
+          "risk": "Documenting before code settles can cause churn, so this task is explicitly sequenced after implementation and verification."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 14,
+        "decisionCount": 11,
+        "cycleTopics": [
+          "claude-nexus 대비 opencode-nexus의 prompts/hooks/agents/skills 차이 비교 및 선택 논의"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T06:14:52.153Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Fix tool-log edit detection for apply_patch",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T06:11:25.632Z",
+          "context": "User asked under [run] to determine, based on live experiments, how to reliably capture required tool-log information and then fix the tool-log bug. Existing focused test scripts/e2e-tool-log-attribution.mjs defines intended behavior: child-session file edits must append to .nexus/state/opencode-nexus/tool-log.jsonl and later aggregate into agent-tracker files_touched. Live experiment showed spawned engineer agents using apply_patch created files, but tool-log.jsonl remained empty. Relevant files: src/plugin/hooks.ts, src/agents/generated/index.ts, scripts/e2e-tool-log-attribution.mjs, scripts/e2e-init-sync.mjs. Constraint: keep change minimal and preserve generated capability mapping as source-of-truth where possible.",
+          "approach": "Implement the smallest runtime fix so edit-like detection also recognizes OpenCode's actual file-edit tool name apply_patch in addition to generated capability-mapped names. Update focused tests to cover apply_patch-based logging, ideally by exercising both existing write behavior and real apply_patch alias behavior without broad refactors.",
+          "acceptance": "tool.execute.after treats apply_patch as an edit-like tool; focused e2e proves tool-log.jsonl gets an entry for apply_patch file edits and files_touched still aggregates by child session; build/check relevant tests pass.",
+          "risk": "Changing edit classification too broadly could affect edit gate enforcement or internal nexus path exemptions. Keep alias handling narrow and covered by focused tests."
+        },
+        {
+          "id": 2,
+          "title": "Verify tool-log attribution fix",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:11:25.638Z",
+          "context": "After the engineer task updates runtime edit detection, verify that tool-log captures child-session edits for apply_patch and that files_touched attribution still works. Relevant checks should focus on the existing attribution e2e and any directly related build/check commands.",
+          "approach": "Run targeted verification on the focused e2e plus relevant project checks needed to catch type/runtime regressions in the touched area. Report PASS/FAIL with findings, not code changes.",
+          "acceptance": "Verification explicitly states whether apply_patch now appends tool-log entries and whether files_touched attribution still passes for the focused scenario.",
+          "risk": "If task IDs are not sequential in this environment, dependency tracking may be approximate; verification should still clearly state what was run and what passed/failed."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T06:28:50.243Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Add locked JSON state update helper and adopt it in state mutations",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T06:17:00.290Z",
+          "context": "User asked under [run] to fix state-file write races that can drop information in tasks, plan, agent-tracker, and similar state files. Current code uses plain readJsonFile + mutate in memory + writeJsonFile across multiple modules. Evidence: src/shared/json-store.ts only provides raw read/write; src/tools/task.ts nxTaskAdd/nxTaskUpdate do unlocked read-modify-write; src/tools/plan.ts nxPlanStart/nxPlanUpdate/nxPlanDecide do unlocked read-modify-write; src/shared/history.ts appendHistory does unlocked read-modify-write; src/shared/agent-tracker.ts registerInvocationStart/registerInvocationEnd do unlocked read-modify-write. Need a common fix that prevents lost updates when concurrent operations target the same state file.",
+          "approach": "Implement a shared file-lock-backed JSON update helper in src/shared/json-store.ts that serializes read-modify-write for a target file, likely via per-file lockfiles with retry plus process-local queue if useful. Migrate agent-tracker, history append, task add/update, and plan start/update/decide to use the helper so IDs and appended records are computed under lock. Keep change minimal and focused on state mutation paths. Add focused tests that reproduce concurrent updates and prove no lost entries/duplicate IDs.",
+          "acceptance": "Concurrent updates to the same state JSON file no longer lose entries in agent-tracker/history/tasks/plan mutation paths. Focused tests cover at least agent-tracker and tasks/plan or history append race scenarios. Build and relevant tests pass.",
+          "risk": "Cross-file workflows like task close still span multiple files and may not become fully transactional; keep scope on per-file lost-update prevention unless a small safe improvement is obvious."
+        },
+        {
+          "id": 2,
+          "title": "Verify state-file race fix",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:17:00.378Z",
+          "context": "After the engineer adds locked JSON mutation handling, verify that concurrent state-file updates no longer lose data. Focus on the state files explicitly mentioned by the user: tasks, plan, agent-tracker, and related history append behavior if changed.",
+          "approach": "Run focused verification on new/updated race tests plus any necessary build/type checks. Report PASS/FAIL and residual risks, especially any remaining cross-file non-transactional behavior.",
+          "acceptance": "Verification explicitly demonstrates that the previously vulnerable same-file concurrent update paths no longer lose information.",
+          "risk": "Full multi-file transaction guarantees may remain out of scope; verification should distinguish same-file race prevention from broader workflow atomicity."
+        },
+        {
+          "id": 3,
+          "title": "Extend same-file locking to tool-log append/reset",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:24:57.654Z",
+          "context": "Follow-up to the state-file race fix. The current implementation added an in-process per-file lock queue for JSON read-modify-write updates, but src/shared/tool-log.ts still uses raw fs.appendFile/fs.writeFile without the shared per-file queue. User explicitly asked to include tool-log too if it is similar. Tool-log is append-only, but same-file races can still happen between appendToolLogEntry() and resetToolLog(), and ordering is better made deterministic under the same file queue approach.",
+          "approach": "Extend the shared file-mutation queue so tool-log append/reset also serialize by file path. Do this with the smallest shared helper addition possible (for example export generic locked file action or add locked append/write text helpers) and migrate src/shared/tool-log.ts to use it. Add/extend focused concurrency coverage to prove concurrent appends survive and reset/append ordering is serialized as intended.",
+          "acceptance": "tool-log append/reset use the same per-file serialization mechanism as other state-file mutations; focused tests cover concurrent tool-log appends and/or reset-vs-append ordering sufficiently to show no dropped lines under same-process concurrency; build and focused tests pass.",
+          "risk": "Keep scope to same-process same-file serialization; do not broaden into speculative cross-process locking unless necessary."
+        },
+        {
+          "id": 4,
+          "title": "Verify tool-log locking extension",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            3
+          ],
+          "created_at": "2026-04-15T06:24:57.765Z",
+          "context": "After tool-log append/reset are moved onto the shared same-file serialization layer, verify that focused concurrency coverage passes and the runtime still preserves tool-log lines under concurrent appends.",
+          "approach": "Run focused verification for the new tool-log race coverage plus existing state concurrency coverage as needed. Report PASS/FAIL and any residual risk, especially same-process vs cross-process scope.",
+          "acceptance": "Verification explicitly states whether concurrent tool-log append behavior is now serialized and whether focused tests pass.",
+          "risk": "The implementation may intentionally remain same-process only; verification should call that out rather than treating it as a bug if unchanged."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:06:52.375Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 41,
+        "topic": "Extend nx-setup to configure built-in agent models via provider->model flow",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Which built-in agents should nx-setup expose for explicit model assignment, and how should disabled or hidden built-ins be treated?",
+            "status": "decided",
+            "decision": "Expose only user-meaningful built-in subagents in the default nx-setup model flow. Add `general` and `explore` to the built-in model selection surface, keep hidden/system built-ins (`compaction`, `title`, `summary`) out of the default flow, and exclude disabled built-ins such as `build` and `plan` unless they are enabled in the effective config. This keeps setup focused on practical cost control without turning it into an internal runtime panel.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "How should the setup wizard and backend represent provider->model selection so built-in agents can use cheaper models without conflicting with current Nexus tiering?",
+            "status": "decided",
+            "decision": "Keep `models` as the canonical backend shape and stop treating `lead_model` + `toStandardModel()` as the primary tiered flow. In the setup wizard, tiered selection should explicitly choose a high-capability model for `nexus` + HOW and a standard model for DO + CHECK. Built-in `general` and `explore` should inherit the standard tier by default, with an optional extra provider->model override step that persists to `models.agents.general` and `models.agents.explore`. Legacy `lead_model` and heuristic standard-model derivation remain only as backward-compatibility fallbacks.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Reviewed the current setup wizard template, setup backend, runtime config hook, e2e coverage, and official OpenCode docs. Current nx_setup model assignment only targets nexus plus Nexus catalog agents from AGENT_META; built-in agents build/plan/general/explore/compaction/title/summary are untouched. The current skill text already promises provider-first selection and says tiered should ask twice, but the backend only accepts a single lead_model and derives the standard model heuristically with toStandardModel(). Official OpenCode docs confirm built-in agents can be customized through config and per-agent model overrides via agent.<name>.model. Repo-local opencode.json manually disables build and plan, creating a possible UX mismatch if setup starts assigning models to disabled built-ins. Main implementation touchpoints are src/tools/setup.ts, templates/skills/nx-setup/SKILL.md, generated nx-setup skill output, and scripts/e2e-setup-template.mjs. create-config.ts injects Nexus agents only and does not manage built-in agent model defaults.",
+        "created_at": "2026-04-15T06:46:21.637Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement built-in agent model assignment in nx_setup",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [],
+          "created_at": "2026-04-15T06:58:03.165Z",
+          "context": "Plan decisions: default built-in setup surface includes only general and explore; build/plan only if enabled; compaction/title/summary excluded from default flow. Keep models as canonical backend shape. Tiered flow should explicitly represent high-capability nexus+HOW and standard DO+CHECK. general/explore inherit the standard tier by default, with optional override persisted via models.agents.general and models.agents.explore. Legacy lead_model + toStandardModel remains fallback-only.",
+          "approach": "Update src/tools/setup.ts so built-in agent model assignment is first-class in merge logic. Add effective handling for general/explore inheritance from DO/CHECK, allow explicit overrides via models.agents, and ensure disabled built-ins are not written in the default path. Preserve backward compatibility for older lead_model-driven calls while making explicit models the canonical path.",
+          "acceptance": "nx_setup can persist explicit model choices for general/explore, tiered setup no longer depends on heuristic standard-model derivation for the main path, and disabled/hidden built-ins are not unintentionally surfaced or written by default.",
+          "risk": "Drift between legacy and canonical inputs could produce surprising model assignments; writing config for disabled built-ins could create misleading state."
+        },
+        {
+          "id": 2,
+          "title": "Update nx-setup wizard instructions for built-in model flow",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:58:03.183Z",
+          "context": "The current nx-setup skill text already describes provider-first selection but still documents tiered as a single lead_model input. It needs to reflect the new built-in model policy and explicit provider->model flow for high-capability, standard, and optional built-in override selection.",
+          "approach": "Revise templates/skills/nx-setup/SKILL.md and any generated counterpart so the user-facing setup flow explains: general/explore are the only built-ins in the default flow, they inherit the standard tier by default, and there is an optional extra provider->model override step for those built-ins. Remove or demote language that implies heuristic derivation is the primary path.",
+          "acceptance": "Wizard instructions are consistent with backend behavior and plan decisions, and clearly explain when built-in model override is optional versus inherited.",
+          "risk": "Template/generated file drift may leave stale instructions in one location."
+        },
+        {
+          "id": 3,
+          "title": "Add regression coverage for built-in setup model behavior",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:58:03.224Z",
+          "context": "Existing e2e setup tests cover Nexus agent model groups and legacy overrides, but not built-in general/explore inheritance or exclusion behavior.",
+          "approach": "Extend scripts/e2e-setup-template.mjs to verify: general/explore can receive explicit model assignments through canonical setup inputs, they inherit the standard tier by default in tiered/custom flows, and default setup behavior does not write hidden/system or disabled built-ins unintentionally.",
+          "acceptance": "Regression tests fail without the new behavior and pass with it, covering both canonical explicit inputs and backward-compatible fallback behavior.",
+          "risk": "Tests may overfit current repo-local disable state or generated config defaults."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Extend nx-setup to configure built-in agent models via provider->model flow"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:18:42.148Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 42,
+        "topic": "Prevent recursive subagent spawning from subagents",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Restrict subagent spawning so only the primary nexus agent can invoke the task tool",
+            "status": "decided",
+            "decision": "Use defense in depth. First, remove task-tool access from all configured subagents so the model is not encouraged or able to delegate further. Second, enforce the same rule at runtime in the task hook by resolving the caller from explicit agent fields or from the current session's agent-tracker entry and rejecting any task invocation whose caller is not the primary nexus agent. This is preferred over prompt-only guidance because prompt constraints are insufficient, and over hook-only enforcement because hiding the tool reduces accidental recursion and makes the capability boundary explicit."
+          }
+        ],
+        "research_summary": "Inspected the current task/delegation enforcement. The task tool is intercepted in src/plugin/hooks.ts by enforceTaskTeamPolicy(), but that function is effectively a no-op for known Nexus agents. Subagent lead-only enforcement already exists for nx_task_close via both direct caller inspection and session-to-agent-tracker lookup in hooks.ts and src/tools/task.ts. Subagent tool visibility is configured in src/create-config.ts; today subagents explicitly hide nx_task_close but not task. Existing e2e coverage includes scripts/e2e-team-policy.mjs for task-hook policy and scripts/e2e-subagent-prompts.mjs for subagent tool exposure. This suggests the safest fix is defense in depth: hide task from all subagents in config and hard-block task invocations from any non-primary session in the hook, while allowing the primary nexus agent to continue delegating.",
+        "created_at": "2026-04-15T07:14:24.143Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement primary-only task delegation policy",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T07:14:45.223Z",
+          "context": "User reported recursive subagent spawning because subagents can call the task tool. Current relevant files: src/plugin/hooks.ts has enforceTaskTeamPolicy() but it is effectively a no-op for known Nexus agents; src/create-config.ts hides nx_task_close from subagents but does not hide task; scripts/e2e-team-policy.mjs covers hook-side task policy; scripts/e2e-subagent-prompts.mjs covers subagent tool visibility. Primary agent id is nexus in src/agents/primary.ts.",
+          "approach": "Apply defense in depth: update subagent tool policy so task is disabled for all subagents, and implement a runtime hook check that rejects task invocations from any caller/session that resolves to a non-primary agent. Reuse the existing nx_task_close lead-only session lookup pattern where practical, keep the change minimal, and add/update e2e coverage for both the hook gate and config exposure.",
+          "acceptance": "1. Subagent configs expose task:false for every non-primary Nexus agent. 2. A task invocation issued from a non-primary agent session is rejected with a clear primary-only error. 3. A task invocation from the primary agent remains allowed. 4. Existing and new e2e coverage for team policy/subagent prompts passes.",
+          "risk": "Overly broad gating could block legitimate primary delegation if caller detection is wrong; keep fallback resolution narrow and test both primary and subagent cases."
+        },
+        {
+          "id": 2,
+          "title": "Verify primary-only task delegation policy",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "ephemeral",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T07:14:45.258Z",
+          "context": "Verification for the new primary-only task delegation policy once implementation is complete. Relevant acceptance is stored on task 1.",
+          "approach": "Run the targeted e2e scripts that cover subagent tool exposure and task-hook team policy. Confirm that subagents cannot invoke task while the primary nexus agent still can.",
+          "acceptance": "Verification reports PASS for the updated task policy checks with no unresolved failures.",
+          "risk": "Targeted e2e tests may miss unrelated regressions; this task only verifies the delegation policy change."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Prevent recursive subagent spawning from subagents"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:41:49.521Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align sample OpenCode configs",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T07:24:08.780Z",
+          "context": "User asked to update both opencode.minimal.json and opencode.example.json to better reflect the current recommended Nexus setup, especially making nexus the only visible primary by disabling built-in build/plan agents.",
+          "approach": "Make the smallest config-only edits. Add default_agent/instructions and disable build/plan in the minimal preset; add build/plan disable entries to the example preset while preserving its stricter permission examples.",
+          "acceptance": "Both sample files reflect the recommended nexus-first setup and remain valid JSON.",
+          "risk": "Low risk; documentation sample drift if README text later diverges."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:51:20.816Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align task pipeline contract with nexus-core",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T07:41:58.733Z",
+          "context": "Update opencode-nexus task pipeline behavior to better match current nexus-core contract: remove blocked/archive drift, require task context, constrain owner_reuse_policy, return deleted files from task_close, file a nexus-core issue for stale hadLoopDetection/edit-tracker guidance, and implement session cleanup if the platform exposes a usable session deletion event.",
+          "approach": "Make minimal focused edits across task schema/tools and plugin hooks. Use claude-nexus as the reference for task_add/task_close contract details and session-scoped cleanup policy. Verify with targeted script/test runs and issue creation.",
+          "acceptance": "Task status space matches core, task_add requires context and enum-limited owner_reuse_policy, task_close has no archive arg and returns deleted file names, hadLoopDetection/edit-tracker mismatch is reported upstream, and session cleanup works if OpenCode emits a deletion event.",
+          "risk": "Medium: changing task schema can affect pipeline evaluator and existing tests; session lifecycle hooks may require light experimentation."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"

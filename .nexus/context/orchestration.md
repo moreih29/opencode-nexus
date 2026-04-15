@@ -49,9 +49,9 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 |---|---|---|
 | `nx-plan` | `[plan]` | 구조화된 플래닝 및 결정 기록 |
 | `nx-run` | `[run]` | 실행 파이프라인 (intake → design → execute → verify → complete) |
-| `nx-init` | `nx-init` | 온보딩 — 코어 구조 및 기반 지식 초기화 |
-| `nx-sync` | `nx-sync` | 태스크 사이클 완료 후 코어 지식 동기화 |
-| `nx-setup` | `nx-setup` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
+| `nx-init` | `skill({ name: "nx-init" })` | 온보딩 — 코어 구조 및 기반 지식 초기화 |
+| `nx-sync` | `[sync]` | 태스크 사이클 완료 후 코어 지식 동기화 |
+| `nx-setup` | `skill({ name: "nx-setup" })` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
 
 ### 스킬 이중 delivery — Option D (A-leg + B-leg)
 
@@ -82,7 +82,7 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 코어 상태
 
-파일 기반 JSON 저장소 (`.nexus/state/opencode-nexus/orchestration.json`). 각 인보케이션은 `invocation_id`, `agent_type`, `status`(running/completed/failed/cancelled), `coordination_label`, `team_name`, `purpose`, `continuity`, 타임스탬프를 포함.
+런타임 상태는 인메모리로 관리되며, 지속성이 필요한 데이터는 `.nexus/state/`의 플랜·태스크·히스토리 파일에 기록된다. Task 1 이후 `orchestration.json`과 `audit/` 로그는 더 이상 활성 런타임 표면이 아니다.
 
 ### 위임 흐름
 
@@ -90,19 +90,14 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 연속성 관리
 
-- `registerStart` / `registerEnd` — 인보케이션 생애주기 등록
-- `pickContinuity` — agent_type + coordination_label로 재개 가능한 인보케이션 선택
-- `buildDelegationPlan` — 연속성이 있으면 resume_task_id, resume_session_id 포함
+- 인보케이션 생애주기는 인메모리에서 관리
+- `coordination_label`을 통한 그룹핑 지원 (선택적)
+- 연속성 힌트는 도구 호출 시 명시적으로 전달
 
 ### 팀 정책
 
-- `requiresTeamInRunMode` — do/check 에이전트는 run 모드에서 팀 레이블 필수
-- `canJoinMeetWithoutTeam` — lead만 팀 없이 plan 참여 가능
-
-### Plan / Run 연속성 어댑터
-
-- Plan: `coordination_label=plan-panel` + `agent_type` 조합 우선 조회
-- Run: agent_type + coordination_label 조합 우선 → agent_type만으로 fallback. 재개 필드 자동 주입
+- `requiresTeamInRunMode` — Task 1 이후 모든 에이전트에서 `false`로 변경. run 모드에서 team_name은 선택적이다.
+- `canJoinPlanWithoutTeam` — lead는 team_name 없이 plan 참여 가능
 
 ## 4. 파이프라인
 
@@ -112,10 +107,18 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 | 출력 | 조건 |
 |------|------|
-| `editsAllowed` | empty 또는 active일 때만 true |
+| `editsAllowed` | **idle**, empty, 또는 active일 때 true (태스크 없는 상태에서는 편집 제한 없음) |
 | `canCloseCycle` | completed-open일 때만 true |
 | `shouldTriggerQa` | canCloseCycle이고 Tester 트리거 신호 존재 |
 | `nextGuidanceKey` | 다음 행동 지침 키 |
+
+### 차등 종료 집행 (Differentiated Exit Enforcement)
+
+| 태스크 사이클 상태 | 종료 동작 |
+|-------------------|----------|
+| `active` | 하드 블록 — 명시적 종료 방지, 완료/정리 필요 |
+| `completed-open` | 원샷 소프트 블록/경고 — 사용자 확인 후 종료 가능 |
+| `none` / `empty` / `idle` | 제한 없음 |
 
 ### Tester 자동 트리거
 
@@ -138,13 +141,15 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 #### 호환성 주의사항 (Compatibility Notes)
 
-- `plan.json`은 canonical하고 플랫폼 중립. OpenCode 전용 연속성 데이터는 `.nexus/state/opencode-nexus/plan.extension.json`에 저장.
-- `plan.extension.json`은 best-effort. 없거나 무시되더라도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
+- `plan.json`은 canonical하고 플랫폼 중립. OpenCode HOW 패널 연속성은 `plan.json`(participants) + `.nexus/state/opencode-nexus/agent-tracker.json`(runtime resume handles/summary) 조합에서 파생된다.
+- `agent-tracker.json`은 durable history가 아니라 세션 범위의 ephemeral runtime continuity/observability state다. 없거나 비어 있어도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
+- **tracker reset 경계는 명시적 primary session lifecycle 훅(`session.created`)으로 단일화**되어 있다. 일반 ensure/setup/init/sync 경로는 tracker를 초기화하지 않는다.
+- `tool-log.jsonl`의 `files_touched`는 세션 스코프에서 추적되며, 자식 세션 연속성이 확정된 후 소급 적용(retroactive attribution)된다.
 - Claude ↔ OpenCode 전환은 canonical-first handoff로 취급. 동시 공동 편집이 아님.
 
 #### HOW 패널 연속성 절차 (HOW-panel Continuity)
 
-- HOW 서브에이전트 호출 시 OpenCode는 `task_id` / `session_id` 핸들을 `.nexus/state/opencode-nexus/plan.extension.json` 사이드카에 저장.
+- HOW 서브에이전트 호출 시 OpenCode는 `task_id` / `session_id` 핸들을 `.nexus/state/opencode-nexus/agent-tracker.json`에 기록한다.
 - 후속 질문 전에 `nx_plan_resume`으로 현재 재개 핸들과 마지막 요약을 확인. `recommendation` 페이로드로 기존 참가자 재개 vs 요약 기반 재수화 여부 판단.
 - 위임 준비된 후속 가이던스가 필요하면 `nx_plan_followup` 사용 — 연속성 데이터를 구체적인 프롬프트와 suggested resume handle 필드로 패키징.
 - `nx_context` / `nx_plan_status`는 follow-up 준비된 HOW 역할을 노출하므로 후속 질문 전에 참조 가능.
