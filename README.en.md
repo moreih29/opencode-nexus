@@ -53,7 +53,6 @@ This entrypoint routes to the canonical `nx_setup` tool, which handles two key s
 |---|---|---|
 | `unified` | same model everywhere | same model everywhere |
 | `tiered` | high-capability | standard |
-| `budget` | high-capability | budget |
 | `custom` | per-category or per-agent overrides | per-category or per-agent overrides |
 
 After setup, you can initialize project knowledge with an optional follow-up:
@@ -115,6 +114,9 @@ This entrypoint routes to the canonical `nx_init` tool.
 | --- | --- | --- |
 | `[plan]` | Open decision mode before implementation | `[plan] discuss database migration strategy` |
 | `[run]` | Execute work through Nexus task pipeline | `[run] implement the migration plan` |
+| `[sync]` | Sync `.nexus/context/` docs with current code state | `[sync] refresh context docs after recent code changes` |
+| `[m]` | Save a lesson or reference into `.nexus/memory/` | `[m] save the incident takeaway` |
+| `[m:gc]` | Merge or prune redundant memory files | `[m:gc] clean up overlapping memory notes` |
 | `[d]` | Record the current meeting decision | `Use option 2 [d]` |
 | `[rule]` | Save durable team conventions | `[rule:testing] always run typecheck before publish` |
 
@@ -129,7 +131,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 | DO | Engineer | Implementation and debugging |
 | DO | Researcher | Independent investigation |
 | DO | Writer | Documentation and written deliverables |
-| CHECK | QA | Tests, verification, and risk review |
+| CHECK | Tester | Tests, verification, and risk review |
 | CHECK | Reviewer | Content and factual review |
 
 ## Canonical Tools and Tags
@@ -158,7 +160,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 - Flat knowledge layout under `.nexus/context/` (design docs) and `.nexus/memory/` (lessons, references)
 - Task pipeline guardrails for edit tools
 - Meeting reminders, run notices, and stronger cycle-close discipline
-- Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, and `nx_setup`
+- Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_history_search`, `nx_init`, `nx_sync`, and `nx_setup`
 - Structured plan discussion records and plan -> task linkage state
 
 ## Knowledge Layout
@@ -176,7 +178,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 - `AGENTS.md` is the primary OpenCode instruction file.
 - `CLAUDE.md` is treated only as legacy migration input.
-- This project is an OpenCode-native migration of `claude-nexus`, not full parity yet.
+- This project is an OpenCode sibling runtime that consumes the same shared spec as `claude-nexus`; it does not aim for strict one-to-one parity.
 - Strong today: hooks, task/plan state tools, agent catalog, system guidance.
 - Partial today: deeper code intelligence coverage and some workflow parity details.
 

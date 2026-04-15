@@ -53,7 +53,6 @@ Use nx-setup to configure this repository for opencode-nexus.
 |---|---|---|
 | `unified` | 모든 곳에 같은 모델 | 모든 곳에 같은 모델 |
 | `tiered` | 고성능 모델 | 표준 모델 |
-| `budget` | 고성능 모델 | budget 모델 |
 | `custom` | 카테고리별 또는 에이전트별 overrides | 카테고리별 또는 에이전트별 overrides |
 
 설정 후에는 선택적으로 nx-init을 통해 프로젝트 지식을 초기화할 수 있습니다:
@@ -115,6 +114,9 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 | --- | --- | --- |
 | `[plan]` | 구현 전 의사결정 모드 | `[plan] DB 마이그레이션 전략 논의` |
 | `[run]` | Nexus task pipeline으로 실행 | `[run] 마이그레이션 계획 구현` |
+| `[sync]` | `.nexus/context/` 동기화 모드 | `[sync] 최근 코드 변경을 컨텍스트 문서에 반영` |
+| `[m]` | `.nexus/memory/`에 메모 저장 | `[m] 이번 장애 교훈 저장` |
+| `[m:gc]` | 메모 정리 및 병합 | `[m:gc] 중복 memory 정리` |
 | `[d]` | 현재 미팅의 결정 기록 | `2안으로 가자 [d]` |
 | `[rule]` | 팀의 지속 규칙 저장 | `[rule:testing] publish 전에 typecheck 필수` |
 
@@ -129,7 +131,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 | DO | Engineer | 구현과 디버깅 |
 | DO | Researcher | 독립 조사와 리서치 |
 | DO | Writer | 문서와 작성형 산출물 |
-| CHECK | QA | 테스트, 검증, 리스크 리뷰 |
+| CHECK | Tester | 테스트, 검증, 리스크 리뷰 |
 | CHECK | Reviewer | 내용 및 사실 검토 |
 
 ## Canonical Tools and Tags
@@ -158,7 +160,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - `.nexus/context/`(설계 문서)와 `.nexus/memory/`(lessons/참조) 기반의 flat 지식 구조
 - edit 도구에 대한 task pipeline 가드레일
 - meeting reminder, run notice, 더 엄격한 cycle-close discipline
-- `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_briefing`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
+- `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_history_search`, `nx_init`, `nx_sync`, `nx_setup` 같은 Nexus 전용 도구
 - 구조화된 plan discussion 레코드와 plan -> task linkage 상태 추적
 
 ## 지식 구조
@@ -176,7 +178,7 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 
 - `AGENTS.md`가 OpenCode의 기본 instruction 파일입니다.
 - `CLAUDE.md`는 마이그레이션용 legacy 입력으로만 취급합니다.
-- 이 프로젝트는 `claude-nexus`의 OpenCode 네이티브 마이그레이션이지만 아직 완전 parity는 아닙니다.
+- 이 프로젝트는 `claude-nexus`와 같은 shared spec을 소비하는 OpenCode용 sibling runtime이며 아직 완전 parity를 목표로 하지는 않습니다.
 - 현재 강한 부분: hook, task/plan 상태 도구, 에이전트 카탈로그, 시스템 가이드.
 - 아직 부분적인 부분: 더 깊은 code intelligence 범위와 일부 워크플로 parity.
 
