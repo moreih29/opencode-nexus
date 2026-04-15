@@ -62,6 +62,7 @@ function buildSubagentToolPolicy(disallowedTools: string[]): Record<string, bool
   for (const toolName of disallowedTools) {
     policy[toolName] = false;
   }
+  policy.task = false;
   policy.nx_task_close = false;
   return policy;
 }

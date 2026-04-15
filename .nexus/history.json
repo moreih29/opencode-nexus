@@ -7847,6 +7847,156 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:06:52.375Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 41,
+        "topic": "Extend nx-setup to configure built-in agent models via provider->model flow",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Which built-in agents should nx-setup expose for explicit model assignment, and how should disabled or hidden built-ins be treated?",
+            "status": "decided",
+            "decision": "Expose only user-meaningful built-in subagents in the default nx-setup model flow. Add `general` and `explore` to the built-in model selection surface, keep hidden/system built-ins (`compaction`, `title`, `summary`) out of the default flow, and exclude disabled built-ins such as `build` and `plan` unless they are enabled in the effective config. This keeps setup focused on practical cost control without turning it into an internal runtime panel.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "How should the setup wizard and backend represent provider->model selection so built-in agents can use cheaper models without conflicting with current Nexus tiering?",
+            "status": "decided",
+            "decision": "Keep `models` as the canonical backend shape and stop treating `lead_model` + `toStandardModel()` as the primary tiered flow. In the setup wizard, tiered selection should explicitly choose a high-capability model for `nexus` + HOW and a standard model for DO + CHECK. Built-in `general` and `explore` should inherit the standard tier by default, with an optional extra provider->model override step that persists to `models.agents.general` and `models.agents.explore`. Legacy `lead_model` and heuristic standard-model derivation remain only as backward-compatibility fallbacks.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Reviewed the current setup wizard template, setup backend, runtime config hook, e2e coverage, and official OpenCode docs. Current nx_setup model assignment only targets nexus plus Nexus catalog agents from AGENT_META; built-in agents build/plan/general/explore/compaction/title/summary are untouched. The current skill text already promises provider-first selection and says tiered should ask twice, but the backend only accepts a single lead_model and derives the standard model heuristically with toStandardModel(). Official OpenCode docs confirm built-in agents can be customized through config and per-agent model overrides via agent.<name>.model. Repo-local opencode.json manually disables build and plan, creating a possible UX mismatch if setup starts assigning models to disabled built-ins. Main implementation touchpoints are src/tools/setup.ts, templates/skills/nx-setup/SKILL.md, generated nx-setup skill output, and scripts/e2e-setup-template.mjs. create-config.ts injects Nexus agents only and does not manage built-in agent model defaults.",
+        "created_at": "2026-04-15T06:46:21.637Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement built-in agent model assignment in nx_setup",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [],
+          "created_at": "2026-04-15T06:58:03.165Z",
+          "context": "Plan decisions: default built-in setup surface includes only general and explore; build/plan only if enabled; compaction/title/summary excluded from default flow. Keep models as canonical backend shape. Tiered flow should explicitly represent high-capability nexus+HOW and standard DO+CHECK. general/explore inherit the standard tier by default, with optional override persisted via models.agents.general and models.agents.explore. Legacy lead_model + toStandardModel remains fallback-only.",
+          "approach": "Update src/tools/setup.ts so built-in agent model assignment is first-class in merge logic. Add effective handling for general/explore inheritance from DO/CHECK, allow explicit overrides via models.agents, and ensure disabled built-ins are not written in the default path. Preserve backward compatibility for older lead_model-driven calls while making explicit models the canonical path.",
+          "acceptance": "nx_setup can persist explicit model choices for general/explore, tiered setup no longer depends on heuristic standard-model derivation for the main path, and disabled/hidden built-ins are not unintentionally surfaced or written by default.",
+          "risk": "Drift between legacy and canonical inputs could produce surprising model assignments; writing config for disabled built-ins could create misleading state."
+        },
+        {
+          "id": 2,
+          "title": "Update nx-setup wizard instructions for built-in model flow",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:58:03.183Z",
+          "context": "The current nx-setup skill text already describes provider-first selection but still documents tiered as a single lead_model input. It needs to reflect the new built-in model policy and explicit provider->model flow for high-capability, standard, and optional built-in override selection.",
+          "approach": "Revise templates/skills/nx-setup/SKILL.md and any generated counterpart so the user-facing setup flow explains: general/explore are the only built-ins in the default flow, they inherit the standard tier by default, and there is an optional extra provider->model override step for those built-ins. Remove or demote language that implies heuristic derivation is the primary path.",
+          "acceptance": "Wizard instructions are consistent with backend behavior and plan decisions, and clearly explain when built-in model override is optional versus inherited.",
+          "risk": "Template/generated file drift may leave stale instructions in one location."
+        },
+        {
+          "id": 3,
+          "title": "Add regression coverage for built-in setup model behavior",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T06:58:03.224Z",
+          "context": "Existing e2e setup tests cover Nexus agent model groups and legacy overrides, but not built-in general/explore inheritance or exclusion behavior.",
+          "approach": "Extend scripts/e2e-setup-template.mjs to verify: general/explore can receive explicit model assignments through canonical setup inputs, they inherit the standard tier by default in tiered/custom flows, and default setup behavior does not write hidden/system or disabled built-ins unintentionally.",
+          "acceptance": "Regression tests fail without the new behavior and pass with it, covering both canonical explicit inputs and backward-compatible fallback behavior.",
+          "risk": "Tests may overfit current repo-local disable state or generated config defaults."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Extend nx-setup to configure built-in agent models via provider->model flow"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:18:42.148Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 42,
+        "topic": "Prevent recursive subagent spawning from subagents",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Restrict subagent spawning so only the primary nexus agent can invoke the task tool",
+            "status": "decided",
+            "decision": "Use defense in depth. First, remove task-tool access from all configured subagents so the model is not encouraged or able to delegate further. Second, enforce the same rule at runtime in the task hook by resolving the caller from explicit agent fields or from the current session's agent-tracker entry and rejecting any task invocation whose caller is not the primary nexus agent. This is preferred over prompt-only guidance because prompt constraints are insufficient, and over hook-only enforcement because hiding the tool reduces accidental recursion and makes the capability boundary explicit."
+          }
+        ],
+        "research_summary": "Inspected the current task/delegation enforcement. The task tool is intercepted in src/plugin/hooks.ts by enforceTaskTeamPolicy(), but that function is effectively a no-op for known Nexus agents. Subagent lead-only enforcement already exists for nx_task_close via both direct caller inspection and session-to-agent-tracker lookup in hooks.ts and src/tools/task.ts. Subagent tool visibility is configured in src/create-config.ts; today subagents explicitly hide nx_task_close but not task. Existing e2e coverage includes scripts/e2e-team-policy.mjs for task-hook policy and scripts/e2e-subagent-prompts.mjs for subagent tool exposure. This suggests the safest fix is defense in depth: hide task from all subagents in config and hard-block task invocations from any non-primary session in the hook, while allowing the primary nexus agent to continue delegating.",
+        "created_at": "2026-04-15T07:14:24.143Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement primary-only task delegation policy",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "bounded",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T07:14:45.223Z",
+          "context": "User reported recursive subagent spawning because subagents can call the task tool. Current relevant files: src/plugin/hooks.ts has enforceTaskTeamPolicy() but it is effectively a no-op for known Nexus agents; src/create-config.ts hides nx_task_close from subagents but does not hide task; scripts/e2e-team-policy.mjs covers hook-side task policy; scripts/e2e-subagent-prompts.mjs covers subagent tool visibility. Primary agent id is nexus in src/agents/primary.ts.",
+          "approach": "Apply defense in depth: update subagent tool policy so task is disabled for all subagents, and implement a runtime hook check that rejects task invocations from any caller/session that resolves to a non-primary agent. Reuse the existing nx_task_close lead-only session lookup pattern where practical, keep the change minimal, and add/update e2e coverage for both the hook gate and config exposure.",
+          "acceptance": "1. Subagent configs expose task:false for every non-primary Nexus agent. 2. A task invocation issued from a non-primary agent session is rejected with a clear primary-only error. 3. A task invocation from the primary agent remains allowed. 4. Existing and new e2e coverage for team policy/subagent prompts passes.",
+          "risk": "Overly broad gating could block legitimate primary delegation if caller detection is wrong; keep fallback resolution narrow and test both primary and subagent cases."
+        },
+        {
+          "id": 2,
+          "title": "Verify primary-only task delegation policy",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "ephemeral",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T07:14:45.258Z",
+          "context": "Verification for the new primary-only task delegation policy once implementation is complete. Relevant acceptance is stored on task 1.",
+          "approach": "Run the targeted e2e scripts that cover subagent tool exposure and task-hook team policy. Confirm that subagents cannot invoke task while the primary nexus agent still can.",
+          "acceptance": "Verification reports PASS for the updated task policy checks with no unresolved failures.",
+          "risk": "Targeted e2e tests may miss unrelated regressions; this task only verifies the delegation policy change."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Prevent recursive subagent spawning from subagents"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

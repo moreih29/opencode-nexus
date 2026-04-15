@@ -9,7 +9,6 @@ import {
   readPlanParticipantContinuityFromCore
 } from "../orchestration/plan-continuity-adapter.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
-import { isKnownNexusAgent } from "../orchestration/team-policy.js";
 import { SKILL_META } from "../skills/prompts.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import {
@@ -153,7 +152,7 @@ export function createHooks(ctx: PluginContext) {
       const subagentInvocation = input.tool === "task" ? registerSubagentInvocation(ctx.state, output.args, sessionID) : null;
 
       if (input.tool === "task") {
-        await enforceTaskTeamPolicy(output.args, paths);
+        await enforceTaskTeamPolicy(input, output.args, paths);
         if (subagentInvocation) {
           const agentType = pickString(output.args, ["subagent_type", "agent", "type"]);
           const coordinationLabel = pickCoordinationLabel(output.args) ?? undefined;
@@ -437,18 +436,25 @@ function extractTargetPathFromPatchText(args: Record<string, unknown>): string |
 
 
 async function enforceTaskTeamPolicy(
+  input: ToolInput,
   args: Record<string, unknown>,
   paths: ReturnType<typeof createNexusPaths>
 ): Promise<void> {
-  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
-  if (!agentType) {
-    return;
+  const inputRecord: Record<string, unknown> = { ...input };
+  const callerAgent = pickString(inputRecord, ["agent", "agent_id", "agentID", "agentId", "role"]);
+  if (callerAgent && callerAgent.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
+    throw new Error(`task is Nexus-lead only. Caller "${callerAgent}" is not allowed.`);
   }
-  if (!isKnownNexusAgent(agentType) || agentType.toLowerCase() === "explore") {
+
+  const sessionID = pickSessionID(input) ?? pickSessionID(args);
+  if (!sessionID) {
     return;
   }
 
-  void paths;
+  const sessionInvocation = await resolveLatestSessionInvocation(paths, sessionID);
+  if (sessionInvocation && sessionInvocation.agent_type.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
+    throw new Error(`task is Nexus-lead only. Session caller "${sessionInvocation.agent_type}" is not allowed.`);
+  }
 }
 
 async function enforceNexusLeadTaskClosePolicy(
@@ -467,20 +473,27 @@ async function enforceNexusLeadTaskClosePolicy(
     return;
   }
 
-  const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
-  const sessionInvocation = tracker.invocations
-    .filter((inv) => inv.continuity?.child_session_id === sessionID)
-    .sort((left, right) => {
-      const leftTs = Date.parse(left.updated_at ?? left.started_at ?? left.ended_at ?? "");
-      const rightTs = Date.parse(right.updated_at ?? right.started_at ?? right.ended_at ?? "");
-      return rightTs - leftTs;
-    })[0];
+  const sessionInvocation = await resolveLatestSessionInvocation(paths, sessionID);
 
   if (sessionInvocation && sessionInvocation.agent_type.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
     throw new Error(
       `nx_task_close is Nexus-lead only. Session caller "${sessionInvocation.agent_type}" is not allowed.`
     );
   }
+}
+
+async function resolveLatestSessionInvocation(
+  paths: ReturnType<typeof createNexusPaths>,
+  sessionID: string
+): Promise<(Awaited<ReturnType<typeof readAgentTracker>>["invocations"])[number] | undefined> {
+  const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
+  return tracker.invocations
+    .filter((inv) => inv.continuity?.child_session_id === sessionID)
+    .sort((left, right) => {
+      const leftTs = Date.parse(left.updated_at ?? left.started_at ?? left.ended_at ?? "");
+      const rightTs = Date.parse(right.updated_at ?? right.started_at ?? right.ended_at ?? "");
+      return rightTs - leftTs;
+    })[0];
 }
 
 async function updatePlanParticipantContinuity(
