@@ -76,7 +76,7 @@ export const nxContext = tool({
             }
           : null,
         coordinationGroups,
-        tasksSummary: tasksSummary ?? { total: 0, pending: 0, in_progress: 0, completed: 0, blocked: 0 }
+        tasksSummary: tasksSummary ?? { total: 0, pending: 0, in_progress: 0, completed: 0 }
       },
       null,
       2

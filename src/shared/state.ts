@@ -8,7 +8,6 @@ export interface TasksSummary {
   pending: number;
   in_progress: number;
   completed: number;
-  blocked: number;
 }
 
 export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
@@ -49,8 +48,7 @@ export async function readTasksSummary(tasksFile: string): Promise<TasksSummary 
     total: parsed.data.tasks.length,
     pending: 0,
     in_progress: 0,
-    completed: 0,
-    blocked: 0
+    completed: 0
   };
 
   for (const task of parsed.data.tasks) {

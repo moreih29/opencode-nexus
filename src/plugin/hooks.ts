@@ -49,7 +49,7 @@ interface ChatOutput {
   parts: Array<{ type?: string; text?: string }>;
 }
 
-type PipelineTaskStatus = "pending" | "in_progress" | "completed" | "blocked";
+type PipelineTaskStatus = "pending" | "in_progress" | "completed";
 
 interface PipelineEvaluatorSnapshot {
   hasTasksFile: boolean;
@@ -67,7 +67,6 @@ interface PipelineEvaluatorResult {
     | "task_cycle_required"
     | "add_first_task"
     | "resume_active_cycle"
-    | "resolve_blocked_tasks"
     | "close_cycle"
     | "spawn_qa_then_close";
 }
@@ -140,6 +139,12 @@ export function createHooks(ctx: PluginContext) {
         } catch {
           // sync failure must not block session initialization
         }
+        return;
+      }
+
+      if (event.type === "session.deleted") {
+        await cleanupHarnessSessionState(paths);
+        clearDeletedSessionState(ctx.state, pickSessionID(event));
       }
     },
 
@@ -305,7 +310,7 @@ export function createHooks(ctx: PluginContext) {
 
       if (status === "active") {
         throw new Error(
-          "[nexus] Exit blocked: active task cycle detected. Update tasks (or mark blocked) and continue the cycle before exiting."
+          "[nexus] Exit blocked: active task cycle detected. Update pending/in-progress tasks and continue the cycle before exiting."
         );
       }
 
@@ -687,7 +692,7 @@ function isExitCommand(command: string): boolean {
 }
 
 function getExitGuardStatus(result: PipelineEvaluatorResult) {
-  if (result.nextGuidanceKey === "resume_active_cycle" || result.nextGuidanceKey === "resolve_blocked_tasks") {
+  if (result.nextGuidanceKey === "resume_active_cycle") {
     return "active" as const;
   }
   if (result.nextGuidanceKey === "close_cycle" || result.nextGuidanceKey === "spawn_qa_then_close") {
@@ -698,7 +703,7 @@ function getExitGuardStatus(result: PipelineEvaluatorResult) {
 
 function buildExitWarning(status: "active" | "completed-open" | "clear"): string {
   if (status === "active") {
-    return "[nexus] Active task cycle detected. Do not abandon the cycle silently: update blocked/in-progress tasks, finish verification, and use nx_task_close only when the cycle is actually complete.";
+    return "[nexus] Active task cycle detected. Do not abandon the cycle silently: update pending/in-progress tasks, finish verification, and use nx_task_close only when the cycle is actually complete.";
   }
 
   if (status === "completed-open") {
@@ -876,6 +881,29 @@ async function safeUnlink(filePath: string): Promise<void> {
   }
 }
 
+async function cleanupHarnessSessionState(paths: ReturnType<typeof createNexusPaths>): Promise<void> {
+  await Promise.all([safeUnlink(paths.AGENT_TRACKER_FILE), safeUnlink(paths.TOOL_LOG_FILE)]);
+}
+
+function clearDeletedSessionState(state: NexusPluginState, sessionID: string | null): void {
+  if (!sessionID) {
+    return;
+  }
+
+  state.lastPromptBySession.delete(sessionID);
+  state.onboardedSessions.delete(sessionID);
+  state.softExitBlockedSessions.delete(sessionID);
+
+  for (const [fingerprint, queue] of state.pendingSubagentInvocations.entries()) {
+    const filtered = queue.filter((pending) => pending.sessionID !== sessionID);
+    if (filtered.length > 0) {
+      state.pendingSubagentInvocations.set(fingerprint, filtered);
+    } else {
+      state.pendingSubagentInvocations.delete(fingerprint);
+    }
+  }
+}
+
 async function readCurrentBranch(projectRoot: string): Promise<string> {
   try {
     const head = (await fs.readFile(path.join(projectRoot, ".git", "HEAD"), "utf8")).trim();
@@ -915,11 +943,10 @@ async function buildStatefulNotice(
     }
     if (taskSummary) {
       const evaluation = await evaluatePipelineFromSummary(taskSummary);
-      if (evaluation.nextGuidanceKey === "resume_active_cycle" || evaluation.nextGuidanceKey === "resolve_blocked_tasks") {
+      if (evaluation.nextGuidanceKey === "resume_active_cycle") {
         return [
           "[nexus] Active task cycle detected.",
-          `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}, blocked=${taskSummary.blocked}`,
-          taskSummary.blocked > 0 ? "Resolve blocked tasks or explicitly re-plan before continuing implementation." : "",
+          `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}`,
           "Use [run] when you are ready to continue the run cycle workflow."
         ].join(" ");
       }
@@ -971,13 +998,12 @@ async function buildStatefulNotice(
         "After implementation, update task states, verify, optionally nx_sync, and close with nx_task_close."
       ].join(" ");
     }
-    if (evaluation.nextGuidanceKey === "resume_active_cycle" || evaluation.nextGuidanceKey === "resolve_blocked_tasks") {
-      const activeSummary = taskSummary ?? { pending: 0, in_progress: 0, blocked: 0 };
+    if (evaluation.nextGuidanceKey === "resume_active_cycle") {
+      const activeSummary = taskSummary ?? { pending: 0, in_progress: 0, completed: 0, total: 0 };
       return [
         "[nexus] Run mode detected.",
         branchGuard ? `Branch Guard: current branch is ${branch}. Avoid substantial execution on the default branch.` : "",
-        `Active tasks: pending=${activeSummary.pending}, in_progress=${activeSummary.in_progress}, blocked=${activeSummary.blocked}.`,
-        activeSummary.blocked > 0 ? "Resolve blocked tasks before opening more implementation scope." : "",
+        `Active tasks: pending=${activeSummary.pending}, in_progress=${activeSummary.in_progress}.`,
         "Keep edits scoped to active tasks, do not continue as Lead solo once work is decomposed, involve Engineer for code execution units, read relevant .nexus/ files before specialist delegation, and update status as each unit completes."
       ].join(" ");
     }
@@ -1016,7 +1042,7 @@ async function buildStatefulNotice(
 }
 
 async function evaluatePipelineFromSummary(
-  summary: { pending: number; in_progress: number; blocked: number; completed: number; total: number } | null,
+  summary: { pending: number; in_progress: number; completed: number; total: number } | null,
   qaTriggerReasons: string[] = []
 ): Promise<PipelineEvaluatorResult> {
   const snapshot: PipelineEvaluatorSnapshot = {
@@ -1029,7 +1055,7 @@ async function evaluatePipelineFromSummary(
 }
 
 function expandSummaryTasks(
-  summary: { pending: number; in_progress: number; blocked: number; completed: number } | null
+  summary: { pending: number; in_progress: number; completed: number } | null
 ): Array<{ status: PipelineTaskStatus }> {
   if (!summary) {
     return [];
@@ -1041,9 +1067,6 @@ function expandSummaryTasks(
   }
   for (let i = 0; i < summary.in_progress; i += 1) {
     tasks.push({ status: "in_progress" });
-  }
-  for (let i = 0; i < summary.blocked; i += 1) {
-    tasks.push({ status: "blocked" });
   }
   for (let i = 0; i < summary.completed; i += 1) {
     tasks.push({ status: "completed" });

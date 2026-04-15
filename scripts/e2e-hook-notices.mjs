@@ -61,7 +61,8 @@ await fs.writeFile(
         {
           id: 1,
           title: "Implement hook parity",
-          status: "blocked",
+          context: "Continue active implementation",
+          status: "pending",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -87,6 +88,7 @@ await fs.writeFile(
         {
           id: 2,
           title: "Done",
+          context: "Completed work",
           status: "completed",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

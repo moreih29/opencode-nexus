@@ -102,7 +102,8 @@ function pass(label) {
     Array.from({ length: taskCount }, (_, i) =>
       nxTaskAdd.execute(
         {
-          title: `task-${i}`
+          title: `task-${i}`,
+          context: `concurrency task ${i}`
         },
         ctx
       )

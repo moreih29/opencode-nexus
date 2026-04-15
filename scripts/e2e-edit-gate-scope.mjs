@@ -39,13 +39,13 @@ const emptyTasks = await attemptEdit("empty-tasks");
 console.log("empty tasks file:", emptyTasks);
 
 await writeTasks([
-  { id: 1, title: "active", status: "pending", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+  { id: 1, title: "active", context: "active task", status: "pending", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
 ]);
 const activeCycle = await attemptEdit("active-cycle");
 console.log("active cycle:", activeCycle);
 
 await writeTasks([
-  { id: 2, title: "done", status: "completed", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+  { id: 2, title: "done", context: "completed task", status: "completed", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
 ]);
 const completedOpen = await attemptEdit("completed-open");
 console.log("completed-open cycle:", completedOpen);

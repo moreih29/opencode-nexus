@@ -18,7 +18,7 @@ const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 await fs.writeFile(
   paths.TASKS_FILE,
-  JSON.stringify({ tasks: [{ id: 1, title: "x", status: "pending", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
+  JSON.stringify({ tasks: [{ id: 1, title: "x", context: "active work", status: "pending", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
   "utf8"
 );
 
@@ -40,7 +40,7 @@ assert.match(out2.parts[0].text, /Active task cycle detected/i);
 
 await fs.writeFile(
   paths.TASKS_FILE,
-  JSON.stringify({ tasks: [{ id: 2, title: "done", status: "completed", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
+  JSON.stringify({ tasks: [{ id: 2, title: "done", context: "completed work", status: "completed", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] }, null, 2),
   "utf8"
 );
 
@@ -60,17 +60,17 @@ assert.match(out4.parts[0].text, /completed-but-not-closed cycle/i);
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 
 await assert.rejects(
-  () => hooks["tool.execute.before"]({ tool: "nx_task_close", agent: "engineer" }, { args: { archive: true } }),
+  () => hooks["tool.execute.before"]({ tool: "nx_task_close", agent: "engineer" }, { args: {} }),
   /Nexus-lead only/i
 );
 
-await hooks["tool.execute.before"]({ tool: "nx_task_close", agent: "nexus" }, { args: { archive: true } });
+await hooks["tool.execute.before"]({ tool: "nx_task_close", agent: "nexus" }, { args: {} });
 
 await assert.rejects(
-  () => nxTaskClose.execute({ archive: false }, { directory: root, worktree: root, agent: "engineer" }),
+  () => nxTaskClose.execute({}, { directory: root, worktree: root, agent: "engineer" }),
   /Nexus-lead only/i
 );
 
-await nxTaskClose.execute({ archive: false }, { directory: root, worktree: root, agent: "nexus" });
+await nxTaskClose.execute({}, { directory: root, worktree: root, agent: "nexus" });
 
 console.log("e2e stop guard passed");

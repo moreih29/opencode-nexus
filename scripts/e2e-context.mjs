@@ -41,7 +41,7 @@ await fs.writeFile(
 );
 
 const ctx = { directory: root, worktree: root };
-const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Implement workflow" }, ctx));
+const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Implement workflow", context: "Execute the planned workflow" }, ctx));
 assert.match(addResult.message, /Link this task to its plan issue/);
 assert.equal(typeof addResult.task.id, "number");
 

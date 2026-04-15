@@ -3,8 +3,13 @@ import { z } from "zod";
 export const TaskStatusSchema = z.enum([
   "pending",
   "in_progress",
-  "completed",
-  "blocked"
+  "completed"
+]);
+
+export const OwnerReusePolicySchema = z.enum([
+  "fresh",
+  "resume_if_same_artifact",
+  "resume"
 ]);
 
 export const TaskItemSchema = z.object({
@@ -13,13 +18,13 @@ export const TaskItemSchema = z.object({
   status: TaskStatusSchema,
   owner: z.string().optional(),
   owner_agent_id: z.string().optional(),
-  owner_reuse_policy: z.string().optional(),
+  owner_reuse_policy: OwnerReusePolicySchema.optional(),
   plan_issue: z.number().optional(),
   deps: z.array(z.number()).optional(),
   created_at: z.string().optional(),
   // updated_at deprecated — accepted on read but not written in new data
   updated_at: z.string().optional(),
-  context: z.string().optional(),
+  context: z.string(),
   approach: z.string().optional(),
   acceptance: z.string().optional(),
   risk: z.string().optional()

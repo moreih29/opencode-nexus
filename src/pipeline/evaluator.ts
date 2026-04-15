@@ -1,4 +1,4 @@
-export type PipelineTaskStatus = "pending" | "in_progress" | "blocked" | "completed" | string;
+export type PipelineTaskStatus = "pending" | "in_progress" | "completed" | string;
 
 export interface PipelineTaskLike {
   id?: number;
@@ -9,7 +9,6 @@ export interface PipelineTaskSummaryLike {
   total?: number;
   pending?: number;
   in_progress?: number;
-  blocked?: number;
   completed?: number;
 }
 
@@ -40,7 +39,6 @@ export interface PipelineEvaluation {
     | "task_cycle_required"
     | "add_first_task"
     | "resume_active_cycle"
-    | "resolve_blocked_tasks"
     | "close_cycle"
     | "spawn_qa_then_close";
 }
@@ -49,7 +47,6 @@ interface NormalizedSummary {
   total: number;
   pending: number;
   inProgress: number;
-  blocked: number;
   completed: number;
 }
 
@@ -61,7 +58,7 @@ export function evaluatePipelineSnapshot(snapshot: PipelineSnapshot): PipelineEv
   const editsAllowed = taskCycleState === "empty" || taskCycleState === "active";
   const canCloseCycle = taskCycleState === "completed-open";
   const shouldTriggerQa = canCloseCycle && inferQaSignal(snapshot);
-  const nextGuidanceKey = resolveNextGuidance(taskCycleState, summary.blocked > 0, shouldTriggerQa);
+  const nextGuidanceKey = resolveNextGuidance(taskCycleState, shouldTriggerQa);
 
   return {
     taskCycleState,
@@ -92,12 +89,11 @@ function normalizeSummary(snapshot: PipelineSnapshot): NormalizedSummary {
   const fromSummary = snapshot.taskSummary;
   if (fromSummary) {
     return {
-      total: normalizeCount(fromSummary.total),
-      pending: normalizeCount(fromSummary.pending),
-      inProgress: normalizeCount(fromSummary.in_progress),
-      blocked: normalizeCount(fromSummary.blocked),
-      completed: normalizeCount(fromSummary.completed)
-    };
+        total: normalizeCount(fromSummary.total),
+        pending: normalizeCount(fromSummary.pending),
+        inProgress: normalizeCount(fromSummary.in_progress),
+        completed: normalizeCount(fromSummary.completed)
+      };
   }
 
   const tasks = Array.isArray(snapshot.tasks) ? snapshot.tasks : [];
@@ -105,7 +101,6 @@ function normalizeSummary(snapshot: PipelineSnapshot): NormalizedSummary {
     total: tasks.length,
     pending: 0,
     inProgress: 0,
-    blocked: 0,
     completed: 0
   };
 
@@ -117,10 +112,6 @@ function normalizeSummary(snapshot: PipelineSnapshot): NormalizedSummary {
     }
     if (status === "in_progress") {
       summary.inProgress += 1;
-      continue;
-    }
-    if (status === "blocked") {
-      summary.blocked += 1;
       continue;
     }
     if (status === "completed") {
@@ -144,7 +135,7 @@ function resolveTaskCycleState(hasTaskCycle: boolean, summary: NormalizedSummary
   if (summary.total <= 0) {
     return "empty";
   }
-  if (summary.pending > 0 || summary.inProgress > 0 || summary.blocked > 0) {
+  if (summary.pending > 0 || summary.inProgress > 0) {
     return "active";
   }
   if (summary.completed > 0 && summary.completed === summary.total) {
@@ -168,7 +159,6 @@ function inferQaSignal(snapshot: PipelineSnapshot): boolean {
 
 function resolveNextGuidance(
   state: PipelineTaskCycleState,
-  hasBlockedTasks: boolean,
   shouldTriggerQa: boolean
 ): PipelineEvaluation["nextGuidanceKey"] {
   if (state === "none") {
@@ -178,7 +168,7 @@ function resolveNextGuidance(
     return "add_first_task";
   }
   if (state === "active") {
-    return hasBlockedTasks ? "resolve_blocked_tasks" : "resume_active_cycle";
+    return "resume_active_cycle";
   }
   return shouldTriggerQa ? "spawn_qa_then_close" : "close_cycle";
 }

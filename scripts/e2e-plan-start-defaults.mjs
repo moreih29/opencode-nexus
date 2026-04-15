@@ -130,7 +130,7 @@ function pass(label) {
   pass("case4: first nxPlanStart gets plan_id=1");
 
   // Archive the first plan cycle so history records plan id=1
-  await nxTaskClose.execute({ archive: true }, ctx);
+  await nxTaskClose.execute({}, { ...ctx, agent: "nexus" });
 
   const second = JSON.parse(
     await nxPlanStart.execute(

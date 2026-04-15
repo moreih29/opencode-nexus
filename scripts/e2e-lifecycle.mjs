@@ -15,7 +15,7 @@ const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 
 const ctx = { directory: root, worktree: root };
-const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Lifecycle task" }, ctx));
+const addResult = JSON.parse(await nxTaskAdd.execute({ title: "Lifecycle task", context: "Validate task lifecycle behavior" }, ctx));
 assert.equal(typeof addResult.task.id, "number");
 assert.equal(addResult.task.status, "pending");
 const id = addResult.task.id;
@@ -26,9 +26,6 @@ assert.equal(updateResult.task.status, "completed");
 
 updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "pending" }, ctx));
 assert.equal(updateResult.task.status, "pending");
-
-updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "blocked" }, ctx));
-assert.equal(updateResult.task.status, "blocked");
 
 updateResult = JSON.parse(await nxTaskUpdate.execute({ id, status: "completed" }, ctx));
 assert.equal(updateResult.task.status, "completed");
@@ -41,15 +38,16 @@ await assert.rejects(
   }
 );
 
-const close = JSON.parse(await nxTaskClose.execute({ archive: true }, ctx));
+const close = JSON.parse(await nxTaskClose.execute({}, { ...ctx, agent: "nexus" }));
 assert.equal(close.closed, true);
 assert.equal(typeof close.memoryHint.taskCount, "number");
+assert.deepEqual(close.deleted, ["tasks.json"], "deleted should list removed session files");
 
 const history = JSON.parse(await fs.readFile(paths.HISTORY_FILE, "utf8"));
 assert.equal(history.cycles.at(-1).memoryHint.taskCount, 1);
 
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
-const emptyClose = JSON.parse(await nxTaskClose.execute({ archive: false }, ctx));
+const emptyClose = JSON.parse(await nxTaskClose.execute({}, { ...ctx, agent: "nexus" }));
 assert.equal(emptyClose.closed, true, "empty task cycles should still be closable");
 
 console.log("e2e lifecycle passed");

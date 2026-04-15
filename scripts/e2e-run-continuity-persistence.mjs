@@ -22,6 +22,7 @@ await fs.writeFile(
         {
           id: "task-run-persist-1",
           title: "Run continuity persistence",
+          context: "Keep latest continuity handles",
           status: "in_progress",
           owner: "engineer",
           plan_issue: 1,

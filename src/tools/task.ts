@@ -10,6 +10,7 @@ import { fileExists } from "../shared/state.js";
 import { TasksFileSchema, type TaskItem, type TasksFile } from "../shared/schema.js";
 
 const z = tool.schema;
+const OWNER_REUSE_POLICY_VALUES = ["fresh", "resume_if_same_artifact", "resume"] as const;
 
 interface PipelineEvaluatorSnapshot {
   hasTasksFile: boolean;
@@ -27,7 +28,6 @@ interface PipelineEvaluatorResult {
     | "task_cycle_required"
     | "add_first_task"
     | "resume_active_cycle"
-    | "resolve_blocked_tasks"
     | "close_cycle"
     | "spawn_qa_then_close";
 }
@@ -38,10 +38,10 @@ export const nxTaskAdd = tool({
     title: z.string(),
     owner: z.string().optional(),
     owner_agent_id: z.string().optional(),
-    owner_reuse_policy: z.string().optional(),
+    owner_reuse_policy: z.enum(OWNER_REUSE_POLICY_VALUES).optional(),
     plan_issue: z.number().optional(),
     deps: z.array(z.number()).optional(),
-    context: z.string().optional(),
+    context: z.string(),
     approach: z.string().optional(),
     acceptance: z.string().optional(),
     risk: z.string().optional(),
@@ -130,7 +130,6 @@ export const nxTaskList = tool({
       completed: tasksFile.tasks.filter((task) => task.status === "completed").length,
       pending: tasksFile.tasks.filter((task) => task.status === "pending").length,
       in_progress: tasksFile.tasks.filter((task) => task.status === "in_progress").length,
-      blocked: tasksFile.tasks.filter((task) => task.status === "blocked").length,
       ready: tasksFile.tasks
         .filter(
           (t) =>
@@ -148,7 +147,7 @@ export const nxTaskUpdate = tool({
   description: "Update task status",
   args: {
     id: z.number(),
-    status: z.enum(["pending", "in_progress", "completed", "blocked"]),
+    status: z.enum(["pending", "in_progress", "completed"]),
     note: z.string().optional()
   },
   async execute(args, context) {
@@ -184,10 +183,8 @@ export const nxTaskUpdate = tool({
 
 export const nxTaskClose = tool({
   description: "Close task cycle and archive history",
-  args: {
-    archive: z.boolean().default(true)
-  },
-  async execute(args, context) {
+  args: {},
+  async execute(_args, context) {
     const callerAgent = resolveCallerAgentFromToolContext(context);
     if (callerAgent && callerAgent !== NEXUS_PRIMARY_AGENT_ID) {
       throw new Error(`nx_task_close is Nexus-lead only. Caller "${callerAgent}" is not allowed.`);
@@ -208,29 +205,33 @@ export const nxTaskClose = tool({
     const memoryHint = {
       taskCount,
       decisionCount,
-      cycleTopics: [typeof (plan as { topic?: unknown } | null)?.topic === "string" ? (plan as { topic: string }).topic : ""]
+      cycleTopics: [
+        typeof (plan as { topic?: unknown } | null)?.topic === "string" ? (plan as { topic: string }).topic : "",
+        typeof tasks?.goal === "string" ? tasks.goal : ""
+      ]
         .filter(Boolean)
     };
 
     const cycleTimestamp = new Date().toISOString();
     const branch = await readCurrentBranch(context.worktree ?? context.directory);
-    const shouldArchive = args.archive ?? true;
-
-    if (shouldArchive) {
-      await appendHistory(paths.HISTORY_FILE, {
-        completed_at: cycleTimestamp,
-        branch,
-        plan: plan ?? undefined,
-        tasks: tasks?.tasks ?? [],
-        memoryHint
-      });
-    }
+    await appendHistory(paths.HISTORY_FILE, {
+      completed_at: cycleTimestamp,
+      branch,
+      plan: plan ?? undefined,
+      tasks: tasks?.tasks ?? [],
+      memoryHint
+    });
 
     const history = await readJsonFile<{ cycles: unknown[] }>(paths.HISTORY_FILE, { cycles: [] });
     const totalCycles = history.cycles.length;
 
-    await safeUnlink(paths.PLAN_FILE);
-    await safeUnlink(paths.TASKS_FILE);
+    const deleted: string[] = [];
+    if (await removeFileIfExists(paths.PLAN_FILE)) {
+      deleted.push(path.basename(paths.PLAN_FILE));
+    }
+    if (await removeFileIfExists(paths.TASKS_FILE)) {
+      deleted.push(path.basename(paths.TASKS_FILE));
+    }
 
     return JSON.stringify(
       {
@@ -242,9 +243,9 @@ export const nxTaskClose = tool({
           decisions: decisionCount,
           tasks: taskCount
         },
+        deleted,
         total_cycles: totalCycles,
-        memoryHint,
-        nextStep: "Run nx_sync to promote this archived cycle into core knowledge."
+        memoryHint
       },
       null,
       2
@@ -257,6 +258,15 @@ async function safeUnlink(filePath: string): Promise<void> {
     await fs.unlink(filePath);
   } catch {
     // noop
+  }
+}
+
+async function removeFileIfExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.unlink(filePath);
+    return true;
+  } catch {
+    return false;
   }
 }
 

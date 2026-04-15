@@ -7997,6 +7997,60 @@
           "Prevent recursive subagent spawning from subagents"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:41:49.521Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align sample OpenCode configs",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T07:24:08.780Z",
+          "context": "User asked to update both opencode.minimal.json and opencode.example.json to better reflect the current recommended Nexus setup, especially making nexus the only visible primary by disabling built-in build/plan agents.",
+          "approach": "Make the smallest config-only edits. Add default_agent/instructions and disable build/plan in the minimal preset; add build/plan disable entries to the example preset while preserving its stricter permission examples.",
+          "acceptance": "Both sample files reflect the recommended nexus-first setup and remain valid JSON.",
+          "risk": "Low risk; documentation sample drift if README text later diverges."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T07:51:20.816Z",
+      "branch": "global-refactor",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align task pipeline contract with nexus-core",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T07:41:58.733Z",
+          "context": "Update opencode-nexus task pipeline behavior to better match current nexus-core contract: remove blocked/archive drift, require task context, constrain owner_reuse_policy, return deleted files from task_close, file a nexus-core issue for stale hadLoopDetection/edit-tracker guidance, and implement session cleanup if the platform exposes a usable session deletion event.",
+          "approach": "Make minimal focused edits across task schema/tools and plugin hooks. Use claude-nexus as the reference for task_add/task_close contract details and session-scoped cleanup policy. Verify with targeted script/test runs and issue creation.",
+          "acceptance": "Task status space matches core, task_add requires context and enum-limited owner_reuse_policy, task_close has no archive arg and returns deleted file names, hadLoopDetection/edit-tracker mismatch is reported upstream, and session cleanup works if OpenCode emits a deletion event.",
+          "risk": "Medium: changing task schema can affect pipeline evaluator and existing tests; session lifecycle hooks may require light experimentation."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"

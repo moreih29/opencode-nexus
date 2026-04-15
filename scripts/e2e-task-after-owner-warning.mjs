@@ -21,27 +21,30 @@ async function writeTasks(tasks) {
 }
 
 await writeTasks([
-  {
-    id: 1,
-    title: "Engineer pending",
-    status: "pending",
-    owner: "engineer",
+    {
+      id: 1,
+      title: "Engineer pending",
+      context: "pending engineer task",
+      status: "pending",
+      owner: "engineer",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
-  {
-    id: 2,
-    title: "Engineer in progress",
-    status: "in_progress",
-    owner_agent_id: "engineer",
+    {
+      id: 2,
+      title: "Engineer in progress",
+      context: "in-progress engineer task",
+      status: "in_progress",
+      owner_agent_id: "engineer",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
-  {
-    id: 3,
-    title: "Writer pending",
-    status: "pending",
-    owner: "writer",
+    {
+      id: 3,
+      title: "Writer pending",
+      context: "pending writer task",
+      status: "pending",
+      owner: "writer",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
@@ -64,19 +67,21 @@ assert.match(withIncomplete.output, /#2/, "should include in-progress owner task
 assert.doesNotMatch(withIncomplete.output, /#3/, "should not include tasks owned by other agents");
 
 await writeTasks([
-  {
-    id: 1,
-    title: "Engineer pending",
-    status: "completed",
-    owner: "engineer",
+    {
+      id: 1,
+      title: "Engineer pending",
+      context: "completed engineer task",
+      status: "completed",
+      owner: "engineer",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
-  {
-    id: 2,
-    title: "Engineer in progress",
-    status: "completed",
-    owner_agent_id: "engineer",
+    {
+      id: 2,
+      title: "Engineer in progress",
+      context: "completed engineer task",
+      status: "completed",
+      owner_agent_id: "engineer",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }

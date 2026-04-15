@@ -85,7 +85,7 @@ assert.equal(planAfterDecide.issues[0].status, "decided", "plan.json: issue stat
 pass("plan.json issue status transitions to decided (not tasked)");
 
 // Add task linked to plan issue
-const addText = JSON.parse(await nxTaskAdd.execute({ title: "Implement", owner: "engineer", plan_issue: 1 }, ctx));
+const addText = JSON.parse(await nxTaskAdd.execute({ title: "Implement", context: "Implement the agreed plan", owner: "engineer", plan_issue: 1 }, ctx));
 assert.match(addText.message, /Added task/);
 assert.equal(typeof addText.task.id, "number");
 pass("nxTaskAdd adds task with plan_issue link");
@@ -96,7 +96,7 @@ pass("tasks file has 1 task");
 
 // Close cycle and archive to history
 await nxTaskUpdate.execute({ id: tasksRaw.tasks[0].id, status: "completed" }, ctx);
-const closeRaw = await nxTaskClose.execute({ archive: true }, ctx);
+const closeRaw = await nxTaskClose.execute({}, { ...ctx, agent: "nexus" });
 const close = JSON.parse(closeRaw);
 assert.equal(close.closed, true, "nxTaskClose: closed should be true");
 pass("nxTaskClose closes the cycle");

@@ -22,6 +22,7 @@ await fs.writeFile(
         {
           id: "task-run-1",
           title: "Run continuity",
+          context: "Resume engineer continuity",
           status: "in_progress",
           owner: "engineer",
           plan_issue: 1,

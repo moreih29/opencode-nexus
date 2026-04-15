@@ -87,10 +87,10 @@ await nxPlanStart.execute(
   },
   ctx
 );
-await nxTaskAdd.execute({ title: "Implement sync flow", plan_issue: 1 }, ctx);
+await nxTaskAdd.execute({ title: "Implement sync flow", context: "Carry plan decisions into sync", plan_issue: 1 }, ctx);
 const tasksFile = JSON.parse(await fs.readFile(paths.TASKS_FILE, "utf8"));
 await nxTaskUpdate.execute({ id: tasksFile.tasks[0].id, status: "completed" }, ctx);
-await nxTaskClose.execute({ archive: true }, ctx);
+await nxTaskClose.execute({}, { ...ctx, agent: "nexus" });
 
 const syncMessage = await nxSync.execute({}, ctx);
 assert.equal(typeof syncMessage, "string");
