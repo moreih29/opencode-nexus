@@ -97,29 +97,6 @@ export const PlanFileSchema = z.object({
   created_at: z.string()
 });
 
-export const PlanPanelParticipantSchema = z.object({
-  role: z.string(),
-  session_id: z.string().optional(),
-  task_id: z.string().optional(),
-  last_summary: z.string().optional(),
-  updated_at: z.string()
-});
-
-export const PlanSidecarSchema = z.object({
-  schema_version: z.literal(1),
-  canonical_file: z.literal("plan.json"),
-  platform: z.literal("opencode"),
-  handoff: z.object({
-    policy: z.literal("canonical-first"),
-    canonical_ready: z.boolean(),
-    updated_at: z.string()
-  }),
-  panel: z.object({
-    strategy: z.literal("how-fixed-panel"),
-    participants: z.array(PlanPanelParticipantSchema)
-  })
-});
-
 export const InvocationContinuitySchema = z
   .object({
     child_session_id: z.string().optional(),
@@ -179,7 +156,6 @@ export type PlanIssueStatus = z.infer<typeof PlanIssueStatusSchema>;
 export type PlanDiscussionEntry = z.infer<typeof PlanDiscussionEntrySchema>;
 export type PlanDiscussionKind = z.infer<typeof PlanDiscussionKindSchema>;
 export type PlanFile = z.infer<typeof PlanFileSchema>;
-export type PlanSidecar = z.infer<typeof PlanSidecarSchema>;
 export type Invocation = z.infer<typeof InvocationSchema>;
 export type AgentTracker = z.infer<typeof AgentTrackerSchema>;
 export type InvocationLifecycleStatus = z.infer<typeof InvocationLifecycleStatusSchema>;

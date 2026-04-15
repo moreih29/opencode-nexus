@@ -151,7 +151,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 - 9-agent Nexus catalog mapped to HOW / DO / CHECK roles
 - Default `nexus` primary paired with specialist subagents
 - Stateful plan and task workflow stored in `.nexus/state/`
-- HOW-panel continuity through OpenCode sidecar state (`.nexus/state/opencode-nexus/plan.extension.json`) separate from canonical `.nexus`
+- HOW-panel continuity derived from canonical `plan.json` + `.nexus/state/opencode-nexus/agent-tracker.json`
 - Resume hints per HOW participant via stored `task_id` / `session_id` handles when OpenCode provides them
 - `nx_plan_resume` to inspect a HOW participant's current resume handle before follow-up delegation
 - `nx_plan_followup` to produce delegation-ready HOW participant follow-up input

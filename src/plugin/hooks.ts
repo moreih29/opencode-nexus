@@ -12,7 +12,6 @@ import { isKnownNexusAgent } from "../orchestration/team-policy.js";
 import { SKILL_META } from "../skills/prompts.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { readAgentTracker, registerInvocationEnd, registerInvocationStart, writeAgentTracker } from "../shared/agent-tracker.js";
-import { loadCanonicalPlan, syncPlanSidecar } from "../shared/plan-sidecar.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
 import { aggregateFilesForAgent, appendToolLogEntry, resetToolLog } from "../shared/tool-log.js";
@@ -403,8 +402,7 @@ async function updatePlanParticipantContinuity(
     return;
   }
 
-  const plan = await loadCanonicalPlan(paths.PLAN_FILE);
-  if (!plan) {
+  if (!(await fileExists(paths.PLAN_FILE))) {
     return;
   }
 
@@ -426,14 +424,6 @@ async function updatePlanParticipantContinuity(
       child_task_id: handles.taskID,
       child_session_id: handles.sessionID
     }
-  });
-
-  await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, {
-    speaker: agentType,
-    message: output.output.slice(0, 500),
-    taskID: handles.taskID,
-    sessionID: handles.sessionID,
-    teamName: coordinationLabel
   });
 }
 

@@ -30,8 +30,7 @@ const started = await nxPlanStart.execute(
 const startedParsed = JSON.parse(started);
 assert.equal(startedParsed.created, true);
 
-// Register architect as HOW panel participant via how_agent_ids so syncPlanSidecar
-// seeds the sidecar before the hook fires (panel membership is driven by how_agent_ids)
+// Register architect as HOW panel participant via how_agent_ids
 await nxPlanDecide.execute(
   {
     issue_id: 1,
@@ -71,16 +70,6 @@ await hooks["tool.execute.after"](
 
 await logState("after hook completion", paths);
 
-const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
-const architect = sidecar.panel.participants.find((item) => item.role.toLowerCase() === "architect");
-assert.ok(architect, "architect participant must exist in sidecar after plan start");
-architect.task_id = "sidecar-task-architect-desync";
-architect.session_id = "sidecar-session-architect-desync";
-architect.updated_at = new Date().toISOString();
-await fs.writeFile(paths.PLAN_SIDECAR_FILE, `${JSON.stringify(sidecar, null, 2)}\n`, "utf8");
-
-await logState("after intentional sidecar desync", paths);
-
 const resumeArchitect = parseToolJson(
   await nxPlanResume.execute(
     { role: "architect", question: "What continuity should we use now?" },
@@ -90,12 +79,12 @@ const resumeArchitect = parseToolJson(
 assert.equal(
   resumeArchitect.task_id,
   coreHandles.task_id,
-  "nxPlanResume should prefer orchestration core task continuity over sidecar"
+  "nxPlanResume should prefer orchestration core task continuity over stale participant hints"
 );
 assert.equal(
   resumeArchitect.session_id,
   coreHandles.session_id,
-  "nxPlanResume should prefer orchestration core session continuity over sidecar"
+  "nxPlanResume should prefer orchestration core session continuity over stale participant hints"
 );
 assert.equal(
   resumeArchitect.opencode_task_tool_resume_handle,
@@ -130,7 +119,6 @@ assert.equal(
 );
 
 // Register strategist as HOW panel participant via how_agent_ids on the issue
-// (panel membership is driven by issues[].how_agent_ids)
 await nxPlanDecide.execute(
   {
     issue_id: 1,
@@ -139,17 +127,17 @@ await nxPlanDecide.execute(
   },
   ctx
 );
-const sidecarWithStrategist = await readJson(paths.PLAN_SIDECAR_FILE);
-const strategist = sidecarWithStrategist.panel.participants.find((item) => item.role.toLowerCase() === "strategist");
-assert.ok(strategist, "strategist participant must exist in sidecar after decide with how_agent_ids");
-// Inject sidecar-only handles to simulate a participant that only has sidecar continuity
-// (no orchestration-core entry) — tests that nxPlanResume ignores sidecar-only data
-strategist.task_id = "sidecar-task-strategist-only";
-strategist.session_id = "sidecar-session-strategist-only";
-strategist.updated_at = new Date().toISOString();
-await fs.writeFile(paths.PLAN_SIDECAR_FILE, `${JSON.stringify(sidecarWithStrategist, null, 2)}\n`, "utf8");
 
-await logState("after fallback sidecar continuity setup", paths);
+await hooks["tool.execute.before"](
+  { tool: "task" },
+  { args: { subagent_type: "strategist", team_name: "plan-panel", description: "Review continuity summary" } }
+);
+await hooks["tool.execute.after"](
+  { tool: "task", args: { subagent_type: "strategist", team_name: "plan-panel" } },
+  { title: "ok", output: "Strategist reviewed the continuity trade-offs.", metadata: null }
+);
+
+await logState("after strategist summary-only setup", paths);
 
 const resumeStrategist = await nxPlanResume.execute(
   { role: "strategist", question: "Continue strategist thread" },
@@ -158,7 +146,7 @@ const resumeStrategist = await nxPlanResume.execute(
 assert.equal(
   resumeStrategist,
   "No participant continuity found for strategist.",
-  "nxPlanResume should not resume from plan sidecar when orchestration has no continuity"
+  "nxPlanResume should not resume when tracker has no continuity handles"
 );
 
 const followupStrategist = parseToolJson(
@@ -174,23 +162,17 @@ const followupStrategist = parseToolJson(
 assert.equal(
   followupStrategist.recommendation.mode,
   "rehydrate-from-summary",
-  "nxPlanFollowup should avoid resume-existing when continuity only exists in plan sidecar"
+  "nxPlanFollowup should avoid resume-existing when only summary context exists"
 );
 assert.equal(
   followupStrategist.delegation.resume_task_id,
   null,
-  "nxPlanFollowup should not emit resume_task_id from sidecar-only continuity"
+  "nxPlanFollowup should not emit resume_task_id without continuity handles"
 );
 assert.equal(
   followupStrategist.delegation.resume_session_id,
   null,
-  "nxPlanFollowup should not emit resume_session_id from sidecar-only continuity"
-);
-
-const sidecarProjection = await readJson(paths.PLAN_SIDECAR_FILE);
-assert.ok(
-  sidecarProjection.panel.participants.some((item) => item.role.toLowerCase() === "strategist"),
-  "plan sidecar should still retain panel membership independently of resumability"
+  "nxPlanFollowup should not emit resume_session_id without continuity handles"
 );
 
 console.log("e2e plan continuity core-first passed");
@@ -201,11 +183,8 @@ async function readJson(filePath) {
 
 async function logState(label, paths) {
   const core = await readJson(paths.AGENT_TRACKER_FILE);
-  const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
   console.log(`[inspect:${label}] orchestration-core`);
   console.log(JSON.stringify(core, null, 2));
-  console.log(`[inspect:${label}] plan-sidecar`);
-  console.log(JSON.stringify(sidecar, null, 2));
 }
 
 function parseToolJson(value) {

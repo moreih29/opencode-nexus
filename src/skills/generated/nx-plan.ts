@@ -369,9 +369,10 @@ nexus-core \`rule:harness-state-namespace\`에 따라 harness 네임스페이스
 Used for observability (for example, files touched tracking), not as the source of
 truth for resume routing.
 
-**\`.nexus/state/opencode-nexus/plan.extension.json\`** — tracks HOW-agent participants
-in plan sessions. Stores session and task IDs per role for continuity across plan
-interactions. 공통 \`plan.json\`의 extension 파일로, \`{base}.extension.json\` 네이밍 규칙을 따른다.
+**\`.nexus/state/plan.json\`** — canonical plan state.
+HOW-panel participants are defined via plan issues (\`how_agents\`, \`how_agent_ids\`).
+Plan continuity is derived by combining these canonical participants with
+\`.nexus/state/opencode-nexus/agent-tracker.json\` continuity handles.
 
 ## Resume Parameter on the \`task\` Tool (opencode 1.3.13)
 

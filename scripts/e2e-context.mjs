@@ -29,7 +29,7 @@ await fs.writeFile(
           id: 1,
           title: "Plan run workflow",
           status: "pending",
-          how_agent_ids: { architect: "ses_arch_init" }
+          how_agent_ids: { architect: "ses_arch_init", strategist: "ses_strat_init" }
         }
       ],
       created_at: new Date().toISOString()
@@ -63,45 +63,13 @@ await hooks["tool.execute.after"](
   { title: "ok", output: "Prefer canonical-first handoff.", metadata: { task_id: "task-architect-1", session_id: "session-architect-1" } }
 );
 
-const planSidecar = JSON.parse(await fs.readFile(paths.PLAN_SIDECAR_FILE, "utf8"));
-const now = new Date().toISOString();
-const participants = (Array.isArray(planSidecar?.panel?.participants) ? planSidecar.panel.participants : [])
-  .map((item) => {
-    if (item.role === "architect") {
-      return {
-        ...item,
-        task_id: "task-architect-sidecar-stale",
-        session_id: "session-architect-sidecar-stale",
-        last_summary: "Stale sidecar continuity",
-        updated_at: now
-      };
-    }
-    return item;
-  })
-  .concat([
-    {
-      role: "strategist",
-      task_id: "task-strategist-sidecar-1",
-      session_id: "session-strategist-sidecar-1",
-      last_summary: "Sidecar-only strategist context",
-      updated_at: now
-    }
-  ]);
-
-await fs.writeFile(
-  paths.PLAN_SIDECAR_FILE,
-  JSON.stringify(
-    {
-      ...planSidecar,
-      panel: {
-        ...planSidecar.panel,
-        participants
-      }
-    },
-    null,
-    2
-  ),
-  "utf8"
+await hooks["tool.execute.before"](
+  { tool: "task" },
+  { args: { subagent_type: "strategist", team_name: "plan-panel", description: "review sequencing" } }
+);
+await hooks["tool.execute.after"](
+  { tool: "task", args: { subagent_type: "strategist", team_name: "plan-panel" } },
+  { title: "ok", output: "Prioritize rollout milestones.", metadata: null }
 );
 
 const contextResult = JSON.parse(await nxContext.execute({}, ctx));
@@ -147,7 +115,7 @@ assert.match(resumeResult.recommendation.suggested_prompt, /justify the handoff 
 assert.equal(
   strategistResumeResult,
   "No participant continuity found for strategist.",
-  "plan sidecar membership should not make strategist resumable without orchestration continuity"
+  "plan membership should not make strategist resumable without tracker continuity"
 );
 assert.equal(strategistFollowupResult.recommendation.mode, "rehydrate-from-summary");
 assert.equal(strategistFollowupResult.delegation.resume_task_id, null);

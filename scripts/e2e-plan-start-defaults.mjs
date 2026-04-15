@@ -147,7 +147,7 @@ function pass(label) {
   pass("case4: plan.json reflects second plan after start-over");
 }
 
-// Case 5: sidecar is created alongside plan.json on nxPlanStart
+// Case 5: legacy plan.extension.json sidecar is not created on nxPlanStart
 {
   const root = await makeRoot("case5");
   const ctx = { directory: root, worktree: root };
@@ -157,18 +157,19 @@ function pass(label) {
   await nxPlanStart.execute(
     {
       topic: "Sidecar init test",
-      research_summary: "Verifying sidecar is initialised.",
-      issues: ["Check sidecar"]
+      research_summary: "Verifying no legacy sidecar file is created.",
+      issues: ["Check legacy sidecar removal"]
     },
     ctx
   );
 
-  const sidecar = await readJson(paths.PLAN_SIDECAR_FILE);
-  assert.equal(sidecar.schema_version, 1, "case5: sidecar schema_version is 1");
-  assert.equal(sidecar.handoff.policy, "canonical-first", "case5: sidecar handoff policy");
-  assert.equal(sidecar.panel.strategy, "how-fixed-panel", "case5: sidecar panel strategy");
-  assert.equal(Array.isArray(sidecar.panel.participants), true, "case5: sidecar participants is array");
-  pass("case5: nxPlanStart initialises plan sidecar with canonical structure");
+  const legacySidecarPath = path.join(root, ".nexus", "state", "opencode-nexus", "plan.extension.json");
+  await assert.rejects(
+    fs.access(legacySidecarPath),
+    { code: "ENOENT" },
+    "case5: legacy plan.extension.json sidecar must not be written"
+  );
+  pass("case5: nxPlanStart does not create legacy plan.extension.json sidecar");
 }
 
 console.log(`e2e plan-start-defaults passed (${passCount} assertions)`);

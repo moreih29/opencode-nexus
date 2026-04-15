@@ -1,9 +1,13 @@
 import { tool } from "@opencode-ai/plugin";
 import { appendHistory, nextPlanId } from "../shared/history.js";
-import { readPlanParticipantContinuityFromCore, type PlanParticipantContinuity } from "../orchestration/plan-continuity-adapter.js";
+import {
+  readPlanParticipantContinuityFromCore,
+  readPlanParticipantSnapshotFromCore,
+  type PlanParticipantContinuity
+} from "../orchestration/plan-continuity-adapter.js";
+import { collectHowRolesFromPlan } from "../shared/plan-how-panel.js";
 import { createNexusPaths } from "../shared/paths.js";
 import { readJsonFile, writeJsonFile } from "../shared/json-store.js";
-import { readPlanSidecar, summarizePlanSidecar, syncPlanSidecar } from "../shared/plan-sidecar.js";
 import { fileExists } from "../shared/state.js";
 import {
   PlanFileSchema,
@@ -53,7 +57,6 @@ export const nxPlanStart = tool({
 
     PlanFileSchema.parse(plan);
     await writeJsonFile(paths.PLAN_FILE, plan);
-    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
     return JSON.stringify({ created: true, plan_id: plan.id, topic: args.topic, issueCount: plan.issues.length });
   }
 });
@@ -69,25 +72,13 @@ export const nxPlanStatus = tool({
 
     const plan = await readPlan(paths.PLAN_FILE);
     const summary = summarizeIssues(plan);
-    const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
-    const followupParticipants = sidecar
-      ? await Promise.all(
-          sidecar.panel.participants.map(async (item) =>
-            mergeParticipantContinuity(
-              item.role,
-              await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, item.role),
-              {
-                role: item.role,
-                task_id: item.task_id ?? null,
-                session_id: item.session_id ?? null,
-                last_summary: item.last_summary ?? null,
-                updated_at: item.updated_at,
-                source: "plan-sidecar"
-              }
-            )
-          )
-        )
-      : [];
+    const panelRoles = collectHowRolesFromPlan(plan);
+    const followupParticipants = await Promise.all(
+      panelRoles.map(async (role) => ({
+        role,
+        participant: await readPlanParticipantSnapshotFromCore(paths.AGENT_TRACKER_FILE, role)
+      }))
+    );
 
     return JSON.stringify(
       {
@@ -100,9 +91,17 @@ export const nxPlanStatus = tool({
         current_issue: pickCurrentIssue(plan),
         decided_ratio: `${summary.decided}/${summary.total}`,
         opencode: {
-          ...summarizePlanSidecar(sidecar),
+          handoff: "canonical-first",
+          canonical_ready: true,
+          how_panel_size: panelRoles.length,
+          participants: followupParticipants.map(({ role, participant }) => ({
+            role,
+            task_id: participant?.task_id ?? null,
+            session_id: participant?.session_id ?? null,
+            has_continuity: Boolean(participant?.task_id || participant?.session_id || participant?.last_summary)
+          })),
           followup_ready_roles: followupParticipants
-            .filter((item) => item.resumable || item.last_summary)
+            .filter((item) => item.participant?.task_id || item.participant?.session_id || item.participant?.last_summary)
             .map((item) => item.role)
         }
       },
@@ -121,22 +120,16 @@ export const nxPlanResume = tool({
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
     const coreParticipant = await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, args.role);
-    const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
-    const sidecarParticipant = pickParticipantFromSidecar(sidecar, args.role);
-    if (!coreParticipant && !sidecar) {
-      return "No OpenCode plan sidecar available.";
-    }
-
     if (!coreParticipant) {
       return `No participant continuity found for ${args.role}.`;
     }
 
-    const participant = mergeParticipantContinuity(args.role, coreParticipant, sidecarParticipant);
+    const participant = mergeParticipantContinuity(args.role, coreParticipant);
 
     return JSON.stringify(
       {
         role: participant.role,
-        strategy: sidecar?.panel.strategy ?? "how-fixed-panel",
+        strategy: "how-fixed-panel",
         task_id: participant.task_id ?? null,
         session_id: participant.session_id ?? null,
         opencode_task_tool_resume_handle: participant.session_id ?? null,
@@ -161,10 +154,9 @@ export const nxPlanFollowup = tool({
   },
   async execute(args, context) {
     const paths = createNexusPaths(context.worktree ?? context.directory);
-    const sidecar = await readPlanSidecar(paths.PLAN_SIDECAR_FILE);
-    const coreParticipant = await readPlanParticipantContinuityFromCore(paths.AGENT_TRACKER_FILE, args.role);
+    const coreParticipant = await readPlanParticipantSnapshotFromCore(paths.AGENT_TRACKER_FILE, args.role);
     const plan = await readCanonicalFollowupPlan(paths.PLAN_FILE);
-    const participant = mergeParticipantContinuity(args.role, coreParticipant, pickParticipantFromSidecar(sidecar, args.role));
+    const participant = mergeParticipantContinuity(args.role, coreParticipant);
     const recommendation = buildResumeRecommendation(participant ?? { role: args.role }, args.question);
     const issue = args.issue_id
       ? plan?.issues.find((item) => item.id === args.issue_id) ?? null
@@ -268,7 +260,6 @@ export const nxPlanUpdate = tool({
     }
 
     await writeJsonFile(paths.PLAN_FILE, plan);
-    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan);
     return JSON.stringify(result);
   }
 });
@@ -301,7 +292,6 @@ export const nxPlanDecide = tool({
     if (args.how_agent_ids !== undefined) issue.how_agent_ids = args.how_agent_ids;
 
     await writeJsonFile(paths.PLAN_FILE, plan);
-    await syncPlanSidecar(paths.PLAN_SIDECAR_FILE, plan, { speaker: "lead", message: args.decision });
 
     const allDecided = plan.issues.every((item) => item.status === "decided");
     return JSON.stringify({
@@ -343,43 +333,21 @@ function buildResumeRecommendation(
   };
 }
 
-function pickParticipantFromSidecar(
-  sidecar: Awaited<ReturnType<typeof readPlanSidecar>>,
-  role: string
-): PlanParticipantContinuity | null {
-  if (!sidecar) {
-    return null;
-  }
-  const participant = sidecar.panel.participants.find((item) => item.role.toLowerCase() === role.toLowerCase());
-  if (!participant) {
-    return null;
-  }
-  return {
-    role: participant.role,
-    task_id: participant.task_id ?? null,
-    session_id: participant.session_id ?? null,
-    last_summary: participant.last_summary ?? null,
-    updated_at: participant.updated_at,
-    source: "plan-sidecar"
-  };
-}
-
 function mergeParticipantContinuity(
   role: string,
-  coreParticipant: PlanParticipantContinuity | null,
-  sidecarParticipant: PlanParticipantContinuity | null
+  coreParticipant: PlanParticipantContinuity | null
 ) {
   const task_id = coreParticipant?.task_id ?? null;
   const session_id = coreParticipant?.session_id ?? null;
-  const sidecarSummary = sidecarParticipant?.last_summary?.trim() ? sidecarParticipant.last_summary : null;
-  const source = coreParticipant ? coreParticipant.source : sidecarSummary ? "plan-sidecar" : "none";
+  const coreSummary = coreParticipant?.last_summary?.trim() ? coreParticipant.last_summary : null;
+  const source = coreParticipant ? coreParticipant.source : "none";
 
   return {
-    role: coreParticipant?.role ?? sidecarParticipant?.role ?? role,
+    role: coreParticipant?.role ?? role,
     task_id,
     session_id,
-    last_summary: coreParticipant?.last_summary ?? sidecarSummary,
-    updated_at: coreParticipant?.updated_at ?? (source === "plan-sidecar" ? sidecarParticipant?.updated_at ?? null : null),
+    last_summary: coreSummary,
+    updated_at: coreParticipant?.updated_at ?? null,
     source,
     resumable: Boolean(task_id || session_id)
   };

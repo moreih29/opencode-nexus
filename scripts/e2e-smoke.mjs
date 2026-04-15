@@ -71,16 +71,13 @@ const decideResult = JSON.parse(
 assert.equal(decideResult.decided, true, "nxPlanDecide: decided should be true");
 pass("nxPlanDecide registers decision with how_agent_ids");
 
-// plan sidecar reflects architect participant sourced from how_agent_ids
-const sidecarRaw = JSON.parse(await fs.readFile(paths.PLAN_SIDECAR_FILE, "utf8"));
-assert.equal(sidecarRaw.handoff.policy, "canonical-first", "sidecar: handoff policy");
-assert.equal(sidecarRaw.panel.strategy, "how-fixed-panel", "sidecar: panel strategy");
-assert.equal(
-  sidecarRaw.panel.participants.some((item) => item.role === "architect"),
-  true,
-  "sidecar: architect participant present after decide with how_agent_ids"
+const legacySidecarPath = path.join(projectRoot, ".nexus", "state", "opencode-nexus", "plan.extension.json");
+await assert.rejects(
+  fs.access(legacySidecarPath),
+  { code: "ENOENT" },
+  "legacy plan.extension.json sidecar must not be written"
 );
-pass("sidecar panel has architect participant after nxPlanDecide with how_agent_ids");
+pass("runtime does not create legacy plan.extension.json sidecar");
 
 // Issue status is 'decided' — 'tasked' is a removed legacy status
 const planAfterDecide = JSON.parse(await fs.readFile(paths.PLAN_FILE, "utf8"));

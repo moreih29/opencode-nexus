@@ -7012,6 +7012,122 @@
           "Refactor Nexus runtime contract and docs"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:22:41.221Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 37,
+        "topic": "Review whether plan.extension.json is necessary",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Whether to keep, shrink, or remove plan.extension.json",
+            "status": "decided",
+            "decision": "`plan.extension.json` is not required for correctness and will be removed. The system should derive plan follow-up and resumability from canonical `plan.json` plus `agent-tracker.json`, preserving current UX where needed through derived tracker summaries rather than a persisted sidecar.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Code review and architect analysis show `plan.extension.json` is currently a best-effort projection, not the source of truth for plan resumability. `src/orchestration/plan-continuity-adapter.ts` reads actual resumability from `agent-tracker.json`; `src/shared/plan-sidecar.ts` mainly duplicates HOW panel membership derived from `plan.json` and preserves fallback `last_summary` metadata. Current reads are in `src/tools/plan.ts` and `src/tools/context.ts`, but those outputs can be derived from canonical `plan.json` plus `agent-tracker.json`. Main migration risk is preserving summary-only follow-up suggestions without the sidecar.",
+        "created_at": "2026-04-15T02:56:26.390Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Derive plan continuity from plan.json and agent-tracker",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T02:59:54.105Z",
+          "context": "Plan #37 decided to remove plan.extension.json. Current plan tools and nx_context still read sidecar state for HOW panel membership and summary fallback, while resumability already comes from agent-tracker. Replace sidecar reads with derived data from canonical plan.json plus agent-tracker.json.",
+          "approach": "Refactor plan/status/context continuity helpers so panel membership comes from plan issues and follow-up/resume information comes from tracker-derived continuity. Preserve current output shape where practical.",
+          "acceptance": "nxPlanStatus, nxPlanResume, nxPlanFollowup, and nxContext work without reading plan.extension.json and still expose useful HOW follow-up information derived from canonical plan plus tracker.",
+          "risk": "Behavioral drift in follow-up suggestions or summary-only hints if derivation is incomplete."
+        },
+        {
+          "id": 2,
+          "title": "Remove plan sidecar write path and file/schema references",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T02:59:54.131Z",
+          "context": "After plan continuity behavior no longer depends on plan.extension.json, remove the sidecar implementation and its runtime wiring.",
+          "approach": "Delete sync/read helpers, remove PLAN_SIDECAR path usage, remove sidecar schema/types, and clean up hook/tool code that writes or references the file.",
+          "acceptance": "No runtime code writes or reads plan.extension.json; plan-sidecar implementation and schema references are removed or dead-code-free.",
+          "risk": "Residual references in tests, docs, or generated content could break build/test until cleaned."
+        },
+        {
+          "id": 3,
+          "title": "Verify sidecar removal end-to-end",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-15T02:59:54.142Z",
+          "context": "After runtime, tests, and docs are updated, validate that plan workflows still function and that no stale plan.extension.json contract remains.",
+          "approach": "Run targeted plan continuity/context/prompt tests plus broader checks. Review residual references to plan.extension.json and confirm expected behavior during plan lifecycle.",
+          "acceptance": "Targeted plan continuity and context tests pass, broader checks pass, and remaining references to plan.extension.json are either intentionally historical or removed.",
+          "risk": "Hidden assumptions in generated docs/tests or cleanup scripts may surface late."
+        },
+        {
+          "id": 4,
+          "title": "Update tests and docs for sidecar removal",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-15T03:00:11.710Z",
+          "context": "Current tests and docs mention plan.extension.json explicitly in runtime, context, harness docs, README, and generated skill content. These must be aligned after sidecar removal.",
+          "approach": "Update targeted e2e tests, harness docs, context docs, README, templates, and generated skill/doc outputs so continuity is described as derived from plan.json plus agent-tracker.json.",
+          "acceptance": "No active docs/tests describe plan.extension.json as part of the runtime contract; generated artifacts are refreshed and aligned.",
+          "risk": "Generated/source drift if source-of-truth files are not updated first."
+        },
+        {
+          "id": 5,
+          "title": "Remove stale skill backup files",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            4
+          ],
+          "created_at": "2026-04-15T03:21:46.877Z",
+          "context": "Final verification found stale `.bak` skill backup files under `.opencode/skills/` containing removed `plan.extension.json` references. They are not runtime-active but should be cleaned up to avoid confusion.",
+          "approach": "Delete the two stale backup files and re-run a minimal reference check.",
+          "acceptance": "The stale `.bak` files are removed and no active skill files reference plan.extension.json.",
+          "risk": "Low; backup-file cleanup only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 5,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Review whether plan.extension.json is necessary"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

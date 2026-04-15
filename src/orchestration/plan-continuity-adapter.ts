@@ -1,4 +1,5 @@
 import { pickContinuityFromTrackerState, readAgentTracker } from "../shared/agent-tracker.js";
+import type { Invocation } from "../shared/schema.js";
 import type { RunContinuityAdapterHints } from "./run-continuity-adapter.js";
 
 export interface PlanParticipantContinuity {
@@ -7,7 +8,7 @@ export interface PlanParticipantContinuity {
   session_id: string | null;
   last_summary: string | null;
   updated_at: string | null;
-  source: "orchestration-core" | "plan-sidecar";
+  source: "orchestration-core";
 }
 
 /**
@@ -62,7 +63,63 @@ export async function readPlanParticipantContinuityFromCore(
   const normalizedRole = role.toLowerCase();
   const tracker = await readAgentTracker(coreFilePath);
 
-  const continuity =
+  const continuity = pickContinuityForRole(tracker, normalizedRole);
+
+  if (!continuity) {
+    return null;
+  }
+
+  const invocation = findInvocationForContinuity(tracker.invocations, normalizedRole, continuity);
+
+  return {
+    role: normalizedRole,
+    task_id: continuity.child_task_id ?? continuity.resume_task_id ?? null,
+    session_id: continuity.child_session_id ?? continuity.resume_session_id ?? null,
+    last_summary: invocation?.last_message ?? null,
+    updated_at: invocation?.updated_at ?? null,
+    source: "orchestration-core"
+  };
+}
+
+export async function readPlanParticipantSnapshotFromCore(
+  coreFilePath: string,
+  role: string
+): Promise<PlanParticipantContinuity | null> {
+  const normalizedRole = role.toLowerCase();
+  const tracker = await readAgentTracker(coreFilePath);
+  const continuity = pickContinuityForRole(tracker, normalizedRole);
+  const continuityInvocation = continuity
+    ? findInvocationForContinuity(tracker.invocations, normalizedRole, continuity)
+    : null;
+  const latestSummaryInvocation = pickLatestRoleInvocationWithSummary(tracker.invocations, normalizedRole);
+  const summaryInvocation = continuityInvocation?.last_message ? continuityInvocation : latestSummaryInvocation;
+  const task_id = continuity?.child_task_id ?? continuity?.resume_task_id ?? null;
+  const session_id = continuity?.child_session_id ?? continuity?.resume_session_id ?? null;
+  const last_summary = summaryInvocation?.last_message ?? null;
+  const updated_at = summaryInvocation ? pickInvocationTimestamp(summaryInvocation) : null;
+
+  if (!task_id && !session_id && !last_summary) {
+    return null;
+  }
+
+  return {
+    role: normalizedRole,
+    task_id,
+    session_id,
+    last_summary,
+    updated_at,
+    source: "orchestration-core"
+  };
+}
+
+// Alias for consumers that prefer the tracker-oriented name.
+export const readPlanParticipantContinuityFromTracker = readPlanParticipantContinuityFromCore;
+
+function pickContinuityForRole(
+  tracker: Awaited<ReturnType<typeof readAgentTracker>>,
+  normalizedRole: string
+) {
+  return (
     pickContinuityFromTrackerState(tracker, {
       agent_type: normalizedRole,
       coordination_label: "plan-panel",
@@ -71,13 +128,16 @@ export async function readPlanParticipantContinuityFromCore(
     ?? pickContinuityFromTrackerState(tracker, {
       agent_type: normalizedRole,
       prefer_running: true
-    });
+    })
+  );
+}
 
-  if (!continuity) {
-    return null;
-  }
-
-  const invocation = tracker.invocations.find((item) => {
+function findInvocationForContinuity(
+  invocations: Invocation[],
+  normalizedRole: string,
+  continuity: NonNullable<ReturnType<typeof pickContinuityFromTrackerState>>
+) {
+  return invocations.find((item) => {
     if (item.agent_type.toLowerCase() !== normalizedRole) {
       return false;
     }
@@ -96,16 +156,28 @@ export async function readPlanParticipantContinuityFromCore(
     }
     return false;
   });
-
-  return {
-    role: normalizedRole,
-    task_id: continuity.child_task_id ?? continuity.resume_task_id ?? null,
-    session_id: continuity.child_session_id ?? continuity.resume_session_id ?? null,
-    last_summary: invocation?.last_message ?? null,
-    updated_at: invocation?.updated_at ?? null,
-    source: "orchestration-core"
-  };
 }
 
-// Alias for consumers that prefer the tracker-oriented name.
-export const readPlanParticipantContinuityFromTracker = readPlanParticipantContinuityFromCore;
+function pickLatestRoleInvocationWithSummary(invocations: Invocation[], normalizedRole: string) {
+  const candidates = invocations
+    .filter((item) => item.agent_type.toLowerCase() === normalizedRole && typeof item.last_message === "string" && item.last_message.trim().length > 0)
+    .sort((left, right) => {
+      const leftPlanPanel = left.coordination_label === "plan-panel" ? 1 : 0;
+      const rightPlanPanel = right.coordination_label === "plan-panel" ? 1 : 0;
+      if (leftPlanPanel !== rightPlanPanel) {
+        return rightPlanPanel - leftPlanPanel;
+      }
+      return getInvocationTimestamp(right) - getInvocationTimestamp(left);
+    });
+  return candidates[0] ?? null;
+}
+
+function pickInvocationTimestamp(invocation: Invocation): string | null {
+  return invocation.updated_at ?? invocation.ended_at ?? invocation.started_at ?? null;
+}
+
+function getInvocationTimestamp(invocation: Invocation): number {
+  const candidate = invocation.ended_at ?? invocation.updated_at ?? invocation.started_at;
+  const value = Date.parse(candidate);
+  return Number.isFinite(value) ? value : -1;
+}

@@ -133,13 +133,13 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 #### 호환성 주의사항 (Compatibility Notes)
 
-- `plan.json`은 canonical하고 플랫폼 중립. OpenCode 전용 연속성 데이터는 `.nexus/state/opencode-nexus/plan.extension.json`에 저장.
-- `plan.extension.json`은 best-effort. 없거나 무시되더라도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
+- `plan.json`은 canonical하고 플랫폼 중립. OpenCode HOW 패널 연속성은 `plan.json`(participants) + `.nexus/state/opencode-nexus/agent-tracker.json`(resume handles/summary)에서 파생된다.
+- `agent-tracker.json`은 best-effort continuity source다. 없거나 비어 있어도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
 - Claude ↔ OpenCode 전환은 canonical-first handoff로 취급. 동시 공동 편집이 아님.
 
 #### HOW 패널 연속성 절차 (HOW-panel Continuity)
 
-- HOW 서브에이전트 호출 시 OpenCode는 `task_id` / `session_id` 핸들을 `.nexus/state/opencode-nexus/plan.extension.json` 사이드카에 저장.
+- HOW 서브에이전트 호출 시 OpenCode는 `task_id` / `session_id` 핸들을 `.nexus/state/opencode-nexus/agent-tracker.json`에 기록한다.
 - 후속 질문 전에 `nx_plan_resume`으로 현재 재개 핸들과 마지막 요약을 확인. `recommendation` 페이로드로 기존 참가자 재개 vs 요약 기반 재수화 여부 판단.
 - 위임 준비된 후속 가이던스가 필요하면 `nx_plan_followup` 사용 — 연속성 데이터를 구체적인 프롬프트와 suggested resume handle 필드로 패키징.
 - `nx_context` / `nx_plan_status`는 follow-up 준비된 HOW 역할을 노출하므로 후속 질문 전에 참조 가능.
