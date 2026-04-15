@@ -8051,6 +8051,94 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T11:46:29.685Z",
+      "branch": "main",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Prepare release metadata for deployment",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "resume",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T11:41:48.778Z",
+          "context": "User explicitly requested commit, merge to main, and deploy. Current package version is `0.5.3`, which is already published to npm, so a new release version is required before publish. Also remove incidental local-only file changes (`.nexus/history.json`, `.opencode/skills/deploy/SKILL.md`) from the release commit so only shipping changes remain.",
+          "approach": "Make the smallest release-prep edits: restore incidental local-only files, bump `package.json` version to the next patch release, regenerate lockfile/package metadata if needed, and keep the commit scoped to the nexus-core v0.9.0 consumption update plus release prep.",
+          "acceptance": "Working tree contains only release-relevant changes, and `package.json` version is a new unpublished release version.",
+          "risk": "Release prep must not accidentally include local orchestration history or unrelated skill-file drift."
+        },
+        {
+          "id": 2,
+          "title": "Run release preflight and publish",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "resume",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T11:41:48.780Z",
+          "context": "After release metadata is prepared and committed, complete deploy preflight, merge to main, tag if needed, and publish the npm package because the user explicitly requested deploy.",
+          "approach": "Run build, e2e, package dry run, template sync, and docs checks; commit the upgrade; merge into main; then publish the release using the clean merged main state.",
+          "acceptance": "Release preflight passes, the upgrade is committed and merged into main, and the new package version is published.",
+          "risk": "Preflight may surface template/docs drift that must be fixed before publish."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T12:41:46.002Z",
+      "branch": "nexus-prompt-layer-alignment",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align prompt layers with current runtime behavior",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T12:36:43.970Z",
+          "context": "User requested a [run] implementation of the prompt-layer refactor, but it must stay aligned with the current runtime behavior. The relevant local files are `src/agents/primary.ts`, `src/plugin/system-prompt.ts`, and `src/plugin/hooks.ts` (`buildStatefulNotice`, mode/state handling around `experimental.chat.system.transform`). Current behavior that must be preserved: attendee-request steering, plan active and plan allComplete Step 7 handoff, run-mode guidance for no-cycle/active/completed-open states, QA-before-close guidance, Branch Guard messaging, and B-leg skill injection for plan/run/sync. Prior analysis showed the earlier simplification proposal was too aggressive. The correct refactor is to reduce duplicated phrasing, centralize shared prompt context calculation, and keep existing runtime steering semantics and test contracts intact. There is an unrelated local modification in `.nexus/history.json`; do not revert or include unrelated changes.",
+          "approach": "Make the smallest refactor that improves separation of concerns without changing supported behavior: add a shared prompt-context helper if useful, preserve the current notice branches and system-prompt structure, trim only redundant wording, keep primary prompt aligned with current orchestration features, and update tests only where wording or plumbing changed intentionally.",
+          "acceptance": "Prompt-layer code is refactored without regressing runtime steering: attendee notices, Step 7 handoff, QA-before-close, Branch Guard, active-cycle guidance, and skill injection still work; e2e prompt/notice tests pass after the change.",
+          "risk": "This area is highly coupled to string-based e2e tests and current orchestration behavior; over-simplifying prompts could silently remove meaningful steering or break contract tests."
+        },
+        {
+          "id": 2,
+          "title": "Verify prompt-layer refactor",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T12:36:52.333Z",
+          "context": "After the engineer finishes the prompt-layer refactor, independently verify that current runtime prompt behavior still matches the intended contracts. Focus especially on the e2e surfaces around system transform, hook notices, QA trigger behavior, and any prompt/config expectations affected by `src/agents/primary.ts`, `src/plugin/system-prompt.ts`, and `src/plugin/hooks.ts`. There is unrelated local drift in `.nexus/history.json` that should be ignored unless it interferes.",
+          "approach": "Run the relevant test commands or targeted scripts, inspect failures, and report PASS/FAIL with concrete findings tied to preserved runtime behaviors.",
+          "acceptance": "Prompt-related tests pass, especially the system-transform and hook-notice coverage, or any failures are reported as concrete blocking findings.",
+          "risk": "Some failures may be broad string-based test drift rather than behavior regressions; distinguish contract changes from accidental breakage."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"
