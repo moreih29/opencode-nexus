@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.7.1 (d2da7dede9540a14bc5925904c2382795f383b1e)
+// Source: @moreih29/nexus-core@0.8.0 (254efc7d8f4f52e45b548706dd42389fdb9801b2)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -28,16 +28,16 @@ Execution norm that Lead follows when the user invokes the [run] tag. Composes s
 - **Branch Guard**: if on main/master, create a branch appropriate to the task type before proceeding (prefix: \`feat/\`, \`fix/\`, \`chore/\`, \`research/\`, etc. — Lead's judgment). Auto-create without user confirmation.
 - Check for \`tasks.json\`:
   - **Exists** → read it and proceed to Step 2.
-  - **Absent** → auto-invoke \`Skill({ skill: "claude-nexus:nx-plan", args: "auto" })\` to generate tasks.json. Do NOT ask — \`[run]\` implies execution intent. After plan generation, proceed to Step 2.
+  - **Absent** → auto-invoke \`skill({ name: "nx-plan", mode: "auto" }) (experimental \`mode\` passthrough)\` to generate tasks.json. Do NOT ask — \`[run]\` implies execution intent. After plan generation, proceed to Step 2.
 - If tasks.json exists, check prior decisions with \`nx_plan_status\`.
 
 ### Step 1.5: TUI Progress
 
 Register tasks for visual progress tracking (Ctrl+T):
 
-- **≤ 10 tasks**: \`TaskCreate\` per task
-- **> 10 tasks**: group by \`plan_issue\`, \`TaskCreate\` per group
-- Use \`TaskUpdate\` to reflect progress (\`in_progress\` / \`completed\`) as execution proceeds
+- **≤ 10 tasks**: \`todowrite({ todos: [{ content: "<per-task label>", status: "pending", priority: "medium" }] }) (approximation: session todo management, not a true task register)\` per task
+- **> 10 tasks**: group by \`plan_issue\`, \`todowrite({ todos: [{ content: "<group label>", status: "pending", priority: "medium" }] }) (approximation: session todo management, not a true task register)\` per group
+- Update the registered entry via \`todowrite({ todos: [{ content: "<label>", status: "in_progress", priority: "medium" }] }) (approximation: session todo management, not a true task register)\` / \`todowrite({ todos: [{ content: "<label>", status: "completed", priority: "medium" }] }) (approximation: session todo management, not a true task register)\` as execution proceeds
 - **Skip only if**: non-TTY environment (VSCode, headless)
 - **Known issue**: TUI may freeze during auto-compact (#27919) — task data on disk remains correct
 
@@ -94,7 +94,7 @@ For each task, Lead chooses between fresh spawn and resume based on the \`owner\
 
 Execute in order:
 
-1. **nx-sync**: invoke \`Skill({ skill: "claude-nexus:nx-sync" })\` if code changes were made in this cycle. Best effort — failure does not block cycle completion.
+1. **nx-sync**: invoke \`skill({ name: "nx-sync" })\` if code changes were made in this cycle. Best effort — failure does not block cycle completion.
 2. **nx_task_close**: call to archive plan+tasks to history.json. This updates \`.nexus/history.json\`.
 3. **git commit**: stage and commit source changes, build artifacts (\`bridge/\`, \`scripts/\`), \`.nexus/history.json\`, and any modified \`.nexus/memory/\` or \`.nexus/context/\`. Use explicit \`git add\` with paths (not \`git add -A\`) and a HEREDOC commit message with \`Co-Authored-By\`. This ensures the cycle's history archive lands in the same commit as the code changes, giving a 1:1 cycle-commit mapping.
 4. **Report**: summarize to user — changed files, key decisions applied, and suggested next steps. Merge/push is the user's decision and outside this skill's scope.

@@ -159,6 +159,283 @@ export function deriveDisallowedTools(capabilityIds, capsMap) {
 }
 
 // ==========================================================================
+// Invocation map and macro expansion (v0.8.0)
+// ==========================================================================
+
+let _invocationMapCache = null;
+
+/**
+ * Load invocation-map.yml from the opencode-nexus root.
+ * Cached after first load.
+ * @returns {any}
+ */
+export function loadInvocationMap() {
+  if (_invocationMapCache !== null) return _invocationMapCache;
+  const mapPath = join(OPENCODE_NEXUS_ROOT, 'invocation-map.yml');
+  _invocationMapCache = parseYaml(readFileSync(mapPath, 'utf8'));
+  return _invocationMapCache;
+}
+
+/**
+ * Load canonical invocation ids from nexus-core vocabulary.
+ * @returns {Set<string>}
+ */
+export function loadInvocationIds() {
+  const path = join(NEXUS_CORE_ROOT, 'vocabulary/invocations.yml');
+  const doc = parseYaml(readFileSync(path, 'utf8'));
+  return new Set((doc.invocations ?? []).map(invocation => invocation.id));
+}
+
+/**
+ * Apply cross-harness replacement: replace all occurrences of
+ * each key in cross_harness_map with its mapped value.
+ * e.g., "claude-nexus:nx-plan" -> "opencode-nexus:nx-plan"
+ * @param {string} content
+ * @returns {string}
+ */
+export function applyCrossHarnessReplacement(content) {
+  const map = loadInvocationMap();
+  const crossMap = map.cross_harness_map ?? {};
+  let result = content;
+  for (const [from, to] of Object.entries(crossMap)) {
+    if (from && to) {
+      result = result.split(from).join(to);
+    }
+  }
+  return result;
+}
+
+/**
+ * Parse one macro parameter value.
+ * Supports quoted strings, arrays, objects, and heredoc markers (>>IDENT).
+ * @param {string} source
+ * @param {number} start
+ * @returns {{ value: string, nextIndex: number }}
+ */
+function parseMacroValue(source, start) {
+  const ch = source[start];
+  if (ch === '"' || ch === "'") {
+    let i = start + 1;
+    let value = '';
+    while (i < source.length) {
+      if (source[i] === '\\' && i + 1 < source.length) {
+        value += source[i + 1];
+        i += 2;
+        continue;
+      }
+      if (source[i] === ch) return { value, nextIndex: i + 1 };
+      value += source[i];
+      i += 1;
+    }
+    throw new Error(`Unterminated quoted value in macro params: ${source}`);
+  }
+
+  if (source.startsWith('>>', start)) {
+    let i = start + 2;
+    while (i < source.length && /[A-Za-z0-9_]/.test(source[i])) i += 1;
+    return { value: source.slice(start, i), nextIndex: i };
+  }
+
+  if (ch === '[' || ch === '{') {
+    const stack = [ch];
+    const closing = { '[': ']', '{': '}' };
+    let i = start + 1;
+    while (i < source.length && stack.length > 0) {
+      const current = source[i];
+      if (current === '"' || current === "'") {
+        const parsed = parseMacroValue(source, i);
+        i = parsed.nextIndex;
+        continue;
+      }
+      if (current === '[' || current === '{') stack.push(current);
+      if ((current === ']' || current === '}') && current === closing[stack[stack.length - 1]]) {
+        stack.pop();
+      }
+      i += 1;
+    }
+    if (stack.length > 0) throw new Error(`Unterminated structured value in macro params: ${source}`);
+    return { value: source.slice(start, i), nextIndex: i };
+  }
+
+  let i = start;
+  while (i < source.length && !/\s/.test(source[i])) i += 1;
+  return { value: source.slice(start, i), nextIndex: i };
+}
+
+/**
+ * Parse `key=value` params from a macro header.
+ * @param {string} source
+ * @returns {Record<string, string>}
+ */
+function parseMacroParams(source) {
+  const params = {};
+  let i = 0;
+  while (i < source.length) {
+    while (i < source.length && /\s/.test(source[i])) i += 1;
+    if (i >= source.length) break;
+
+    const keyStart = i;
+    while (i < source.length && /[A-Za-z0-9_]/.test(source[i])) i += 1;
+    const key = source.slice(keyStart, i);
+    if (!key) throw new Error(`Invalid macro params near: ${source.slice(i)}`);
+
+    while (i < source.length && /\s/.test(source[i])) i += 1;
+    if (source[i] !== '=') throw new Error(`Expected '=' after macro param ${key}`);
+    i += 1;
+    while (i < source.length && /\s/.test(source[i])) i += 1;
+
+    const parsed = parseMacroValue(source, i);
+    params[key] = parsed.value;
+    i = parsed.nextIndex;
+  }
+  return params;
+}
+
+/**
+ * Parse user_question options into a simple prose list when possible.
+ * @param {string} optionsRaw
+ * @returns {string}
+ */
+function formatQuestionOptions(optionsRaw) {
+  if (!optionsRaw || optionsRaw === '[]') return '1. Type your answer';
+
+  const entries = [];
+  const objectPattern = /\{\s*label:\s*("([^"]*)"|'([^']*)'|([^,}]+))\s*,\s*description:\s*("([^"]*)"|'([^']*)'|([^}]+))\s*\}/g;
+  let match;
+  while ((match = objectPattern.exec(optionsRaw)) !== null) {
+    const label = (match[2] ?? match[3] ?? match[4] ?? '').trim();
+    const description = (match[6] ?? match[7] ?? match[8] ?? '').trim();
+    entries.push(`${entries.length + 1}. ${label}${description ? ` - ${description}` : ''}`);
+  }
+
+  if (entries.length > 0) return entries.join('\n');
+  return `1. ${optionsRaw}`;
+}
+
+/**
+ * Render a concrete local fallback for a single primitive invocation.
+ * @param {string} primitiveId
+ * @param {Record<string, string>} params
+ * @returns {string}
+ */
+function renderPrimitive(primitiveId, params) {
+  const map = loadInvocationMap();
+
+  if (primitiveId === 'skill_activation') {
+    const skillTool = map.skill_activation?.tool ?? 'skill';
+    const bits = [`name: ${JSON.stringify(params.skill ?? '')}`];
+    if (params.mode) bits.push(`mode: ${JSON.stringify(params.mode)}`);
+    const modeSuffix = params.mode ? ' (experimental `mode` passthrough)' : '';
+    return `${skillTool}({ ${bits.join(', ')} })${modeSuffix}`;
+  }
+
+  if (primitiveId === 'subagent_spawn') {
+    const taskTool = map.subagent_spawn?.runtime_tool ?? 'task';
+    const bits = [];
+    bits.push(`description: ${JSON.stringify(params.name ?? '<short task description>')}`);
+    if (params.prompt !== undefined) bits.push(`prompt: ${JSON.stringify(params.prompt)}`);
+    bits.push(`subagent_type: ${JSON.stringify(params.target_role ?? '')}`);
+    const rendered = `${taskTool}({ ${bits.join(', ')} })`;
+    if (!params.resume_tier_hint) return rendered;
+    return `${rendered} (resume_tier_hint ${JSON.stringify(params.resume_tier_hint)} remains advisory only)`;
+  }
+
+  if (primitiveId === 'task_register') {
+    const todoTool = map.task_register?.approximation_tool ?? 'todowrite';
+    return `${todoTool}({ todos: [{ content: ${JSON.stringify(params.label ?? '<task>')}, status: ${JSON.stringify(params.state ?? 'pending')}, priority: "medium" }] }) (approximation: session todo management, not a true task register)`;
+  }
+
+  if (primitiveId === 'user_question') {
+    const questionTool = map.user_question?.tool ?? 'question';
+    const questionBits = [
+      `question: ${JSON.stringify(params.question ?? '')}`,
+      `header: ${JSON.stringify(params.header ?? 'Response')}`,
+      `options: ${params.options ?? '[]'}`,
+      `multiple: ${params.multiple ?? 'false'}`,
+    ];
+    if (params.custom !== undefined) questionBits.push(`custom: ${params.custom}`);
+    const lines = [`${questionTool}({ questions: [{ ${questionBits.join(', ')} }] })`];
+    if (params.options !== undefined && params.options !== '[]') {
+      lines.push('Options:');
+      lines.push(formatQuestionOptions(params.options));
+    }
+    return lines.join('\n');
+  }
+
+  throw new Error(`Unsupported primitive_id "${primitiveId}" for local rendering.`);
+}
+
+/**
+ * Expand `{{primitive ...}}` macros, including heredoc values.
+ * @param {string} content
+ * @returns {string}
+ */
+export function expandPrimitiveMacros(content) {
+  const invocationIds = loadInvocationIds();
+  let cursor = 0;
+  let output = '';
+
+  while (cursor < content.length) {
+    const start = content.indexOf('{{', cursor);
+    if (start === -1) {
+      output += content.slice(cursor);
+      break;
+    }
+
+    output += content.slice(cursor, start);
+    const end = content.indexOf('}}', start);
+    if (end === -1) throw new Error('Unterminated macro header in body.md');
+
+    const header = content.slice(start + 2, end).trim();
+    const spaceIndex = header.search(/\s/);
+    const primitiveId = spaceIndex === -1 ? header : header.slice(0, spaceIndex);
+    const argsStr = spaceIndex === -1 ? '' : header.slice(spaceIndex + 1).trim();
+
+    if (!invocationIds.has(primitiveId)) {
+      throw new Error(`Unknown primitive_id "${primitiveId}" in body.md macro.`);
+    }
+
+    const params = argsStr ? parseMacroParams(argsStr) : {};
+    let nextCursor = end + 2;
+
+    for (const [key, value] of Object.entries(params)) {
+      if (!value.startsWith('>>')) continue;
+      const ident = value.slice(2);
+      if (!ident) throw new Error(`Invalid heredoc marker for param ${key} in ${primitiveId}`);
+
+      const bodyStart = content[nextCursor] === '\n' ? nextCursor + 1 : nextCursor;
+      const terminator = `\n<<${ident}`;
+      const bodyEnd = content.indexOf(terminator, bodyStart);
+      if (bodyEnd === -1) throw new Error(`Missing heredoc terminator <<${ident} for ${primitiveId}.${key}`);
+
+      params[key] = content.slice(bodyStart, bodyEnd);
+      let afterTerminator = bodyEnd + terminator.length;
+      if (content[afterTerminator] === '\r') afterTerminator += 1;
+      if (content[afterTerminator] === '\n') afterTerminator += 1;
+      nextCursor = afterTerminator;
+    }
+
+    output += renderPrimitive(primitiveId, params);
+    cursor = nextCursor;
+  }
+
+  return output;
+}
+
+/**
+ * Apply all v0.8.0 body transformations:
+ * - expand {{primitive ...}} macros with heredoc support
+ * - apply cross-harness replacements
+ * @param {string} body
+ * @returns {string}
+ */
+export function transformBody(body) {
+  let result = expandPrimitiveMacros(body);
+  result = applyCrossHarnessReplacement(result);
+  return result;
+}
+
+// ==========================================================================
 // Transform functions
 // ==========================================================================
 
@@ -201,7 +478,7 @@ export function transformAgent(meta, body, capsMap, label = '') {
     resume_tier: meta.resume_tier,
   };
 
-  return { prompt: body, meta: agentMeta };
+  return { prompt: transformBody(body), meta: agentMeta };
 }
 
 /**
@@ -516,7 +793,7 @@ export function buildNxSetupSkillEntry(pluginName) {
   const body = fmMatch[2];
 
   const description = collapseDescription(fmObj.description ?? '');
-  const trigger_display = `/${pluginName}:nx-setup`;
+  const trigger_display = `skill({ name: \"nx-setup\" })`;
 
   return {
     id: 'nx-setup',
@@ -542,7 +819,7 @@ export function deriveSkillTriggerDisplay(meta, pluginName) {
     return `[${meta.triggers[0]}]`;
   }
   if (meta.manual_only === true) {
-    return `/${pluginName}:${meta.id}`;
+    return `skill({ name: ${JSON.stringify(meta.id)} })`;
   }
   throw new Error(
     `Skill "${meta.id}" has neither triggers nor manual_only — ambiguous invocation`
@@ -577,10 +854,10 @@ export function transformSkill(meta, body, pluginName, label = '') {
     ...(meta.manual_only === true ? { disable_model_invocation: true } : {}),
   };
 
-  let prompt = body;
+  let prompt = transformBody(body);
   if (Array.isArray(meta.harness_docs_refs) && meta.harness_docs_refs.length > 0) {
     for (const ref of meta.harness_docs_refs) {
-      const docPath = join(OPENCODE_NEXUS_ROOT, 'harness-docs', `${ref}.md`);
+      const docPath = join(OPENCODE_NEXUS_ROOT, 'harness-content', `${ref}.md`);
       let content;
       try {
         content = readFileSync(docPath, 'utf8');

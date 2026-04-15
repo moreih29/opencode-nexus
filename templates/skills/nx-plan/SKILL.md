@@ -41,7 +41,7 @@ Facilitate structured multi-perspective analysis using subagents to decompose is
 
 ## Auto Mode (`[plan:auto]`)
 
-When triggered with `[plan:auto]` or invoked via `Skill({ args: "auto" })`, run the full planning process **without user interaction**:
+When triggered with `[plan:auto]` or invoked via `skill({ name: "nx-plan", mode: "auto" }) (experimental `mode` passthrough)`, run the full planning process **without user interaction**:
 
 1. **Research** — spawn researcher+Explore subagents (same as interactive)
 2. **Issue derivation** — Lead identifies issues from research
@@ -99,8 +99,8 @@ Understand code, core knowledge, and prior decisions before forming a planning a
 
 | Scenario | Approach |
 |----------|----------|
-| Codebase orientation | Spawn Explore agent (`subagent_type: "Explore"`) for file/code search |
-| External research needed | Spawn Researcher agent (`subagent_type: "claude-nexus:researcher"`) for web search |
+| Codebase orientation | `task({ description: "<short task description>", prompt: "<file/code search task>", subagent_type: "explore" })` for codebase exploration |
+| External research needed | `task({ description: "<short task description>", prompt: "<research question>", subagent_type: "researcher" })` for web search |
 | Both codebase and external | Spawn Explore + Researcher in parallel |
 
 - NEVER call `nx_plan_start` before research is complete.

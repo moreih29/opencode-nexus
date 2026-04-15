@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.7.1 (d2da7dede9540a14bc5925904c2382795f383b1e)
+// Source: @moreih29/nexus-core@0.8.0 (254efc7d8f4f52e45b548706dd42389fdb9801b2)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `## Role
@@ -48,9 +48,7 @@ Only update files where a concrete change is detected. If no staleness is found,
 Spawn Writer agent to update affected context documents:
 
 \`\`\`
-Agent({ subagent_type: "claude-nexus:writer", name: "writer-sync-context",
-  prompt: "Update .nexus/context/ documents based on the following changes. Read current files with the harness's file-reading primitive, then write updates with the harness's file-creation primitive. Changes: {change_manifest}" })
-\`\`\`
+task({ description: "writer-sync-context", prompt: "Update .nexus/context/ documents based on the following changes. Read current files with the harness's file-reading primitive, then write updates with the harness's file-creation primitive. Changes: {change_manifest}", subagent_type: "writer" })\`\`\`
 
 The Writer agent:
 - Reads each relevant context file with the harness's file-reading primitive

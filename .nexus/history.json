@@ -6644,6 +6644,201 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T01:00:26.426Z",
+      "branch": "nexus-core-consuming-sync",
+      "plan": {
+        "id": 35,
+        "topic": "Upgrade opencode-nexus to consume @moreih29/nexus-core v0.8.0",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Adopt v0.8.0 consuming contract and generator changes without regressing generated prompts or conformance.",
+            "status": "decided",
+            "decision": "Upgrade directly to `@moreih29/nexus-core ^0.8.0` and implement the v0.8 consumer contract locally: add `invocation-map.yml`, add `harness-content/slash_command_display.md`, extend the generator with macro parsing/expansion (including heredoc handling and unknown-primitive failure), regenerate prompt artifacts, and run build/conformance/e2e to confirm the expanded output remains clean for OpenCode.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Current consumer is on `@moreih29/nexus-core ^0.7.0` with generated prompts emitted from `scripts/generate-from-nexus-core*.mjs`. GitHub `CONSUMING.md` requires versioned upgrade flow and `v0.7_to_v0.8` migration introduces macro-based invocation abstraction (`{{primitive ...}}`), new `vocabulary/invocations.yml`, required local `invocation-map.yml`, required `harness-content/slash_command_display.md`, and generator-side macro expansion before writing generated prompt files. Current repo has no invocation map, no harness-content file, and no macro expander in the generator library.",
+        "created_at": "2026-04-15T00:44:59.234Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement nexus-core v0.8 consumer migration",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-v080-migration",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T00:45:20.791Z",
+          "context": "Upgrade opencode-nexus from `@moreih29/nexus-core ^0.7.0` to `^0.8.0` using GitHub `CONSUMING.md` and `MIGRATIONS/v0_7_to_v0_8.md`. Current generator emits prompts directly from body.md and lacks macro expansion, invocation map, and harness-content docs. Current generated outputs live in `src/agents/generated` and `src/skills/generated`.",
+          "approach": "Update dependency, add required consumer files (`invocation-map.yml`, `harness-content/slash_command_display.md`), extend `scripts/generate-from-nexus-core*.mjs` with v0.8 macro expansion and validation, regenerate artifacts, and make the smallest code/test updates needed for the new generated output to build and pass.",
+          "acceptance": "`package.json` consumes `@moreih29/nexus-core ^0.8.0`; local required files for v0.8 exist; generator expands v0.8 macros including heredoc values and throws on unknown primitives; generated prompt artifacts rebuild successfully; no stray `claude-nexus:` namespace leaks remain in generated output; repo builds cleanly.",
+          "risk": "Macro parsing bugs could silently corrupt prompts or mis-handle heredocs; generated prompt diffs may affect many files."
+        },
+        {
+          "id": 2,
+          "title": "Verify v0.8 migration with conformance and e2e",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-v080-migration",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T00:45:20.908Z",
+          "context": "After the implementation task completes, validate the v0.8 migration against the documented consumer contract. Key commands are `bun run build`, `bun run validate:conformance`, and `bun run test:e2e`. Generated outputs must not contain cross-harness namespace leakage such as `claude-nexus:`.",
+          "approach": "Run the full validation commands after regeneration, inspect failures, and confirm the migration-specific expectations from the GitHub docs (macro expansion, required files, clean generated output) are satisfied.",
+          "acceptance": "Build passes, conformance validation passes, e2e passes, and a direct search confirms generated outputs do not contain `claude-nexus:`.",
+          "risk": "Existing unrelated failures may mask migration regressions; generated files may require follow-up inspection even if tests pass."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Upgrade opencode-nexus to consume @moreih29/nexus-core v0.8.0"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T01:08:19.193Z",
+      "branch": "nexus-core-consuming-sync",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Correct OpenCode invocation mapping to match official docs",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "lead-opencode-doc-fix",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T01:06:08.463Z",
+          "context": "Official OpenCode docs confirm built-in tools include `skill` and `question`, and skills are discovered from `.opencode/skills/*/SKILL.md` and loaded via `skill({ name: \"...\" })`. Custom slash commands are a separate feature under `.opencode/commands/*`, so `/opencode-nexus:nx-init` style display is not grounded in the official skill docs. Existing migration artifacts incorrectly present slash-like skill triggers and a doc-ungrounded invocation map.",
+          "approach": "Update invocation mapping and generated trigger display to use the official `skill({ name: ... })` form for skills, remove slash-command claims from harness-content, regenerate outputs, and verify the build still passes.",
+          "acceptance": "No generated or source docs claim `/opencode-nexus:*` is the native OpenCode skill invocation syntax; skill trigger display and macro expansion align with official docs for `skill` and `question`; build passes after regeneration.",
+          "risk": "Some plugin-specific UX conventions may have relied on slash-like wording and will shift to tool-based wording."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T01:36:19.924Z",
+      "branch": "nexus-core-consuming-sync",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Correct OpenCode invocation mappings in generator",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-invocation-runtime-fix",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T01:30:49.641Z",
+          "context": "We previously migrated to nexus-core v0.8 but subsequent doc/source research showed more precise OpenCode runtime contracts. Verified from official docs plus `/tmp/opencode-src`: `subagent_spawn` should map to the real built-in `task` tool with args `{description,prompt,subagent_type,task_id?,command?}`; `question` exists but its exact shape is `question({ questions: [...] })`; `skill` exists with required `name`, while `mode` is not source-verified but user explicitly wants us to try `mode` when present as an experimental extension. `todowrite` is a session todo list and is the closest approximation for `task_register`, but this should be represented carefully. Current repo files to update include `invocation-map.yml` and `scripts/generate-from-nexus-core.lib.mjs`.",
+          "approach": "Update local invocation mapping metadata and generator primitive rendering so generated prompt text uses OpenCode-native tool names and shapes: `task(...)` for subagents, `question({ questions: [...] })` for user prompts, `todowrite(...)` as the approximation for task registration, and `skill({ name: ..., mode?: ... })` with mode included only when present and labeled as experimental if needed. Keep changes minimal and limited to mapping/rendering logic.",
+          "acceptance": "`invocation-map.yml` reflects the researched mapping status; generator renders `subagent_spawn` as `task(...)`, `user_question` as `question({ questions: [...] })`, `task_register` via `todowrite(...)` approximation, and `skill_activation` with `skill({ name: ... })` plus optional `mode` attempt; no slash-style skill syntax remains in mapping logic.",
+          "risk": "Incorrect rendering could produce invalid prompt guidance or regress generated prompt readability."
+        },
+        {
+          "id": 2,
+          "title": "Regenerate prompts and update local harness docs",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-generated-doc-sync",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T01:30:58.491Z",
+          "context": "After task 1 updates invocation rendering, the generated prompt artifacts and local harness docs need to be regenerated and minimally adjusted. Relevant files likely include `harness-content/slash_command_display.md`, `src/skills/generated/*`, `src/agents/generated/*`, and template files regenerated by project scripts. The repo should reflect OpenCode-native invocation wording, with any caveat text preserved where appropriate.",
+          "approach": "Regenerate prompt artifacts using the repo scripts, inspect resulting diffs, and make only the smallest follow-up edits needed so local docs and generated files consistently reflect the new mapping choices from task 1.",
+          "acceptance": "Generated files and local harness docs consistently show the new invocation wording (`task`, `question`, `skill`, `todowrite` approximation) and the repo remains internally consistent after regeneration.",
+          "risk": "Generated file churn may mask small wording mismatches that need manual cleanup."
+        },
+        {
+          "id": 3,
+          "title": "Verify corrected invocation mappings",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-invocation-runtime-fix",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-15T01:31:05.553Z",
+          "context": "After tasks 1 and 2 complete, verify that the repo reflects the corrected OpenCode invocation mappings from docs/source research. Important expectations: `task` is used for subagent spawn references, `question({ questions: [...] })` shape is used, `skill({ name: ... })` is used with optional `mode` attempts only where intended, `todowrite` is represented as an approximation for task registration, and the repo still builds/checks cleanly.",
+          "approach": "Run validation commands (`bun run check`, plus build if needed), inspect representative generated files, and report PASS/FAIL with any mapping mismatches or residual risks.",
+          "acceptance": "Checks pass and representative outputs match the intended OpenCode mapping semantics without reintroducing slash-style skill claims.",
+          "risk": "There may be wording regressions in generated prompt content even if scripts pass."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T01:41:37.539Z",
+      "branch": "nexus-core-consuming-sync",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Verify corrected invocation mappings",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-invocation-runtime-fix",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T01:36:57.201Z",
+          "context": "Verification-only follow-up after regenerated prompt artifacts. Confirm corrected OpenCode invocation mappings remain consistent: `task(...)` for subagent spawn, `question({ questions: [...] })` shape, `todowrite(...)` approximation for task registration, and `skill({ name: ... })` wording without slash-style skill claims. `bun run check` already passed during regeneration; rerun or extend verification as needed.",
+          "approach": "Inspect representative generated files and run validation commands needed to confirm consistency and absence of old forms.",
+          "acceptance": "Checks pass and representative outputs match intended mapping semantics.",
+          "risk": "Generated wording regressions may remain even when checks pass."
+        },
+        {
+          "id": 2,
+          "title": "Fix task invocation examples to include required description",
+          "status": "completed",
+          "owner": "general",
+          "owner_agent_id": "general-task-description-fix",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T01:39:25.749Z",
+          "context": "Verification found that some generated/template `task(...)` examples omit the required OpenCode `description` field. Example references: `templates/skills/nx-plan/SKILL.md:102-103` and `src/skills/generated/nx-plan.ts:100-101`. The OpenCode `task` tool schema requires `{ description, prompt, subagent_type, task_id?, command? }`. The generator should render `description` consistently, not optionally.",
+          "approach": "Update the renderer so `task(...)` always includes a description, regenerate affected artifacts, and keep the change minimal.",
+          "acceptance": "No generated or template `task(...)` examples omit `description`; checks still pass.",
+          "risk": "Small churn in generated prompt wording."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
     }
   ],
   "schema_version": "0.5"

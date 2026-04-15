@@ -1,0 +1,23 @@
+# invocation-map.yml — local resolver for nexus-core v0.8 invocation primitives.
+# Grounded in official OpenCode docs:
+# - skills load through the `skill` tool
+# - structured user prompts use the `question` tool
+# - custom slash commands are separate from skills
+
+cross_harness_map:
+  claude-nexus: opencode-nexus
+
+skill_activation:
+  tool: skill
+  mode_support: experimental
+
+subagent_spawn:
+  runtime_tool: task
+
+task_register:
+  approximation_tool: todowrite
+  caveat: session_todo_management
+
+user_question:
+  tool: question
+  shape: questions_array

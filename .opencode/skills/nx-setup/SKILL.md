@@ -120,15 +120,15 @@ If yes, add to `opencode.json`:
 ```
 
 **nx-init** (project knowledge initialization):
-Ask with the `question` tool.
-> "Initialize project knowledge (mission, architecture, principles) in `.nexus/`? [y/n]"
+Ask with `question({ questions: [...] })`, for example:
+> `question({ questions: [{ question: "Initialize project knowledge (mission, architecture, principles) in .nexus/?", header: "Project knowledge", options: [{ label: "Initialize", description: "Run nx-init after setup" }, { label: "Skip", description: "Leave project knowledge unchanged" }], multiple: false }] })`
 
 If yes:
 ```
 nx_setup(scope=<from step 1>, init_after_setup=true)
 ```
 
-Or run `/opencode-nexus:nx-init` separately when ready.
+Or load `skill({ name: "nx-init" })` separately when ready.
 
 ---
 

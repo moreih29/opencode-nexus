@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.7.1 (d2da7dede9540a14bc5925904c2382795f383b1e)
+// Source: @moreih29/nexus-core@0.8.0 (254efc7d8f4f52e45b548706dd42389fdb9801b2)
 // Regenerate: bun run generate:prompts
 
 export const PROMPT = `# nx-setup
@@ -119,15 +119,15 @@ If yes, add to \`opencode.json\`:
 \`\`\`
 
 **nx-init** (project knowledge initialization):
-Ask with the \`question\` tool.
-> "Initialize project knowledge (mission, architecture, principles) in \`.nexus/\`? [y/n]"
+Ask with \`question({ questions: [...] })\`, for example:
+> \`question({ questions: [{ question: "Initialize project knowledge (mission, architecture, principles) in .nexus/?", header: "Project knowledge", options: [{ label: "Initialize", description: "Run nx-init after setup" }, { label: "Skip", description: "Leave project knowledge unchanged" }], multiple: false }] })\`
 
 If yes:
 \`\`\`
 nx_setup(scope=<from step 1>, init_after_setup=true)
 \`\`\`
 
-Or run \`/opencode-nexus:nx-init\` separately when ready.
+Or load \`skill({ name: "nx-init" })\` separately when ready.
 
 ---
 
@@ -142,6 +142,6 @@ export const META = {
   id: "nx-setup",
   name: "nx-setup",
   description: "Interactive OpenCode setup wizard for Nexus orchestration. Configures models, permissions, plugins, and project knowledge.",
-  trigger_display: "/opencode-nexus:nx-setup",
+  trigger_display: "skill({ name: \"nx-setup\" })",
   purpose: "Interactive OpenCode setup wizard for Nexus orchestration. Configures models, permissions, plugins, and project knowledge.",
 } as const;
