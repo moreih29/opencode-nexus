@@ -107,7 +107,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Coordination labels are optional lead-managed metadata, not platform-native team objects.",
     "- All grouped execution is lead-mediated; subagents do not directly coordinate each other.",
     "- Structure subagent delegation payloads with role, task, context, and constraints fields.",
-    "- Setup/maintenance skills (nx-setup, nx-init, nx-sync) are called via skill() only when the user explicitly requests them or directly mentions the need. Do not invoke them proactively without user instruction.",
+    "- Setup/maintenance skills (nx-init, nx-sync) are called via skill() only when the user explicitly requests them or directly mentions the need. Do not invoke them proactively without user instruction.",
     modePlaybook,
     ...(taskPipeline ? [taskPipeline] : []),
     DELEGATION_PLAYBOOK,

@@ -31,7 +31,6 @@ Use optional coordination labels when grouping related subagent work.
 | nx-init | skill({ name: "nx-init" }) | Project onboarding — scan, mission, essentials, context generation |
 | nx-sync | [sync] | Context knowledge synchronization |
 | nx-plan | [plan] | Structured planning — subagent-based analysis, deliberate decisions, produce execution plan |
-| nx-setup | skill({ name: "nx-setup" }) | Interactive OpenCode setup wizard for Nexus orchestration. Configures models, permissions, plugins, and project knowledge. |
 
 ### Tags
 

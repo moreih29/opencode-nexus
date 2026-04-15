@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { installSkillFiles } from "../dist/create-config.js";
 
-const SKILL_IDS = ["nx-plan", "nx-run", "nx-init", "nx-sync", "nx-setup"];
+const SKILL_IDS = ["nx-plan", "nx-run", "nx-init", "nx-sync"];
 
 function sha256(content) {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");
@@ -21,7 +21,7 @@ let passed = 0;
 const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-e2e-"));
 
 try {
-  // Case 1-2: Install skill files — all 5 SKILL.md files created
+  // Case 1-2: Install skill files — all SKILL.md files created
   await installSkillFiles(tmpDir, noop);
 
   for (const skillId of SKILL_IDS) {
@@ -35,7 +35,7 @@ try {
     assert.ok(stat.isFile(), `[1] ${destFile} should be a file`);
   }
   passed++;
-  console.log("PASS [1] all 5 SKILL.md files exist after first installSkillFiles call");
+  console.log("PASS [1] all entrypoint SKILL.md files exist after first installSkillFiles call");
 
   // Case 2: Verify file contents match templates (non-frontmatter body substring check)
   // The template files live under templates/skills/<id>/SKILL.md relative to project root
@@ -77,7 +77,7 @@ try {
     }
   }
   passed++;
-  console.log("PASS [2] all 5 SKILL.md contents match template files verbatim");
+  console.log("PASS [2] all entrypoint SKILL.md contents match template files verbatim");
 
   // Case 3: Idempotency — second call should not create .bak files
   await installSkillFiles(tmpDir, noop);

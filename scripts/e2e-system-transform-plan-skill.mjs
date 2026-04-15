@@ -85,17 +85,16 @@ let passed = 0;
   console.log("PASS [5] mode=memory_gc has no nexus-skill block + gc/merge/Glob in playbook");
 }
 
-// Case 6: mode "idle" — nudge substring present (nx-setup, manual, proactively)
+// Case 6: mode "idle" — nudge substring present (manual/proactively/explicitly)
 {
   const result = buildNexusSystemPrompt({ mode: "idle", agents: NEXUS_AGENT_CATALOG, skills: NEXUS_SKILL_CATALOG });
   const hasNudge =
-    result.includes("nx-setup") ||
     result.includes("manual") ||
     result.includes("proactively") ||
     result.includes("explicitly");
   assert.ok(
     hasNudge,
-    `[6] Expected nudge keyword (nx-setup/manual/proactively/explicitly) in idle mode output`
+    `[6] Expected nudge keyword (manual/proactively/explicitly) in idle mode output`
   );
   passed++;
   console.log("PASS [6] mode=idle includes nudge substring");

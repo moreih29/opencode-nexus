@@ -774,41 +774,6 @@ export function buildSkillIndexFile(skills, nexusCoreVersion, nexusCoreCommit) {
 }
 
 /**
- * Build a skill entry for the locally-defined nx-setup skill.
- * nx-setup is not in nexus-core manifest; its prompt lives in
- * templates/skills/nx-setup/SKILL.md as a YAML-frontmatter document.
- * @param {string} pluginName
- * @returns {{ id: string, prompt: string, meta: { id: string, name: string, description: string, trigger_display: string, purpose: string } }}
- */
-export function buildNxSetupSkillEntry(pluginName) {
-  const skillMdPath = join(OPENCODE_NEXUS_ROOT, 'templates/skills/nx-setup/SKILL.md');
-  const raw = readFileSync(skillMdPath, 'utf8');
-
-  // Parse YAML frontmatter (delimited by --- ... ---)
-  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!fmMatch) {
-    throw new Error('nx-setup SKILL.md is missing YAML frontmatter');
-  }
-  const fmObj = parseYaml(fmMatch[1]);
-  const body = fmMatch[2];
-
-  const description = collapseDescription(fmObj.description ?? '');
-  const trigger_display = `skill({ name: \"nx-setup\" })`;
-
-  return {
-    id: 'nx-setup',
-    prompt: body.trimStart(),
-    meta: {
-      id: 'nx-setup',
-      name: fmObj.name ?? 'nx-setup',
-      description,
-      trigger_display,
-      purpose: description,
-    },
-  };
-}
-
-/**
  * Derive skill trigger_display.
  * @param {any} meta
  * @param {string} pluginName

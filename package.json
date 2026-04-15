@@ -22,6 +22,9 @@
   ],
   "packageManager": "bun@1.3.9",
   "main": "dist/index.js",
+  "bin": {
+    "opencode-nexus": "./dist/cli.js"
+  },
   "files": [
     "dist",
     "templates"

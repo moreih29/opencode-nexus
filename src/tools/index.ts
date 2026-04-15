@@ -12,7 +12,6 @@ import {
   nxLspWorkspaceSymbols
 } from "./lsp.js";
 import { nxPlanDecide, nxPlanFollowup, nxPlanResume, nxPlanStart, nxPlanStatus, nxPlanUpdate } from "./plan.js";
-import { nxSetup } from "./setup.js";
 import { nxHistorySearch, nxTaskAdd, nxTaskClose, nxTaskList, nxTaskUpdate } from "./task.js";
 import { nxInit, nxSync } from "./workflow.js";
 
@@ -30,7 +29,6 @@ export const nexusTools = {
   nx_task_close: nxTaskClose,
   nx_init: nxInit,
   nx_sync: nxSync,
-  nx_setup: nxSetup,
   nx_history_search: nxHistorySearch,
 
   nx_context: nxContext,

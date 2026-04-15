@@ -20,7 +20,6 @@ import {
   buildAgentIndexFile,
   buildSkillIndividualFile,
   buildSkillIndexFile,
-  buildNxSetupSkillEntry,
   loadPluginName,
   writeGenerated,
 } from './generate-from-nexus-core.lib.mjs';
@@ -78,10 +77,6 @@ async function main() {
     const out = transformSkill(meta, body, pluginName, `skills/${skillEntry.id}`);
     skillEntries.push({ id: skillEntry.id, prompt: out.prompt, meta: out.meta });
   }
-  // nx-setup is a locally-defined skill (not in nexus-core manifest).
-  // Its prompt lives in templates/skills/nx-setup/SKILL.md.
-  skillEntries.push(buildNxSetupSkillEntry(pluginName));
-
   const agentsGeneratedDir = join(OPENCODE_NEXUS_ROOT, 'src/agents/generated');
   const skillsGeneratedDir = join(OPENCODE_NEXUS_ROOT, 'src/skills/generated');
 

@@ -22,46 +22,61 @@ OpenCode gives you agents, tools, and plugins. `opencode-nexus` adds operating d
 
 Use `Entrypoint Commands` to get started, `Canonical Tools` as the stable backend contract, and `Coordination Tags` to control workflow mode.
 
-Install the plugin in your project config:
+### 1. Install via CLI
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus"],
-  "instructions": ["AGENTS.md"]
-}
+Install the `opencode-nexus` package globally and register the plugin in your OpenCode config.
+
+```bash
+# Install globally
+npm install -g opencode-nexus
+
+# Show the installed CLI version
+opencode-nexus --version
+
+# Run the interactive installer in a terminal
+opencode-nexus install
+
+# Install to user scope (~/.config/opencode/opencode.json)
+opencode-nexus install --scope user
+
+# Or install to project scope (./opencode.json)
+opencode-nexus install --scope project
 ```
 
-Or start from the included presets:
+When you run `opencode-nexus install` or `opencode-nexus update` without flags in a terminal, the CLI prompts for scope and pinning choices interactively. For scripts and automation, keep passing explicit flags for deterministic non-interactive behavior.
 
-- Minimal: `opencode.minimal.json`
-- Extended example: `opencode.example.json`
+**Scope** determines the location of the OpenCode config file:
+- `user` — `~/.config/opencode/opencode.json` (shared across all projects)
+- `project` — `./opencode.json` (project-specific)
 
-Then run the setup entrypoint inside your project:
+> **Note**: Scope here refers to the target location of the OpenCode config file, not npm installation scope.
 
-```text
-Use nx-setup to configure this repository for opencode-nexus.
+### 2. Update Plugin
+
+After installing a new version, update the plugin version in your config.
+
+```bash
+# Run the interactive updater in a terminal
+opencode-nexus update
+
+# Update to latest version
+opencode-nexus update --scope user
+
+# Pin to a specific version
+opencode-nexus update --scope user --version 0.6.0
 ```
 
-This entrypoint routes to the canonical `nx_setup` tool, which handles two key setup decisions:
+> **Important**: OpenCode does not automatically refresh cached npm plugin versions on startup. Run the CLI update command above explicitly to apply new versions.
 
-**Scope** — choose project level (`./opencode.json`) or user level (`~/.config/opencode/opencode.json`).
+### 3. Project Onboarding (nx-init)
 
-**Model assignment** — Nexus has 9 subagents across three categories. Choose an approach that fits your budget and quality needs:
-
-| Approach | nexus + HOW | DO + CHECK |
-|---|---|---|
-| `unified` | same model everywhere | same model everywhere |
-| `tiered` | high-capability | standard |
-| `custom` | per-category or per-agent overrides | per-category or per-agent overrides |
-
-After setup, you can initialize project knowledge with an optional follow-up:
+After installation, initialize project knowledge.
 
 ```text
 Use nx-init to scan this project and create initial Nexus knowledge.
 ```
 
-When the plugin injects config, the preferred default primary is `nexus` instead of `build`. `nexus` is the Nexus-aware orchestration lead that prioritizes state, task discipline, and delegation.
+This entrypoint routes to the canonical `nx_init` tool, which analyzes project structure and creates initial knowledge files in `.nexus/`.
 
 ## Developing Inside This Repository
 
@@ -77,14 +92,13 @@ Recommended self-hosting flow:
 1. bun install
 2. bun run build
 3. launch OpenCode from this repository root
-4. confirm Nexus tools such as nx_context or nx_setup are available
+4. confirm Nexus tools such as nx_context or nx_init are available
 ```
 
 Important:
 
 - Do not add `"plugin": ["opencode-nexus"]` back into this repo's `opencode.json` while developing locally. That can load both the npm plugin and the local plugin and make validation ambiguous.
-- Use the npm plugin config from the Quick Start section only in other projects that consume the published package.
-- In this repository, `nx_setup(profile="auto")` detects that conflict and avoids writing the package plugin entry back into `opencode.json`.
+- Use the CLI installation flow from the Quick Start section only in other projects that consume the published package.
 
 Recommended first run:
 
@@ -104,7 +118,6 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 | Entrypoint | Canonical Tool | Purpose |
 | --- | --- | --- |
-| `nx-setup` | `nx_setup` | Configure `AGENTS.md`, `opencode.json`, and thin Nexus entrypoint skills |
 | `nx-init` | `nx_init` | Project onboarding and initial knowledge generation |
 | `nx-sync` | `nx_sync` | Synchronize `.nexus/context/` design documents with current project state |
 
@@ -136,7 +149,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 
 ## Canonical Tools and Tags
 
-`nx_*` tools are the real execution contract. `nx-setup`, `nx-init`, and `nx-sync` are thin entrypoints that route into those tools. `[plan]`, `[run]`, `[d]`, and `[rule]` are Coordination Tags that change workflow mode rather than execute a tool directly.
+`nx_*` tools are the real execution contract. `nx-init` and `nx-sync` are thin entrypoints that route into those tools. `[plan]`, `[run]`, `[d]`, and `[rule]` are Coordination Tags that change workflow mode rather than execute a tool directly.
 
 ## Built-in Skills
 
@@ -146,7 +159,6 @@ This entrypoint routes to the canonical `nx_init` tool.
 | `nx-run` | `[run]` | Task-driven execution workflow |
 | `nx-init` | `nx-init` | Onboarding entrypoint that routes to `nx_init` |
 | `nx-sync` | `nx-sync` | Sync entrypoint that routes to `nx_sync` |
-| `nx-setup` | `nx-setup` | Setup entrypoint that routes to `nx_setup` |
 
 ## What It Adds To OpenCode
 
@@ -160,7 +172,7 @@ This entrypoint routes to the canonical `nx_init` tool.
 - Flat knowledge layout under `.nexus/context/` (design docs) and `.nexus/memory/` (lessons, references)
 - Task pipeline guardrails for edit tools
 - Meeting reminders, run notices, and stronger cycle-close discipline
-- Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_history_search`, `nx_init`, `nx_sync`, and `nx_setup`
+- Nexus custom tools such as `nx_plan_*`, `nx_task_*`, `nx_context`, `nx_history_search`, `nx_init`, and `nx_sync`
 - Structured plan discussion records and plan -> task linkage state
 
 ## Knowledge Layout
