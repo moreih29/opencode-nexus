@@ -8051,6 +8051,404 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T11:46:29.685Z",
+      "branch": "main",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Prepare release metadata for deployment",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "resume",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T11:41:48.778Z",
+          "context": "User explicitly requested commit, merge to main, and deploy. Current package version is `0.5.3`, which is already published to npm, so a new release version is required before publish. Also remove incidental local-only file changes (`.nexus/history.json`, `.opencode/skills/deploy/SKILL.md`) from the release commit so only shipping changes remain.",
+          "approach": "Make the smallest release-prep edits: restore incidental local-only files, bump `package.json` version to the next patch release, regenerate lockfile/package metadata if needed, and keep the commit scoped to the nexus-core v0.9.0 consumption update plus release prep.",
+          "acceptance": "Working tree contains only release-relevant changes, and `package.json` version is a new unpublished release version.",
+          "risk": "Release prep must not accidentally include local orchestration history or unrelated skill-file drift."
+        },
+        {
+          "id": 2,
+          "title": "Run release preflight and publish",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "resume",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T11:41:48.780Z",
+          "context": "After release metadata is prepared and committed, complete deploy preflight, merge to main, tag if needed, and publish the npm package because the user explicitly requested deploy.",
+          "approach": "Run build, e2e, package dry run, template sync, and docs checks; commit the upgrade; merge into main; then publish the release using the clean merged main state.",
+          "acceptance": "Release preflight passes, the upgrade is committed and merged into main, and the new package version is published.",
+          "risk": "Preflight may surface template/docs drift that must be fixed before publish."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T12:41:46.002Z",
+      "branch": "nexus-prompt-layer-alignment",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Align prompt layers with current runtime behavior",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T12:36:43.970Z",
+          "context": "User requested a [run] implementation of the prompt-layer refactor, but it must stay aligned with the current runtime behavior. The relevant local files are `src/agents/primary.ts`, `src/plugin/system-prompt.ts`, and `src/plugin/hooks.ts` (`buildStatefulNotice`, mode/state handling around `experimental.chat.system.transform`). Current behavior that must be preserved: attendee-request steering, plan active and plan allComplete Step 7 handoff, run-mode guidance for no-cycle/active/completed-open states, QA-before-close guidance, Branch Guard messaging, and B-leg skill injection for plan/run/sync. Prior analysis showed the earlier simplification proposal was too aggressive. The correct refactor is to reduce duplicated phrasing, centralize shared prompt context calculation, and keep existing runtime steering semantics and test contracts intact. There is an unrelated local modification in `.nexus/history.json`; do not revert or include unrelated changes.",
+          "approach": "Make the smallest refactor that improves separation of concerns without changing supported behavior: add a shared prompt-context helper if useful, preserve the current notice branches and system-prompt structure, trim only redundant wording, keep primary prompt aligned with current orchestration features, and update tests only where wording or plumbing changed intentionally.",
+          "acceptance": "Prompt-layer code is refactored without regressing runtime steering: attendee notices, Step 7 handoff, QA-before-close, Branch Guard, active-cycle guidance, and skill injection still work; e2e prompt/notice tests pass after the change.",
+          "risk": "This area is highly coupled to string-based e2e tests and current orchestration behavior; over-simplifying prompts could silently remove meaningful steering or break contract tests."
+        },
+        {
+          "id": 2,
+          "title": "Verify prompt-layer refactor",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T12:36:52.333Z",
+          "context": "After the engineer finishes the prompt-layer refactor, independently verify that current runtime prompt behavior still matches the intended contracts. Focus especially on the e2e surfaces around system transform, hook notices, QA trigger behavior, and any prompt/config expectations affected by `src/agents/primary.ts`, `src/plugin/system-prompt.ts`, and `src/plugin/hooks.ts`. There is unrelated local drift in `.nexus/history.json` that should be ignored unless it interferes.",
+          "approach": "Run the relevant test commands or targeted scripts, inspect failures, and report PASS/FAIL with concrete findings tied to preserved runtime behaviors.",
+          "acceptance": "Prompt-related tests pass, especially the system-transform and hook-notice coverage, or any failures are reported as concrete blocking findings.",
+          "risk": "Some failures may be broad string-based test drift rather than behavior regressions; distinguish contract changes from accidental breakage."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T14:07:05.768Z",
+      "branch": "nexus-prompt-layer-alignment",
+      "plan": {
+        "id": 43,
+        "topic": "OpenCode 글로벌 설정과 nx-setup user scope 검증",
+        "issues": [
+          {
+            "id": 1,
+            "title": "nx-setup의 user/global scope 구현이 OpenCode 공식 경로 모델과 일치하는가?",
+            "status": "decided",
+            "decision": "`nx-setup`의 user/global scope 구현은 OpenCode 공식 경로 모델과 일치한다. `src/tools/setup.ts`는 user scope를 `~/.config/opencode/opencode.json`, `~/.config/opencode/AGENTS.md`, `~/.config/opencode/skills/`로 해석하며, 이는 OpenCode 공식 Config/Skills 문서의 global config 및 global skills 경로와 부합한다. 다만 이 scope는 npm 설치 범위가 아니라 runtime config/instructions/skills 자산의 배치 범위로 설명해야 혼동이 없다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "OpenCode의 글로벌 설정에서 npm은 필수인가, 아니면 선택적 설치 수단인가?",
+            "status": "decided",
+            "decision": "OpenCode의 글로벌 설정에서 npm은 필수가 아니라 선택적 설치/배포 수단이다. 공식 Intro 문서는 OpenCode 자체를 install script, npm, bun, pnpm, yarn, brew 등 여러 방식으로 설치할 수 있다고 설명한다. 공식 Config 문서는 글로벌 설정의 정답 경로를 `~/.config/opencode/opencode.json`로 정의하며, Plugins 문서는 npm plugin을 `plugin` 배열로 선언하면 OpenCode가 Bun으로 설치한다고 설명한다. 따라서 'global 설정 = npm'은 부정확하고, 더 정확한 표현은 'global 설정은 `~/.config/opencode` 아래 파일/디렉터리이며 npm은 그 위에서 쓰일 수 있는 설치/배포 채널 중 하나'이다."
+          },
+          {
+            "id": 3,
+            "title": "npm 기반 plugin 버전이 올라가면 OpenCode가 자동으로 최신 버전으로 갱신하는가?",
+            "status": "decided",
+            "decision": "현재 OpenCode 구현 기준으로 npm 기반 plugin이 새 버전으로 올라가도 자동으로 npm 최신 버전으로 갱신된다고 보면 안 된다. `packages/opencode/src/plugin/shared.ts`는 bare plugin spec를 내부적으로 `package@latest`로 해석하지만, `packages/opencode/src/npm/index.ts`의 `Npm.add()`는 해당 spec용 캐시 디렉터리에서 `arborist.loadVirtual()`이 성공하면 기존 설치를 그대로 반환하고 registry 최신 버전 확인이나 재설치를 하지 않는다. 따라서 최초 설치나 캐시 미스 때는 최신이 설치되지만, 이후에는 같은 spec에 대해 캐시를 재사용하므로 명시적 업데이트나 캐시 제거 없이는 새 npm 배포를 자동 추적하지 않는 현재 동작으로 해석하는 것이 맞다."
+          },
+          {
+            "id": 4,
+            "title": "CLI-first 설치/업데이트 흐름으로 전환하고 nx-setup 제거",
+            "status": "decided",
+            "decision": "설치와 업데이트는 플러그인 로드 전에도 실행 가능한 CLI가 맡고, README는 CLI-first 흐름으로 개편한다. `nx-setup`과 관련 스킬/도구 노출은 제거하고, 설치 범위(scope), plugin spec 기록, 업데이트/캐시 갱신 같은 결정적 작업은 CLI에서 처리한다. 프로젝트 분석처럼 LLM이 유리한 작업은 `nx-init`에 남긴다."
+          }
+        ],
+        "research_summary": "리포지토리의 nx_setup 구현과 nx-setup 스킬, e2e 테스트를 검토했고, 공식 OpenCode 문서의 Config/Plugins/Intro 페이지를 대조했다. 구현상 nx_setup의 user scope는 `~/.config/opencode/opencode.json`, `~/.config/opencode/AGENTS.md`, `~/.config/opencode/skills/`를 대상으로 하며, plugin 등록은 `opencode.json`의 `plugin` 배열에 `opencode-nexus`를 추가하는 방식이다. 공식 문서도 글로벌 config 경로를 `~/.config/opencode/opencode.json`, 글로벌 plugin 디렉터리를 `~/.config/opencode/plugins/`로 명시한다. npm은 OpenCode 자체 설치 수단 중 하나이며, npm plugins는 config의 `plugin` 배열을 통해 선언되고 Bun이 startup 시 설치/캐시한다. 다만 published plugin이 startup 때마다 자동으로 최신 버전으로 갱신되는지는 공식 문서에서 명시하지 않는다.",
+        "created_at": "2026-04-15T13:11:51.960Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Clarify nx-setup scope wording",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T13:15:58.604Z",
+          "context": "The plan concluded that `nx-setup` user/global scope is correct, but the wording should distinguish runtime asset placement (`opencode.json`, `AGENTS.md`, `skills/`) from plugin installation/loading. Relevant evidence: `src/tools/setup.ts`, `src/skills/generated/nx-setup.ts`, OpenCode docs for Config and Skills.",
+          "approach": "Update setup-facing documentation or skill copy so `user`/`project` scope is described as runtime config/instructions/skills scope, not npm installation scope.",
+          "acceptance": "Documentation clearly states that `user` scope writes Nexus runtime assets under `~/.config/opencode/`, and does not imply that npm global install defines config scope.",
+          "risk": "If wording remains ambiguous, users may continue to conflate plugin loading with config placement."
+        },
+        {
+          "id": 2,
+          "title": "Review nx-setup scope clarification",
+          "status": "completed",
+          "owner": "reviewer",
+          "owner_agent_id": "reviewer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T13:16:08.783Z",
+          "context": "Verification task for any documentation or prompt wording changes around `nx-setup` user/global scope semantics.",
+          "approach": "Check that the updated wording matches the actual implementation and official OpenCode config/skills/plugin docs, and that it no longer implies npm global install defines config scope.",
+          "acceptance": "Review confirms the wording is accurate, non-misleading, and grounded in current code/doc behavior.",
+          "risk": "A partial wording fix could still leave room for users to misread the setup flow."
+        },
+        {
+          "id": 3,
+          "title": "Document plugin update expectation",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [],
+          "created_at": "2026-04-15T13:16:18.462Z",
+          "context": "The plan concluded that OpenCode currently caches npm plugin installs per spec and does not automatically refresh to newly published npm latest versions for already-cached plugins. Evidence from OpenCode source: `packages/opencode/src/plugin/shared.ts`, `packages/opencode/src/npm/index.ts`.",
+          "approach": "Add documentation or troubleshooting guidance that plugin updates should not be assumed to auto-follow npm latest after first install; describe that explicit refresh or cache invalidation may be needed.",
+          "acceptance": "Documentation states the current update behavior accurately and distinguishes OpenCode self-update from npm plugin update behavior.",
+          "risk": "Without this clarification, users may wrongly assume new npm releases are picked up automatically."
+        },
+        {
+          "id": 4,
+          "title": "Review plugin update documentation",
+          "status": "completed",
+          "owner": "reviewer",
+          "owner_agent_id": "reviewer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            3
+          ],
+          "created_at": "2026-04-15T13:16:27.579Z",
+          "context": "Verification task for documentation about cached npm plugin installs and lack of automatic latest refresh behavior.",
+          "approach": "Review the wording against current OpenCode docs and source behavior, ensuring no overclaim beyond the code evidence.",
+          "acceptance": "Review confirms the update guidance is accurate, scoped to current implementation, and does not conflate plugin updates with OpenCode autoupdate.",
+          "risk": "Overstating the behavior as a guaranteed long-term contract could become stale if OpenCode changes implementation."
+        },
+        {
+          "id": 5,
+          "title": "Implement CLI install/update and remove nx-setup",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 4,
+          "deps": [],
+          "created_at": "2026-04-15T13:46:56.736Z",
+          "context": "User requested `[run] cli 기능 추가 + README에 설치 흐름 개편 + nx-setup 제거`. Current package has no CLI (`package.json` exports only plugin entry), `src/tools/setup.ts` implements `nx_setup`, README still tells users to add `plugin` manually then run `nx-setup`, and templates/generated skills expose `nx-setup`. Prior decisions: installation/update should move to a CLI-first deterministic flow; `nx-setup` should be removed; CLI should handle scope, plugin spec recording, and update behavior; `nx-init` remains for LLM-friendly project analysis. Relevant files likely include `package.json`, `src/tools/index.ts`, `src/index.ts`, `src/create-config.ts`, `src/tools/setup.ts`, skill templates/generated skill metadata, tests under `scripts/`, and README-related references.",
+          "approach": "Add a packaged CLI entrypoint that can install/update `opencode-nexus` into user/project OpenCode config, preferably with explicit version pinning for deterministic updates. Remove `nx_setup` tool exposure and the `nx-setup` skill/template plumbing. Update or add tests for the new CLI behavior and for removal of setup skill/tool exposure. Keep changes minimal but complete.",
+          "acceptance": "Package exposes a working CLI entrypoint for install/update flows. Runtime no longer exposes `nx_setup`/`nx-setup`. Build and relevant tests pass after the migration. Existing `nx-init`/`nx-sync`/plan-run flows keep working.",
+          "risk": "Removing setup touches plugin init, generated skills, docs, and tests; partial removal could leave broken references or stale generated artifacts."
+        },
+        {
+          "id": 6,
+          "title": "Rewrite README for CLI-first onboarding",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 4,
+          "deps": [
+            5
+          ],
+          "created_at": "2026-04-15T13:47:12.466Z",
+          "context": "After task 5 lands, user-facing docs need to stop telling users to add `plugin` manually and run `nx-setup`. README currently centers `nx-setup`; prior plan tasks 1 and 3 also called for clarifying runtime scope and plugin update expectations. Documentation should absorb those clarifications into the new CLI-first flow. Relevant files: `README.md`, `README.en.md`, and any other user-facing installation references touched by the code migration.",
+          "approach": "Document install/update around the new CLI commands, explain user/project scope there, and clarify that OpenCode startup does not automatically refresh cached npm plugin versions. Remove `nx-setup` references from README-level onboarding while keeping `nx-init` as the LLM-oriented next step.",
+          "acceptance": "README installation flow is CLI-first, no longer depends on `nx-setup`, and clearly explains scope and update behavior. Korean and English README stay aligned if both are touched.",
+          "risk": "Docs can easily drift from the final CLI interface if updated before the implementation stabilizes."
+        },
+        {
+          "id": 7,
+          "title": "Verify CLI migration and docs",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 4,
+          "deps": [
+            5,
+            6
+          ],
+          "created_at": "2026-04-15T13:47:22.027Z",
+          "context": "Verification for the CLI-first install/update migration and `nx-setup` removal. Must cover code behavior and user-facing docs.",
+          "approach": "Run the relevant build/tests for the new CLI packaging and affected plugin lifecycle/skill exposure paths. Check that `nx_setup` is gone from runtime exposure and that README instructions match the implemented CLI commands.",
+          "acceptance": "Build/tests covering the migration pass, and verification confirms the published surface no longer exposes `nx_setup`/`nx-setup` while docs match the shipped interface.",
+          "risk": "A green build alone may miss stale docs or removed-surface regressions, so interface verification must accompany command execution."
+        },
+        {
+          "id": 8,
+          "title": "Review install/update messaging",
+          "status": "completed",
+          "owner": "reviewer",
+          "owner_agent_id": "reviewer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 4,
+          "deps": [
+            6
+          ],
+          "created_at": "2026-04-15T13:47:37.538Z",
+          "context": "Review user-facing copy after the CLI-first migration, especially install/update scope wording and removal of `nx-setup` onboarding.",
+          "approach": "Check the README messaging for accuracy, consistency, and misleading statements about global scope, npm, and automatic updates. This review should also satisfy the prior scope/update documentation concerns if the new docs cover them.",
+          "acceptance": "Review reports PASS or findings, and user-facing docs no longer imply that `nx-setup` or OpenCode startup handles installation/update automatically.",
+          "risk": "User-facing onboarding drift would reintroduce the exact confusion that motivated the CLI migration."
+        },
+        {
+          "id": 9,
+          "title": "Rewrite README.md for CLI-first onboarding",
+          "status": "completed",
+          "created_at": "2026-04-15T13:57:05.437Z",
+          "context": "Update Korean README to use CLI-first install flow with `opencode-nexus install`/`update`, remove nx-setup references, explain scope and plugin update behavior.",
+          "approach": "Rewrite Quick Start section, update Entrypoint Commands table, update Built-in Skills table, update self-hosting guidance.",
+          "acceptance": "- Quick Start section uses CLI commands\n- Removes manual plugin-array editing as primary path\n- Removes nx-setup from install flow\n- Explains scope as OpenCode config location, not npm scope\n- Explains plugin update behavior (manual CLI update needed)"
+        },
+        {
+          "id": 10,
+          "title": "Rewrite README.en.md for CLI-first onboarding",
+          "status": "completed",
+          "created_at": "2026-04-15T13:57:08.782Z",
+          "context": "Update English README to use CLI-first install flow with `opencode-nexus install`/`update`, remove nx-setup references, explain scope and plugin update behavior.",
+          "approach": "Rewrite Quick Start section, update Entrypoint Commands table, update Built-in Skills table, update self-hosting guidance.",
+          "acceptance": "- Quick Start section uses CLI commands\n- Removes manual plugin-array editing as primary path  \n- Removes nx-setup from install flow\n- Explains scope as OpenCode config location, not npm scope\n- Explains plugin update behavior (manual CLI update needed)"
+        },
+        {
+          "id": 11,
+          "title": "Clean tracked .opencode skill copies",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 4,
+          "deps": [
+            5
+          ],
+          "created_at": "2026-04-15T14:04:58.291Z",
+          "context": "Verification found tracked workspace skill copies still include stale `nx-setup` artifacts even though shipped runtime/templates were migrated. `git ls-files` shows `.opencode/skills/nx-setup/SKILL.md` is tracked, and `.opencode/skills/nx-init/SKILL.md` still tells users to recommend `nx-setup` first. These copies should align with the current CLI-first flow and removal of `nx-setup`.",
+          "approach": "Delete the tracked `.opencode/skills/nx-setup/SKILL.md` copy and update `.opencode/skills/nx-init/SKILL.md` to recommend `opencode-nexus install` instead. Keep the cleanup minimal and aligned with the template version.",
+          "acceptance": "Tracked `.opencode` skill copies no longer reference `nx-setup`. `.opencode/skills/nx-init/SKILL.md` matches the new install guidance, and the stale `nx-setup` tracked file is removed.",
+          "risk": "Leaving tracked copies stale would reintroduce the same confusion even after the runtime surface was removed."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 11,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "OpenCode 글로벌 설정과 nx-setup user scope 검증",
+          "CLI-first 설치/업데이트 흐름으로 전환하고 nx-setup 제거"
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T14:53:52.665Z",
+      "branch": "nexus-prompt-layer-alignment",
+      "plan": {
+        "id": 44,
+        "topic": "CLI interactive install/update와 global version flag 보강",
+        "issues": [
+          {
+            "id": 1,
+            "title": "CLI는 전역 `--version`/`-v`와 어떤 interactive 기본 동작을 제공해야 하는가?",
+            "status": "decided",
+            "decision": "CLI는 top-level `--version`/`-v`를 지원해 패키지 버전을 즉시 출력해야 한다. `install`과 `update`는 TTY에서 실행되고 관련 선택 플래그가 빠진 경우 create-react-app 스타일의 interactive prompt로 scope, pin 여부, 버전 입력 같은 선택을 묻고, 명시 플래그가 주어진 비대화식 호출은 기존처럼 그대로 동작해야 한다. 비-TTY에서는 자동 질문을 시도하지 말고 현재의 결정적 동작을 유지한다."
+          }
+        ],
+        "research_summary": "현재 `src/cli.ts`는 `install`/`update` 두 서브커맨드만 파싱하며, 전역 `--version`/`-v` 처리가 없어 `bun dist/cli.js --version`이 unknown command로 실패한다. `install`은 인자 없이 실행되면 기본값(`scope=user`, pin=true)으로 즉시 `~/.config/opencode/opencode.json`을 수정한다. 테스트는 `scripts/e2e-setup-template.mjs`에서 비대화식 install/update와 `--no-pin`만 검증한다. 사용자 요구는 create-react-app 같은 대화형 선택지 기반 install/update UX와 version 표면 보강이다.",
+        "created_at": "2026-04-15T14:16:57.140Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement interactive CLI prompts and version flag",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T14:17:20.795Z",
+          "context": "User reported two CLI UX issues after the recent CLI-first migration: `bun dist/cli.js --version` fails with `Unknown command: --version`, and `bun dist/cli.js install` immediately writes to user config instead of offering a create-react-app-like interactive selection flow. Current implementation is in `src/cli.ts`; current CLI tests are in `scripts/e2e-setup-template.mjs`. The repo is already dirty from the prior CLI migration; preserve existing user/agent changes. Active plan decision: support top-level `--version`/`-v`, and make `install`/`update` interactive in TTY when relevant flags are omitted while preserving deterministic non-interactive behavior when flags are provided or stdin is not a TTY.",
+          "approach": "Add top-level version handling plus a minimal interactive prompt flow using Node readline for `install`/`update`. Prompt for scope and pin/version choices when running interactively without explicit flags; keep existing flag-based behavior unchanged. Extend CLI tests to cover the new behavior, including `--version` and interactive flows via scripted stdin.",
+          "acceptance": "`bun dist/cli.js --version` prints the package version and exits successfully. `install` and `update` prompt interactively in a TTY when options are omitted, and still behave deterministically with explicit flags. Updated CLI tests pass.",
+          "risk": "Interactive CLI logic can easily break non-interactive automation if TTY detection or prompt defaults are wrong."
+        },
+        {
+          "id": 2,
+          "title": "Update CLI docs for interactive flow",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T14:17:31.169Z",
+          "context": "After CLI behavior changes land, docs should reflect the new top-level `--version` support and the interactive default flow for `install`/`update`. Current user-facing docs live mainly in `README.md` and `README.en.md` and currently show only non-interactive examples.",
+          "approach": "Update the README install/update section to mention that bare `install`/`update` can prompt interactively in a terminal, while flags keep the flow non-interactive. Add a brief note or example for `--version` if appropriate.",
+          "acceptance": "README docs match the shipped CLI behavior in both Korean and English and no longer suggest that `install` always writes immediately without prompts in a terminal.",
+          "risk": "Docs can drift from the actual prompt flow if updated before the implementation stabilizes."
+        },
+        {
+          "id": 3,
+          "title": "Verify interactive CLI behavior",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-15T14:17:41.888Z",
+          "context": "Need to verify the CLI fix for top-level version handling and interactive install/update prompts after implementation and doc updates land. Existing CLI coverage is in `scripts/e2e-setup-template.mjs`.",
+          "approach": "Run build/check and the relevant CLI-focused tests, then spot-check the new interactive behavior and doc alignment. Confirm that non-interactive explicit-flag calls still work.",
+          "acceptance": "Verification confirms `--version` works, interactive terminal flows behave as documented, and existing deterministic CLI invocations still pass.",
+          "risk": "TTY-sensitive behavior may pass in one harness path but fail in another if the test setup is not representative."
+        },
+        {
+          "id": 4,
+          "title": "Implement CLI version flag and interactive prompts with tests",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "lead",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T14:18:25.170Z",
+          "context": "Apply decided behavior: top-level --version/-v support, TTY-only interactive install/update when relevant flags omitted, preserve non-interactive deterministic explicit-flag flows.",
+          "approach": "Inspect current src/cli.ts and e2e script, add minimal prompt helper with Node readline, wire parsing for top-level version alias, update e2e tests for version and scripted interactive cases, run build/check/tests.",
+          "acceptance": "CLI supports --version/-v at top level; install/update prompt in TTY when choices omitted; explicit flags/non-TTY keep prior deterministic behavior; CLI-focused tests pass.",
+          "risk": "Dirty worktree and existing migration changes could overlap; interactive tests can be flaky if stdin/tty handling differs."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "CLI interactive install/update와 global version flag 보강",
+          "Fix CLI UX and coverage without broad refactors"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

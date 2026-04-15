@@ -25,4 +25,4 @@ Use the canonical `nx_init` tool to perform the work. Do not invent a parallel w
 
 - `nx_init` remains the canonical backend.
 - Generated identity drafts are not final until the user explicitly confirms them.
-- If the user needs project wiring first, recommend `nx-setup` before continuing.
+- If the user needs plugin wiring first, recommend running `opencode-nexus install` before continuing.

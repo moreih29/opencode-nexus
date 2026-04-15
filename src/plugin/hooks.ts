@@ -71,6 +71,16 @@ interface PipelineEvaluatorResult {
     | "spawn_qa_then_close";
 }
 
+interface StatefulNoticeContext {
+  branch: string;
+  branchGuard: boolean;
+  hasPlan: boolean;
+  taskSummary: Awaited<ReturnType<typeof readTasksSummary>>;
+  planReminder: string | null;
+  ruleTags: string[] | null;
+  attendeeMentions: string[];
+}
+
 let pipelineEvaluatorLoader: Promise<((snapshot: PipelineEvaluatorSnapshot) => PipelineEvaluatorResult) | null> | null = null;
 
 const NEXUS_START = "<!-- NEXUS:START -->";
@@ -922,13 +932,8 @@ async function buildStatefulNotice(
   paths: ReturnType<typeof createNexusPaths>,
   projectRoot: string
 ): Promise<string | null> {
-  const branch = await readCurrentBranch(projectRoot);
-  const branchGuard = branch === "main" || branch === "master";
-  const hasPlan = await fileExists(paths.PLAN_FILE);
-  const taskSummary = await readTasksSummary(paths.TASKS_FILE);
-  const planReminder = hasPlan ? await buildPlanReminder(paths.PLAN_FILE) : null;
-  const ruleTags = detectRuleTags(prompt);
-  const attendeeMentions = detectAttendeeMentions(prompt);
+  const noticeContext = await buildStatefulNoticeContext(prompt, paths, projectRoot);
+  const { attendeeMentions, hasPlan, planReminder, taskSummary, branch, branchGuard, ruleTags } = noticeContext;
 
   if (attendeeMentions.length > 0) {
     if (hasPlan) {
@@ -938,23 +943,7 @@ async function buildStatefulNotice(
   }
 
   if (!mode) {
-    if (planReminder) {
-      return planReminder;
-    }
-    if (taskSummary) {
-      const evaluation = await evaluatePipelineFromSummary(taskSummary);
-      if (evaluation.nextGuidanceKey === "resume_active_cycle") {
-        return [
-          "[nexus] Active task cycle detected.",
-          `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}`,
-          "Use [run] when you are ready to continue the run cycle workflow."
-        ].join(" ");
-      }
-      if (evaluation.nextGuidanceKey === "close_cycle" || evaluation.nextGuidanceKey === "spawn_qa_then_close") {
-        return "[nexus] A completed task cycle is still open. Use [run] to finish cycle closure workflow before starting a new edit cycle.";
-      }
-    }
-    return null;
+    return buildIdleStatefulNotice(planReminder, taskSummary);
   }
 
   const fallback = buildTagNotice(mode);
@@ -982,12 +971,7 @@ async function buildStatefulNotice(
   }
 
   if (mode === "run") {
-    let qaReasons: string[] = [];
-    let evaluation = await evaluatePipelineFromSummary(taskSummary, qaReasons);
-    if (taskSummary && evaluation.nextGuidanceKey === "close_cycle") {
-      qaReasons = (await evaluateQaAutoTrigger(projectRoot, [])).reasons;
-      evaluation = await evaluatePipelineFromSummary(taskSummary, qaReasons);
-    }
+    const { evaluation, qaReasons } = await evaluateRunNoticeGuidance(taskSummary, projectRoot);
     if (evaluation.nextGuidanceKey === "task_cycle_required") {
       return [
         "[nexus] Run mode detected. No task cycle yet.",
@@ -1052,6 +1036,65 @@ async function evaluatePipelineFromSummary(
     qaTriggerReasons
   };
   return evaluatePipelineSnapshot(snapshot);
+}
+
+async function buildStatefulNoticeContext(
+  prompt: string,
+  paths: ReturnType<typeof createNexusPaths>,
+  projectRoot: string
+): Promise<StatefulNoticeContext> {
+  const branch = await readCurrentBranch(projectRoot);
+  const hasPlan = await fileExists(paths.PLAN_FILE);
+  const taskSummary = await readTasksSummary(paths.TASKS_FILE);
+  return {
+    branch,
+    branchGuard: branch === "main" || branch === "master",
+    hasPlan,
+    taskSummary,
+    planReminder: hasPlan ? await buildPlanReminder(paths.PLAN_FILE) : null,
+    ruleTags: detectRuleTags(prompt),
+    attendeeMentions: detectAttendeeMentions(prompt)
+  };
+}
+
+async function buildIdleStatefulNotice(
+  planReminder: string | null,
+  taskSummary: Awaited<ReturnType<typeof readTasksSummary>>
+): Promise<string | null> {
+  if (planReminder) {
+    return planReminder;
+  }
+  if (!taskSummary) {
+    return null;
+  }
+
+  const evaluation = await evaluatePipelineFromSummary(taskSummary);
+  if (evaluation.nextGuidanceKey === "resume_active_cycle") {
+    return [
+      "[nexus] Active task cycle detected.",
+      `pending=${taskSummary.pending}, in_progress=${taskSummary.in_progress}`,
+      "Use [run] when you are ready to continue the run cycle workflow."
+    ].join(" ");
+  }
+
+  if (evaluation.nextGuidanceKey === "close_cycle" || evaluation.nextGuidanceKey === "spawn_qa_then_close") {
+    return "[nexus] A completed task cycle is still open. Use [run] to finish cycle closure workflow before starting a new edit cycle.";
+  }
+
+  return null;
+}
+
+async function evaluateRunNoticeGuidance(
+  taskSummary: Awaited<ReturnType<typeof readTasksSummary>>,
+  projectRoot: string
+): Promise<{ evaluation: PipelineEvaluatorResult; qaReasons: string[] }> {
+  let qaReasons: string[] = [];
+  let evaluation = await evaluatePipelineFromSummary(taskSummary, qaReasons);
+  if (taskSummary && evaluation.nextGuidanceKey === "close_cycle") {
+    qaReasons = (await evaluateQaAutoTrigger(projectRoot, [])).reasons;
+    evaluation = await evaluatePipelineFromSummary(taskSummary, qaReasons);
+  }
+  return { evaluation, qaReasons };
 }
 
 function expandSummaryTasks(

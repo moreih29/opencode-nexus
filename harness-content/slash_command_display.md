@@ -9,7 +9,6 @@ OpenCode's official docs distinguish between skills and slash commands.
 For Nexus on OpenCode, treat the following as the canonical skill loads:
 
 - `skill({ name: "nx-init" })` — project onboarding
-- `skill({ name: "nx-setup" })` — setup workflow
 - `skill({ name: "nx-plan" })` — planning skill
 - `skill({ name: "nx-run" })` — execution skill
 - `skill({ name: "nx-sync" })` — context sync skill

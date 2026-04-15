@@ -6,14 +6,12 @@ import { PROMPT as nx_run_prompt, META as nx_run_meta } from './nx-run.js';
 import { PROMPT as nx_init_prompt, META as nx_init_meta } from './nx-init.js';
 import { PROMPT as nx_sync_prompt, META as nx_sync_meta } from './nx-sync.js';
 import { PROMPT as nx_plan_prompt, META as nx_plan_meta } from './nx-plan.js';
-import { PROMPT as nx_setup_prompt, META as nx_setup_meta } from './nx-setup.js';
 
 export const SKILL_PROMPTS: Record<string, string> = {
   "nx-run": nx_run_prompt,
   "nx-init": nx_init_prompt,
   "nx-sync": nx_sync_prompt,
   "nx-plan": nx_plan_prompt,
-  "nx-setup": nx_setup_prompt,
 };
 
 export const SKILL_META: Record<string, {
@@ -50,12 +48,5 @@ export const SKILL_META: Record<string, {
     description: "Structured multi-perspective analysis to decompose issues, align on decisions, and produce an enriched plan before execution. Plan only — does not execute.",
     trigger_display: "[plan]",
     purpose: "Structured planning — subagent-based analysis, deliberate decisions, produce execution plan",
-  },
-  "nx-setup": {
-    id: "nx-setup",
-    name: "nx-setup",
-    description: "Interactive OpenCode setup wizard for Nexus orchestration. Configures models, permissions, plugins, and project knowledge.",
-    trigger_display: "skill({ name: \"nx-setup\" })",
-    purpose: "Interactive OpenCode setup wizard for Nexus orchestration. Configures models, permissions, plugins, and project knowledge.",
   },
 };

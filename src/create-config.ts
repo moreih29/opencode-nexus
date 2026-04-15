@@ -80,7 +80,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 // Idempotent: skips if content hash matches; backs up if user-edited.
 // Errors are swallowed after logging to avoid blocking plugin init.
 
-const SKILL_IDS_TO_INSTALL = ["nx-plan", "nx-run", "nx-init", "nx-sync", "nx-setup"] as const;
+const SKILL_IDS_TO_INSTALL = ["nx-plan", "nx-run", "nx-init", "nx-sync"] as const;
 
 function sha256(content: string): string {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");

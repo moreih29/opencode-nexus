@@ -81,11 +81,11 @@ await fs.writeFile(outFile, content, "utf8");
 console.log(`generated ${path.relative(root, outFile)}`);
 
 // Generate SKILL.md files for skills that have prompts in SKILL_PROMPTS.
-// Handwritten skills (nx-init, nx-sync, nx-setup) are preserved — only
-// nx-plan and nx-run (which have authoritative prompt bodies) are auto-generated.
+// Handwritten skills (nx-init, nx-sync) are preserved — only nx-plan and
+// nx-run (which have authoritative prompt bodies) are auto-generated.
 // NOTE: drift risk for handwritten skills is accepted (Option A decision).
 const GENERATED_SKILL_IDS = Object.keys(SKILL_PROMPTS).filter(
-  (id) => !["nx-init", "nx-sync", "nx-setup"].includes(id)
+  (id) => !["nx-init", "nx-sync"].includes(id)
 );
 
 for (const skillId of GENERATED_SKILL_IDS) {
