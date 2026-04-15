@@ -14,12 +14,68 @@ interface BuildSystemInput {
   skills: SkillMeta[];
 }
 
+type NexusMode = BuildSystemInput["mode"];
+
+function joinLines(lines: string[]): string {
+  return lines.join("\n");
+}
+
+function listAgentsByCategory(agents: BuildSystemInput["agents"], category: string): string {
+  return agents
+    .filter((agent) => agent.category === category)
+    .map((agent) => agent.id)
+    .join(", ");
+}
+
+function buildTaskPipeline(mode: NexusMode): string | null {
+  if (mode !== "run") {
+    return null;
+  }
+
+  return joinLines([
+    "TASK PIPELINE (mandatory for file modifications in run mode):",
+    "1. Check active plan decisions first and preserve issue linkage when tasks come from a plan.",
+    "2. Register each execution unit with nx_task_add before editing files.",
+    "3. Keep edits scoped to active tasks only.",
+    "4. As each task completes, call nx_task_update.",
+    "5. When all tasks complete, verify, sync knowledge if needed, then close with nx_task_close."
+  ]);
+}
+
+const DELEGATION_PLAYBOOK = joinLines([
+  "DELEGATION PLAYBOOK:",
+  "- HOW agents advise on approach, UX, research method, and strategy; they do not own implementation state.",
+  "- DO agents execute scoped work against active tasks only.",
+  "- CHECK agents verify and report PASS/FAIL plus severity; they do not silently fix application code.",
+  "- Multi-task or multi-file execution must not stay Lead solo once decomposition is required; involve Engineer for code execution units.",
+  "- Read relevant .nexus/ files (decisions, context, memory) before specialist delegation when context or prior decisions matter.",
+  "- Reuse an existing coordination label before inventing a new one when grouping related work.",
+  "- All grouped execution is lead-mediated; subagents do not directly coordinate each other."
+]);
+
+const OUTPUT_CONTRACTS = joinLines([
+  "OUTPUT CONTRACTS:",
+  "- HOW agents: current state/user perspective, problem/opportunity, recommendation, trade-offs, risks.",
+  "- DO agents: report completion with changed scope, summary, and notable constraints or decisions.",
+  "- CHECK agents: list checks, PASS/FAIL, findings by severity, and recommended actions.",
+  "- Research roles must surface citations, contradicting evidence, and null results where relevant.",
+  "- Claims of impossibility, infeasibility, or platform limits require evidence."
+]);
+
+const PLATFORM_MAPPING = joinLines([
+  "PLATFORM MAPPING:",
+  "- Primary instruction path: AGENTS.md plus opencode.json.instructions.",
+  "- CLAUDE.md is a legacy migration input only, not the primary runtime instruction file.",
+  "- Slash-skill behavior is represented through nx_* tools, tags, hooks, and system injection.",
+  "- Coordination labels are optional metadata, not platform-native team objects."
+]);
+
 export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const { mode, agents, skills } = input;
 
-  const how = agents.filter((a) => a.category === "how").map((a) => a.id).join(", ");
-  const execute = agents.filter((a) => a.category === "do").map((a) => a.id).join(", ");
-  const check = agents.filter((a) => a.category === "check").map((a) => a.id).join(", ");
+  const how = listAgentsByCategory(agents, "how");
+  const execute = listAgentsByCategory(agents, "do");
+  const check = listAgentsByCategory(agents, "check");
 
   const skillRows = skills.map((s) => `- ${s.id} (${s.trigger_display}): ${s.purpose}`).join("\n");
   const modelRows = agents.map((a) => `- ${a.id}: ${a.model}`).join("\n");
@@ -27,41 +83,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
   const modePlaybook = buildModePlaybook(mode);
   const skillKey = mode === "plan" ? "nx-plan" : mode === "run" ? "nx-run" : mode === "sync" ? "nx-sync" : null;
   const skillBody = skillKey !== null ? (SKILL_PROMPTS[skillKey] ?? null) : null;
-  const taskPipeline = mode === "run"
-    ? [
-        "TASK PIPELINE (mandatory for file modifications in run mode):",
-        "1. Check active plan decisions first and preserve issue linkage when tasks come from a plan.",
-        "2. Register each execution unit with nx_task_add before editing files.",
-        "3. Keep edits scoped to active tasks only.",
-        "4. As each task completes, call nx_task_update.",
-        "5. When all tasks complete, verify, sync knowledge if needed, then close with nx_task_close."
-      ].join("\n")
-    : null;
-  const delegationPlaybook = [
-    "DELEGATION PLAYBOOK:",
-    "- HOW agents advise on approach, UX, research method, and strategy; they do not own implementation state.",
-    "- DO agents execute scoped work against active tasks only.",
-    "- CHECK agents verify and report PASS/FAIL plus severity; they do not silently fix application code.",
-    "- Multi-task or multi-file execution must not stay Lead solo once decomposition is required; involve Engineer for code execution units.",
-    "- Read relevant .nexus/ files (decisions, context, memory) before specialist delegation when context or prior decisions matter.",
-    "- Reuse an existing coordination label before inventing a new one when grouping related work.",
-    "- All grouped execution is lead-mediated; subagents do not directly coordinate each other."
-  ].join("\n");
-  const outputContracts = [
-    "OUTPUT CONTRACTS:",
-    "- HOW agents: current state/user perspective, problem/opportunity, recommendation, trade-offs, risks.",
-    "- DO agents: report completion with changed scope, summary, and notable constraints or decisions.",
-    "- CHECK agents: list checks, PASS/FAIL, findings by severity, and recommended actions.",
-    "- Research roles must surface citations, contradicting evidence, and null results where relevant.",
-    "- Claims of impossibility, infeasibility, or platform limits require evidence."
-  ].join("\n");
-  const legacyMapping = [
-    "PLATFORM MAPPING:",
-    "- Primary instruction path: AGENTS.md plus opencode.json.instructions.",
-    "- CLAUDE.md is a legacy migration input only, not the primary runtime instruction file.",
-    "- Slash-skill behavior is represented through nx_* tools, tags, hooks, and system injection.",
-    "- Coordination labels are optional metadata, not platform-native team objects."
-  ].join("\n");
+  const taskPipeline = buildTaskPipeline(mode);
 
   const nexusBlock = [
     "<nexus>",
@@ -88,9 +110,9 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Setup/maintenance skills (nx-setup, nx-init, nx-sync) are called via skill() only when the user explicitly requests them or directly mentions the need. Do not invoke them proactively without user instruction.",
     modePlaybook,
     ...(taskPipeline ? [taskPipeline] : []),
-    delegationPlaybook,
-    outputContracts,
-    legacyMapping,
+    DELEGATION_PLAYBOOK,
+    OUTPUT_CONTRACTS,
+    PLATFORM_MAPPING,
     "Runtime Note:",
     "- Detailed role and skill procedures live in AGENTS.md, instructions, and the nx_* skill/tool surfaces; keep system injection focused on current state and mandatory execution guardrails.",
     "Skills:",
@@ -122,7 +144,6 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
         "- Check nx_context or nx_plan_status for followupReady roles before deciding whether to resume an existing HOW participant or start fresh.",
         "- Discuss one issue at a time and compare options with trade-offs before recording a decision.",
       "- Before asking for a decision, present a comparison table with pros, cons, trade-offs, and a recommendation.",
-      "- Present options with pros, cons, trade-offs, and a recommendation before seeking a decision.",
       "- Record final decisions with [d] and nx_plan_decide.",
       "- Offer [run] only after all issues are decided and gaps are checked."
     ].join("\n");
