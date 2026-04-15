@@ -168,12 +168,15 @@ On cycle end, archive plan+tasks to \`.nexus/history.json\` via \`nx_task_close\
 
 ## State Files
 
-**\`.nexus/state/opencode-nexus/agent-tracker.json\`** — tracks subagent invocations.
+**\`.nexus/state/opencode-nexus/agent-tracker.json\`** — session-scoped runtime continuity/observability state for subagent invocations.
 Each invocation records \`agent_type\`, optional \`coordination_label\`, \`status\`,
 timestamps, and continuity handles (\`child_session_id\`, optional \`child_task_id\`,
 \`resume_task_id\`, \`resume_session_id\`, \`resume_handles\`). 파일은
 nexus-core \`rule:harness-state-namespace\`에 따라 harness 네임스페이스 디렉토리
 (\`.nexus/state/opencode-nexus/\`) 아래에 위치한다.
+This tracker is ephemeral runtime state, not durable invocation history.
+Reset boundary is explicit session lifecycle (\`session.created\`) only; general
+ensure/setup/init/sync paths must preserve existing tracker content.
 
 **\`.nexus/state/opencode-nexus/tool-log.jsonl\`** — runtime tool event log.
 Used for observability (for example, files touched tracking), not as the source of

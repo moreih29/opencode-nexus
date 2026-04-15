@@ -133,8 +133,9 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 #### 호환성 주의사항 (Compatibility Notes)
 
-- `plan.json`은 canonical하고 플랫폼 중립. OpenCode HOW 패널 연속성은 `plan.json`(participants) + `.nexus/state/opencode-nexus/agent-tracker.json`(resume handles/summary)에서 파생된다.
-- `agent-tracker.json`은 best-effort continuity source다. 없거나 비어 있어도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
+- `plan.json`은 canonical하고 플랫폼 중립. OpenCode HOW 패널 연속성은 `plan.json`(participants) + `.nexus/state/opencode-nexus/agent-tracker.json`(runtime resume handles/summary) 조합에서 파생된다.
+- `agent-tracker.json`은 durable history가 아니라 세션 범위의 ephemeral runtime continuity/observability state다. 없거나 비어 있어도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
+- tracker reset 경계는 명시적 세션 lifecycle 훅(`session.created`)이다. 일반 ensure/setup/init/sync 경로는 tracker를 초기화하지 않는다.
 - Claude ↔ OpenCode 전환은 canonical-first handoff로 취급. 동시 공동 편집이 아님.
 
 #### HOW 패널 연속성 절차 (HOW-panel Continuity)

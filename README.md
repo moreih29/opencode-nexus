@@ -151,8 +151,8 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - HOW / DO / CHECK 역할로 나뉜 9개 Nexus 에이전트 카탈로그
 - 기본 primary `nexus`와 specialist subagent 조합
 - `.nexus/state/`에 저장되는 상태 기반 plan/task 워크플로
-- canonical `plan.json` + `.nexus/state/opencode-nexus/agent-tracker.json`에서 파생되는 HOW 패널 연속성
-- HOW 패널 participant별 `task_id/session_id` 재개 힌트 저장
+- canonical `plan.json` + 세션 범위 `.nexus/state/opencode-nexus/agent-tracker.json`에서 파생되는 HOW 패널 연속성
+- HOW 패널 participant별 runtime `task_id/session_id` 재개 힌트 저장 (ephemeral, 세션 경계에서 reset)
 - `nx_plan_resume`로 HOW participant 재개 핸들 조회 가능
 - `nx_plan_followup`로 HOW participant follow-up delegation 입력 생성 가능
 - `.nexus/context/`(설계 문서)와 `.nexus/memory/`(lessons/참조) 기반의 flat 지식 구조

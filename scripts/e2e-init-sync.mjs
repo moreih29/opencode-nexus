@@ -24,6 +24,28 @@ await fs.writeFile(path.join(root, "tsconfig.json"), JSON.stringify({ compilerOp
 
 const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
+await fs.writeFile(
+  paths.AGENT_TRACKER_FILE,
+  JSON.stringify(
+    {
+      harness_id: "opencode-nexus",
+      started_at: "2000-01-01T00:00:00.000Z",
+      invocations: [
+        {
+          invocation_id: "keep-me",
+          agent_type: "engineer",
+          status: "completed",
+          started_at: "2000-01-01T00:00:00.000Z",
+          ended_at: "2000-01-01T00:00:01.000Z"
+        }
+      ]
+    },
+    null,
+    2
+  ) + "\n",
+  "utf8"
+);
+await fs.writeFile(paths.TOOL_LOG_FILE, '{"ts":"2000-01-01T00:00:00.000Z","agent_id":"keep-me","tool":"apply_patch","file":"src/x.ts"}\n', "utf8");
 
 const ctx = {
   directory: root,
@@ -73,6 +95,15 @@ await nxTaskClose.execute({ archive: true }, ctx);
 const syncMessage = await nxSync.execute({}, ctx);
 assert.equal(typeof syncMessage, "string");
 assert.ok(syncMessage.length > 0, "nxSync should return a non-empty guidance message");
+
+const tracker = JSON.parse(await fs.readFile(paths.AGENT_TRACKER_FILE, "utf8"));
+assert.equal(tracker.started_at, "2000-01-01T00:00:00.000Z", "nxInit/nxSync should preserve existing tracker metadata");
+assert.equal(tracker.invocations.length, 1, "nxInit/nxSync should preserve existing tracker invocations");
+assert.equal(tracker.invocations[0].invocation_id, "keep-me", "nxInit/nxSync should not wipe tracker entries");
+
+const toolLog = await fs.readFile(paths.TOOL_LOG_FILE, "utf8");
+assert.match(toolLog, /keep-me/, "nxInit/nxSync should preserve existing tool-log content");
+
 // Verify ensureNexusStructure was called: core nexus dirs must exist
 const { access } = await import("node:fs/promises");
 await access(path.join(root, ".nexus", "context"));

@@ -7128,6 +7128,87 @@
           "Review whether plan.extension.json is necessary"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T03:40:39.780Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 38,
+        "topic": "Review agent-tracker lifecycle and purpose",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Decide the intended operating model for agent-tracker.json and whether current reset behavior is a bug",
+            "status": "decided",
+            "decision": "`agent-tracker.json` is a session-scoped runtime continuity/observability state, not durable invocation history. Reset behavior in `ensureNexusStructure()` is incorrect and should be removed. Tracker reset must occur only at explicit session lifecycle boundaries, while normal setup/init/sync paths should preserve the current tracker. Current consumers should continue treating tracker as ephemeral runtime state layered on top of canonical plan/task files.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Current opencode-nexus code uses `.nexus/state/opencode-nexus/agent-tracker.json` as runtime continuity/observability state, not canonical history. `src/shared/agent-tracker.ts` itself only appends or updates invocations by `invocation_id`; it does not delete entries. The observed 'entries appear and disappear' behavior comes from whole-file resets: `ensureNexusStructure()` resets the tracker (`src/shared/state.ts:14-27`), and that function is called from session initialization and also workflow/setup paths. `session.created` also calls `resetAgentTracker()` again directly (`src/plugin/hooks.ts:119-123`), so tracker resets twice on session start. Current consumers use tracker for plan follow-up continuity, context summaries, and active-agent snapshots, which fits an ephemeral runtime-state role better than durable history. The main problem is a lifecycle/design mismatch: the file looks persistent, but implementation resets it from overly broad code paths.",
+        "created_at": "2026-04-15T03:27:25.061Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Stop destructive tracker resets from ensure/setup paths",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T03:29:27.890Z",
+          "context": "Plan #38 decided that agent-tracker.json is session-scoped runtime state and must not be reset from generic ensure/setup/init/sync paths. Current code resets tracker inside ensureNexusStructure() and again on session.created, causing invocations to appear and disappear unexpectedly.",
+          "approach": "Refactor structure/setup helpers so they only ensure directories/files exist. Keep tracker reset only at explicit session lifecycle boundaries in hooks. Preserve runtime behavior otherwise.",
+          "acceptance": "ensureNexusStructure() is non-destructive; nx_init/nx_sync/nx_setup no longer wipe agent-tracker state; session.created remains the only runtime reset path unless another explicit lifecycle hook is intentionally added.",
+          "risk": "Changing initialization boundaries can expose assumptions in tests or startup behavior."
+        },
+        {
+          "id": 2,
+          "title": "Align tests and docs with agent-tracker lifecycle model",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T03:29:28.000Z",
+          "context": "After lifecycle behavior is corrected, tests and docs should describe agent-tracker as session-scoped runtime continuity state and stop implying it is durable invocation history or reset by generic ensure/setup flows.",
+          "approach": "Update targeted tests plus human/generated docs that describe agent-tracker semantics, reset boundaries, or lifecycle expectations.",
+          "acceptance": "Relevant tests pass with the new lifecycle, and active docs describe agent-tracker as ephemeral runtime continuity/observability state reset at session boundaries only.",
+          "risk": "Docs/generated drift if source-of-truth files are not updated first."
+        },
+        {
+          "id": 3,
+          "title": "Verify agent-tracker lifecycle end-to-end",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "lead-planning",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-15T03:29:43.160Z",
+          "context": "After lifecycle and docs/tests are updated, verify that tracker state persists across non-session operations, resets only at session boundaries, and still supports continuity/context features.",
+          "approach": "Run targeted lifecycle/continuity tests and broader checks. Review for remaining reset paths or stale contract statements.",
+          "acceptance": "Tracker no longer clears during non-session setup/init/sync paths, session-start reset behavior remains explicit, and relevant tests/checks pass.",
+          "risk": "Hidden code paths may still reset the tracker or rely on old semantics."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Review agent-tracker lifecycle and purpose"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

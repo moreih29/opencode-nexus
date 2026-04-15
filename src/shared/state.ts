@@ -21,9 +21,8 @@ export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
   await fs.mkdir(paths.ARTIFACTS_ROOT, { recursive: true });
 
   await ensureFile(paths.HISTORY_FILE, JSON.stringify({ cycles: [] }, null, 2) + "\n");
-
-  await resetAgentTracker(paths.AGENT_TRACKER_FILE);
-  await resetToolLog(paths.TOOL_LOG_FILE);
+  await ensureFile(paths.AGENT_TRACKER_FILE, JSON.stringify(createInitialAgentTracker(), null, 2) + "\n");
+  await ensureFile(paths.TOOL_LOG_FILE, "");
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
@@ -62,12 +61,7 @@ export async function readTasksSummary(tasksFile: string): Promise<TasksSummary 
 }
 
 export async function resetAgentTracker(trackerFile: string): Promise<void> {
-  const initial = {
-    harness_id: HARNESS_ID,
-    started_at: new Date().toISOString(),
-    invocations: []
-  };
-  await fs.writeFile(trackerFile, JSON.stringify(initial, null, 2) + "\n", "utf8");
+  await fs.writeFile(trackerFile, JSON.stringify(createInitialAgentTracker(), null, 2) + "\n", "utf8");
 }
 
 export async function resetToolLog(toolLogFile: string): Promise<void> {
@@ -92,4 +86,12 @@ async function ensureFile(filePath: string, content: string): Promise<void> {
     return;
   }
   await fs.writeFile(filePath, content, "utf8");
+}
+
+function createInitialAgentTracker() {
+  return {
+    harness_id: HARNESS_ID,
+    started_at: new Date().toISOString(),
+    invocations: []
+  };
 }
