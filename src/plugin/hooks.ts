@@ -3,17 +3,12 @@ import fs from "node:fs/promises";
 import { AGENT_META } from "../agents/generated/index.js";
 import { NO_FILE_EDIT_TOOLS } from "../agents/prompts.js";
 import {
-  buildRunContinuityAdapterHints,
-  injectMissingRunResumeArgs,
-  selectRunContinuityFromCore
-} from "../orchestration/run-continuity-adapter.js";
-import {
   buildPlanContinuityAdapterHints,
   injectMissingPlanResumeArgs,
   readPlanParticipantContinuityFromCore
 } from "../orchestration/plan-continuity-adapter.js";
 import { evaluatePipelineSnapshot as evaluatePipelineSnapshotPure } from "../pipeline/evaluator.js";
-import { isKnownNexusAgent, requiresTeamInRunMode } from "../orchestration/team-policy.js";
+import { isKnownNexusAgent } from "../orchestration/team-policy.js";
 import { SKILL_META } from "../skills/prompts.js";
 import { evaluateQaAutoTrigger } from "../pipeline/qa-trigger.js";
 import { readAgentTracker, registerInvocationEnd, registerInvocationStart, writeAgentTracker } from "../shared/agent-tracker.js";
@@ -136,7 +131,6 @@ export function createHooks(ctx: PluginContext) {
 
     "tool.execute.before": async (input: ToolInput, output: ToolOutput) => {
       if (input.tool === "task") {
-        output.args = await injectRunContinuityForTask(paths, output.args);
         output.args = await injectPlanContinuityForTask(paths, output.args);
       }
 
@@ -396,17 +390,7 @@ async function enforceTaskTeamPolicy(
     return;
   }
 
-  const hasPlan = await fileExists(paths.PLAN_FILE);
-  const hasTasks = await fileExists(paths.TASKS_FILE);
-  const inRunMode = hasTasks && !hasPlan;
-  if (!inRunMode || !requiresTeamInRunMode(agentType)) {
-    return;
-  }
-
-  const teamName = pickCoordinationLabel(args);
-  if (!teamName) {
-    throw new Error(`Run mode requires a shared team_name coordination label for ${agentType} subagent tasks.`);
-  }
+  void paths;
 }
 
 async function updatePlanParticipantContinuity(
@@ -500,32 +484,6 @@ function createRunContinuityInvocationID(agentType: string, coordinationLabel?: 
   const nonce = Math.random().toString(36).slice(2, 8);
   const label = (coordinationLabel ?? "solo").replace(/[^A-Za-z0-9._-]/g, "-").toLowerCase();
   return `run-continuity-${agentType.toLowerCase()}-${label}-${timestamp}-${nonce}`;
-}
-
-async function injectRunContinuityForTask(
-  paths: ReturnType<typeof createNexusPaths>,
-  args: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  if (!(await isRunMode(paths))) {
-    return args;
-  }
-
-  const agentType = pickString(args, ["subagent_type", "agent", "type"]);
-  if (!agentType) {
-    return args;
-  }
-
-  const continuity = await selectRunContinuityFromCore(paths.AGENT_TRACKER_FILE, {
-    agent_type: agentType,
-    coordination_label: pickCoordinationLabel(args) ?? undefined
-  });
-
-  if (!continuity) {
-    return args;
-  }
-
-  const hints = buildRunContinuityAdapterHints(continuity);
-  return injectMissingRunResumeArgs(args, hints);
 }
 
 async function injectPlanContinuityForTask(

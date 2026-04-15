@@ -6839,6 +6839,179 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T01:48:19.095Z",
+      "branch": "main",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Merge current branch into main",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "openai/gpt-5.4",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-15T01:48:07.071Z",
+          "context": "User requested merging the current branch chore/nexus-core-consuming-sync into main. Repository is clean, no active plan or task cycle exists.",
+          "approach": "Checkout main and perform a non-interactive merge from the current branch, then verify status and resulting HEAD.",
+          "acceptance": "main contains the commits from chore/nexus-core-consuming-sync and git status is clean or reports only expected branch state.",
+          "risk": "Merge conflicts or main moving unexpectedly; do not rewrite history."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": []
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-15T02:37:44.971Z",
+      "branch": "global-refactor",
+      "plan": {
+        "id": 36,
+        "topic": "Refactor Nexus runtime contract and docs",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Remove `team_name` requirement and reliance from run-mode runtime and guidance",
+            "status": "decided",
+            "decision": "`team_name` will no longer be required for run-mode task spawning or documented as standard task-tool input. Existing parsing may remain only as optional compatibility metadata where harmless, but runtime success and continuity must not depend on it.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Remove run auto-resume injection / Claude-style continuity from OpenCode task spawning",
+            "status": "decided",
+            "decision": "Run-mode auto-resume injection will be removed rather than narrowed. OpenCode task spawning should not receive Claude-style resume fields or implicit continuity injection. Tracking can remain observational via agent-tracker, but spawning must work without injected continuity metadata.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Update generated skills/docs and context docs to current runtime state surfaces",
+            "status": "decided",
+            "decision": "Generated skills/docs, harness resume docs, and .nexus context docs are now aligned to the current runtime surfaces. Active continuity/storage references use plan.extension.json, agent-tracker.json, and tool-log.jsonl rather than orchestration.json or audit/; team_name is documented only as optional metadata.",
+            "how_agents": [
+              "engineer",
+              "writer",
+              "tester"
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Run targeted regressions and full verification for runtime and docs changes",
+            "status": "decided",
+            "decision": "Verification is complete. Targeted team-policy, run continuity, plan continuity, prompt generation, context, and full e2e checks passed after the final harness-docs correction. The runtime and documentation contract is now consistent with the intended OpenCode-native behavior.",
+            "how_agents": [
+              "tester"
+            ]
+          }
+        ],
+        "research_summary": "Architect analyzed opencode-nexus runtime and identified four confirmed problem areas: unnecessary `team_name` requirement in run mode, Claude-style run continuity/resume injection instead of OpenCode-native behavior, stale generated skill/docs referencing obsolete surfaces (`orchestration.json`, `audit/`), and run continuity injection causing spawn issues. Recommended strategy is to remove `team_name` as a runtime prerequisite, remove or heavily narrow run auto-injection (preferred: remove it), keep plan-mode continuity intact, update source-of-truth harness content and regenerate derived artifacts, then verify with targeted regressions plus project checks.",
+        "created_at": "2026-04-15T02:19:58.678Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Remove team_name requirement and run auto-resume injection",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-15T02:20:33.212Z",
+          "context": "Refactor opencode-nexus runtime so run-mode task spawning no longer requires `team_name`, and remove run auto-resume/Claude-style continuity injection from OpenCode task spawning. Architect recommendation: remove run auto-injection entirely as lowest-risk fix. Likely files include src/plugin/hooks.ts, src/orchestration/run-continuity-adapter.ts, src/orchestration/team-policy.ts, src/shared/agent-tracker.ts, src/shared/schema.ts, and impacted tests such as scripts/e2e-team-policy.mjs and run continuity tests.",
+          "approach": "Make the smallest contract-correct runtime change: stop enforcing team_name in run mode, remove or disable run continuity arg injection into task tool calls, and keep agent-tracker observational only. Update only runtime code and directly impacted tests in this task.",
+          "acceptance": "Run-mode task spawning no longer requires team_name; no run path injects resume_task_id/resume_session_id/resume_handles; impacted runtime tests are updated or added for the new contract.",
+          "risk": "Touches spawn/continuity hooks and may affect task correlation or tests if incomplete."
+        },
+        {
+          "id": 2,
+          "title": "Update generated skills and orchestration docs",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T02:20:33.218Z",
+          "context": "After runtime contract fixes, update source-of-truth prompt/docs inputs and regenerate outputs so generated content matches current runtime. Architect identified stale references to orchestration.json and audit/ in harness-content and generated skills/docs.",
+          "approach": "Edit source-of-truth docs/templates first, then regenerate derived skill/template artifacts and refresh any runtime-facing prompt text that still treats team_name as required.",
+          "acceptance": "Generated plan/run skills, templates, and AGENTS-related prompt surfaces no longer describe orchestration.json or audit/ as active state surfaces and no longer require team_name for run-mode spawning.",
+          "risk": "Generated outputs can drift if source and generated files are only partially updated."
+        },
+        {
+          "id": 3,
+          "title": "Sync .nexus context docs with runtime architecture",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-15T02:20:33.226Z",
+          "context": "Human-authored context docs under .nexus/context still describe stale orchestration surfaces. These should be aligned after runtime contract changes.",
+          "approach": "Update only the human-authored context docs that still describe deprecated orchestration storage or required team_name behavior.",
+          "acceptance": ".nexus/context docs describe current runtime surfaces and no longer claim orchestration.json/audit are active or that run mode requires team_name.",
+          "risk": "Low; mostly documentation drift cleanup."
+        },
+        {
+          "id": 4,
+          "title": "Verify runtime contract and docs regressions",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "architect-recommended",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 4,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-15T02:20:33.235Z",
+          "context": "After runtime and docs updates, verify that the new contract is consistent and no regressions remain around run-mode spawning, plan continuity, docs generation, and tests.",
+          "approach": "Run targeted e2e scripts for team policy and continuity plus repository-wide checks. Report PASS/FAIL with findings by severity.",
+          "acceptance": "Targeted regressions relevant to removed team_name requirement and run auto-resume pass, and broader project checks succeed or failures are clearly isolated.",
+          "risk": "May expose hidden contract drift requiring follow-up fixes."
+        },
+        {
+          "id": 5,
+          "title": "Sync harness resume docs with runtime contract",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "tester-followup",
+          "owner_reuse_policy": "reuse",
+          "plan_issue": 3,
+          "deps": [
+            2,
+            3
+          ],
+          "created_at": "2026-04-15T02:34:28.979Z",
+          "context": "Tester found stale references in harness-docs/resume_invocation.md after runtime/doc refactor. The doc still mentions orchestration.json, audit/, and removed run continuity injection behavior.",
+          "approach": "Apply a minimal documentation fix limited to harness-docs/resume_invocation.md so it matches the current runtime: plan may auto-inject task_id, run does not auto-inject resume args, and current runtime surfaces are agent-tracker.json and tool-log.jsonl.",
+          "acceptance": "harness-docs/resume_invocation.md no longer references orchestration.json or audit/ as active runtime surfaces and no longer claims run-mode continuity auto-injection exists.",
+          "risk": "Low; documentation-only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 5,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "Refactor Nexus runtime contract and docs"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

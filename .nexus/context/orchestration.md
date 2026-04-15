@@ -82,7 +82,7 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 코어 상태
 
-파일 기반 JSON 저장소 (`.nexus/state/opencode-nexus/orchestration.json`). 각 인보케이션은 `invocation_id`, `agent_type`, `status`(running/completed/failed/cancelled), `coordination_label`, `team_name`, `purpose`, `continuity`, 타임스탬프를 포함.
+런타임 상태는 인메모리로 관리되며, 지속성이 필요한 데이터는 `.nexus/state/`의 플랜·태스크·히스토리 파일에 기록된다. Task 1 이후 `orchestration.json`과 `audit/` 로그는 더 이상 활성 런타임 표면이 아니다.
 
 ### 위임 흐름
 
@@ -90,19 +90,14 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 연속성 관리
 
-- `registerStart` / `registerEnd` — 인보케이션 생애주기 등록
-- `pickContinuity` — agent_type + coordination_label로 재개 가능한 인보케이션 선택
-- `buildDelegationPlan` — 연속성이 있으면 resume_task_id, resume_session_id 포함
+- 인보케이션 생애주기는 인메모리에서 관리
+- `coordination_label`을 통한 그룹핑 지원 (선택적)
+- 연속성 힌트는 도구 호출 시 명시적으로 전달
 
 ### 팀 정책
 
-- `requiresTeamInRunMode` — do/check 에이전트는 run 모드에서 팀 레이블 필수
-- `canJoinMeetWithoutTeam` — lead만 팀 없이 plan 참여 가능
-
-### Plan / Run 연속성 어댑터
-
-- Plan: `coordination_label=plan-panel` + `agent_type` 조합 우선 조회
-- Run: agent_type + coordination_label 조합 우선 → agent_type만으로 fallback. 재개 필드 자동 주입
+- `requiresTeamInRunMode` — Task 1 이후 모든 에이전트에서 `false`로 변경. run 모드에서 team_name은 선택적이다.
+- `canJoinPlanWithoutTeam` — lead는 team_name 없이 plan 참여 가능
 
 ## 4. 파이프라인
 

@@ -42,7 +42,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- CHECK agents verify and report PASS/FAIL plus severity; they do not silently fix application code.",
     "- Multi-task or multi-file execution must not stay Lead solo once decomposition is required; involve Engineer for code execution units.",
     "- Read relevant .nexus/ files (decisions, context, memory) before specialist delegation when context or prior decisions matter.",
-    "- Reuse an existing team_name coordination label before inventing a new one.",
+    "- Reuse an existing coordination label before inventing a new one when grouping related work.",
     "- All grouped execution is lead-mediated; subagents do not directly coordinate each other."
   ].join("\n");
   const outputContracts = [
@@ -58,7 +58,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Primary instruction path: AGENTS.md plus opencode.json.instructions.",
     "- CLAUDE.md is a legacy migration input only, not the primary runtime instruction file.",
     "- Slash-skill behavior is represented through nx_* tools, tags, hooks, and system injection.",
-    "- team_name is a coordination label, not a platform-native team object."
+    "- Coordination labels are optional metadata, not platform-native team objects."
   ].join("\n");
 
   const nexusBlock = [
@@ -80,7 +80,7 @@ export function buildNexusSystemPrompt(input: BuildSystemInput): string {
     "- Branch Guard: avoid substantial execution directly on main/master.",
     "- [d]: record decision in active plan session.",
     "- [rule]: write stable team conventions.",
-    "- team_name is only a lead-managed coordination label, not a platform-native team object.",
+    "- Coordination labels are optional lead-managed metadata, not platform-native team objects.",
     "- All grouped execution is lead-mediated; subagents do not directly coordinate each other.",
     "- Structure subagent delegation payloads with role, task, context, and constraints fields.",
     "- Setup/maintenance skills (nx-setup, nx-init, nx-sync) are called via skill() only when the user explicitly requests them or directly mentions the need. Do not invoke them proactively without user instruction.",

@@ -21,7 +21,7 @@ Use agents when parallel work or a second specialized perspective is helpful.
 | writer | DO | Technical writing — transforms research findings, code, and analysis into clear documents and presentations for the intended audience | writer |
 
 Small single-file tasks can stay with the lead agent.
-Reuse an existing `team_name` label before inventing a new one; it is a grouping label, not a platform-native team object.
+Use optional coordination labels when grouping related subagent work.
 
 ### Skills
 
@@ -59,7 +59,7 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 - HOW agents advise on approach and do not own implementation state.
 - DO agents execute scoped work against active tasks only.
 - CHECK agents report PASS/FAIL plus findings by severity.
-- `team_name` is a shared coordination label used to group related subagent work.
+- Coordination labels are optional metadata used to group related subagent work.
 - All grouped execution is lead-mediated; subagents do not directly coordinate each other.
 
 ### Platform Mapping
@@ -67,6 +67,6 @@ Reuse an existing `team_name` label before inventing a new one; it is a grouping
 - Primary instruction path: `AGENTS.md` plus `opencode.json.instructions`.
 - `CLAUDE.md` is legacy migration input only.
 - Claude slash skills map to `nx_*` tools plus tags and hook injection.
-- Claude team APIs map to lead-coordinated OpenCode delegation with `team_name` labels.
+- Claude team APIs map to lead-coordinated OpenCode delegation with optional coordination labels.
 - Exit/edit guardrails replace Claude nonstop behavior.
 <!-- NEXUS:END -->
