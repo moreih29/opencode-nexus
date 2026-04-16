@@ -63,7 +63,7 @@ opencode-nexus update
 opencode-nexus update --scope user
 
 # 특정 버전으로 고정
-opencode-nexus update --scope user --version 0.6.0
+opencode-nexus update --scope user --version 0.7.0
 ```
 
 > **중요**: OpenCode는 시작할 때 npm 플러그인의 캐시된 버전을 자동으로 갱신하지 않습니다. 새 버전을 적용하려면 위 CLI 명령으로 명시적으로 업데이트하세요.
