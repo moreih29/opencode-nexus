@@ -460,14 +460,21 @@ async function enforceTaskTeamPolicy(
   if (callerAgent && callerAgent.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
     throw new Error(`task is Nexus-lead only. Caller "${callerAgent}" is not allowed.`);
   }
-
-  const sessionID = pickSessionID(input) ?? pickSessionID(args);
-  if (!sessionID) {
+  if (callerAgent && callerAgent.toLowerCase() === NEXUS_PRIMARY_AGENT_ID) {
     return;
   }
 
+  const sessionID = pickSessionID(input) ?? pickSessionID(args);
+  if (!sessionID) {
+    throw new Error("task is Nexus-lead only. Missing caller provenance for task delegation.");
+  }
+
   const sessionInvocation = await resolveLatestSessionInvocation(paths, sessionID);
-  if (sessionInvocation && sessionInvocation.agent_type.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
+  if (!sessionInvocation) {
+    throw new Error("task is Nexus-lead only. Cannot verify caller provenance for task delegation.");
+  }
+
+  if (sessionInvocation.agent_type.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
     throw new Error(`task is Nexus-lead only. Session caller "${sessionInvocation.agent_type}" is not allowed.`);
   }
 }

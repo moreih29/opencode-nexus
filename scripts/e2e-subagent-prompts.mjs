@@ -155,4 +155,36 @@ let passed = 0;
   console.log(`PASS [6] all ${EXPECTED_SUBAGENT_IDS.length} subagents disallow task and nx_task_close`);
 }
 
+// Case 7: Partial subagent override receives additive defaults and merged tools
+{
+  const hook = createConfigHook();
+  const config = {
+    agent: {
+      engineer: {
+        mode: "custom-subagent-mode",
+        model: "custom-model",
+        tools: {
+          bash: true,
+          task: true,
+          nx_task_close: true
+        }
+      }
+    }
+  };
+  await hook(config);
+
+  const engineer = config.agent.engineer;
+  assert.equal(engineer.mode, "custom-subagent-mode", `[7] engineer.mode should preserve user value`);
+  assert.equal(engineer.model, "custom-model", `[7] engineer.model should preserve user value`);
+  assert.equal(engineer.prompt, AGENT_PROMPTS.engineer, `[7] engineer.prompt should be backfilled from defaults`);
+  assert.equal(typeof engineer.description, "string", `[7] engineer.description should be backfilled`);
+  assert.ok(engineer.description.length > 0, `[7] engineer.description should not be empty`);
+  assert.equal(engineer.tools.bash, true, `[7] engineer.tools should preserve user-specified keys`);
+  assert.equal(engineer.tools.task, false, `[7] engineer.tools.task should be enforced to false`);
+  assert.equal(engineer.tools.nx_task_close, false, `[7] engineer.tools.nx_task_close should be enforced to false`);
+
+  passed++;
+  console.log("PASS [7] partial subagent override is additive-merged with enforced task guards");
+}
+
 console.log(`\n✓ e2e-subagent-prompts.mjs: ${passed} cases passed`);

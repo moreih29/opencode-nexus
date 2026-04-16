@@ -17,6 +17,20 @@ const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 
+await assert.rejects(
+  () => hooks["tool.execute.before"]({ tool: "task" }, { args: { subagent_type: "engineer", description: "no caller" } }),
+  /Missing caller provenance|Cannot verify caller provenance/i
+);
+
+await assert.rejects(
+  () =>
+    hooks["tool.execute.before"](
+      { tool: "task", sessionID: "ses-unknown" },
+      { args: { subagent_type: "engineer", description: "unknown session" } }
+    ),
+  /Cannot verify caller provenance/i
+);
+
 await hooks["tool.execute.before"](
   { tool: "task", agent: "nexus" },
   { args: { subagent_type: "engineer", description: "do work" } }

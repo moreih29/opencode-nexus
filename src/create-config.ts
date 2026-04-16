@@ -12,31 +12,16 @@ export function createConfigHook() {
     const currentAgent = toRecord(config.agent);
     const nextAgent: Record<string, unknown> = { ...currentAgent };
 
-    if (!nextAgent[NEXUS_PRIMARY_AGENT_ID]) {
-      nextAgent[NEXUS_PRIMARY_AGENT_ID] = {
-        description: NEXUS_PRIMARY_DESCRIPTION,
-        mode: "primary",
-        prompt: NEXUS_PRIMARY_PROMPT,
-        color: "accent",
-        permission: {
-          task: {
-            "*": "allow"
-          }
-        }
-      };
-    }
+    nextAgent[NEXUS_PRIMARY_AGENT_ID] = mergePrimaryAgentEntry(toRecord(nextAgent[NEXUS_PRIMARY_AGENT_ID]));
 
     for (const meta of Object.values(AGENT_META)) {
-      if (nextAgent[meta.id]) {
-        continue;
-      }
-      nextAgent[meta.id] = {
+      nextAgent[meta.id] = mergeSubagentAgentEntry(toRecord(nextAgent[meta.id]), {
         description: meta.description,
         mode: "subagent",
         model: meta.model,
         prompt: AGENT_PROMPTS[meta.id],
         tools: buildSubagentToolPolicy(meta.disallowedTools as string[])
-      };
+      });
     }
 
     config.agent = nextAgent;
@@ -54,6 +39,69 @@ export function createConfigHook() {
     if (!config.default_agent) {
       config.default_agent = NEXUS_PRIMARY_AGENT_ID;
     }
+  };
+}
+
+function mergePrimaryAgentEntry(existing: Record<string, unknown>): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {
+    description: NEXUS_PRIMARY_DESCRIPTION,
+    mode: "primary",
+    prompt: NEXUS_PRIMARY_PROMPT,
+    color: "accent",
+    permission: {
+      task: {
+        "*": "allow"
+      }
+    }
+  };
+
+  const mergedPermission = mergePrimaryPermission(toRecord(existing.permission));
+
+  return {
+    ...defaults,
+    ...existing,
+    permission: mergedPermission
+  };
+}
+
+function mergePrimaryPermission(existingPermission: Record<string, unknown>): Record<string, unknown> {
+  const defaultPermission = {
+    task: {
+      "*": "allow"
+    }
+  };
+
+  return {
+    ...defaultPermission,
+    ...existingPermission,
+    task: {
+      ...defaultPermission.task,
+      ...toRecord(existingPermission.task)
+    }
+  };
+}
+
+function mergeSubagentAgentEntry(
+  existing: Record<string, unknown>,
+  defaults: {
+    description: string;
+    mode: string;
+    model: string;
+    prompt: string;
+    tools: Record<string, boolean>;
+  }
+): Record<string, unknown> {
+  const mergedTools = {
+    ...defaults.tools,
+    ...toRecord(existing.tools)
+  };
+  mergedTools.task = false;
+  mergedTools.nx_task_close = false;
+
+  return {
+    ...defaults,
+    ...existing,
+    tools: mergedTools
   };
 }
 

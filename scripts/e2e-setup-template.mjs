@@ -30,7 +30,7 @@ async function runCliTty(args, answers) {
     }, 10000);
 
     const maybeAnswerPrompt = () => {
-      const waitingForPrompt = /(Select an option \[[0-9]+\]: |Project directory \[[^\]]+\]: |Plugin version(?: \[[^\]]+\])?: |Updated plugin version(?: \[[^\]]+\])?: )$/.test(stdout);
+      const waitingForPrompt = /(Select an option \[[0-9]+\]: |Project directory \[[^\]]+\]: |Plugin version(?: \[[^\]]+\])?: |Updated plugin version(?: \[[^\]]+\])?: |Model for agent\.\*\.model(?: \[[^\]]+\])?: )$/.test(stdout);
       if (!waitingForPrompt || answerIndex >= answers.length) {
         return;
       }
@@ -88,6 +88,25 @@ assert.equal(versionResult.stdout.trim(), packageVersion);
 const shortVersionResult = await execFileAsync("node", ["dist/cli.js", "-v"], { cwd: repoRoot });
 assert.equal(shortVersionResult.stdout.trim(), packageVersion);
 
+const topLevelHelpResult = await execFileAsync("node", ["dist/cli.js", "--help"], { cwd: repoRoot });
+assert.match(topLevelHelpResult.stdout, /Commands:/);
+assert.match(topLevelHelpResult.stdout, /\bsetup\b/);
+assert.ok(!topLevelHelpResult.stdout.includes("--scope"), "top-level help should not include command-specific options");
+
+const installHelpResult = await execFileAsync("node", ["dist/cli.js", "install", "--help"], { cwd: repoRoot });
+assert.match(installHelpResult.stdout, /Install command/);
+assert.match(installHelpResult.stdout, /--scope <user\|project>/);
+assert.ok(!installHelpResult.stdout.includes("--model <value>"), "install help should stay plugin-focused");
+
+const updateHelpResult = await execFileAsync("node", ["dist/cli.js", "update", "--help"], { cwd: repoRoot });
+assert.match(updateHelpResult.stdout, /Update command/);
+assert.match(updateHelpResult.stdout, /--version <value>/);
+
+const setupHelpResult = await execFileAsync("node", ["dist/cli.js", "setup", "--help"], { cwd: repoRoot });
+assert.match(setupHelpResult.stdout, /Setup command/);
+assert.match(setupHelpResult.stdout, /--model <value>/);
+assert.ok(!setupHelpResult.stdout.includes("--no-pin"), "setup help should stay model-focused");
+
 const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-project-"));
 await execFileAsync("node", ["dist/cli.js", "install", "--scope", "project", "--directory", projectRoot], {
   cwd: repoRoot
@@ -115,8 +134,18 @@ await execFileAsync(
 const userConfig = JSON.parse(await fs.readFile(userConfigPath, "utf8"));
 assert.equal(userConfig.plugin.includes("opencode-nexus"), true);
 
+const setupConfigPath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-")), "opencode.json");
+await execFileAsync(
+  "node",
+  ["dist/cli.js", "setup", "--scope", "user", "--config", setupConfigPath, "--model", "openai/gpt-5.3-codex"],
+  { cwd: repoRoot }
+);
+const setupConfig = JSON.parse(await fs.readFile(setupConfigPath, "utf8"));
+assert.equal(setupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
+assert.equal(setupConfig.agent.engineer.model, "openai/gpt-5.3-codex");
+
 const interactiveProjectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-interactive-project-"));
-await runCliTty(["install"], ["2", interactiveProjectRoot, "1", "7.7.7"]);
+await runCliTty(["install"], ["2", interactiveProjectRoot, "1", "7.7.7", "2"]);
 
 const interactiveInstallConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
 assert.equal(interactiveInstallConfig.plugin.includes("opencode-nexus@7.7.7"), true);
@@ -125,6 +154,11 @@ await runCliTty(["update", "--scope", "project", "--directory", interactiveProje
 const interactiveUpdateConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
 assert.equal(interactiveUpdateConfig.plugin.includes("opencode-nexus@8.8.8"), true);
 assert.equal(interactiveUpdateConfig.plugin.includes("opencode-nexus@7.7.7"), false);
+
+await runCliTty(["setup", "--scope", "project", "--directory", interactiveProjectRoot], ["openai/gpt-5.3-codex"]);
+const interactiveSetupConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
+assert.equal(interactiveSetupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
+assert.equal(interactiveSetupConfig.agent.tester.model, "openai/gpt-5.3-codex");
 
 const nonInteractiveConfigPath = path.join(
   await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-noninteractive-")),
