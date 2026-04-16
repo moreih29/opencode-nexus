@@ -124,4 +124,15 @@ assert.ok(includesLine(allCompletePlan, /allComplete/i), "allComplete plan notic
 assert.ok(includesLine(allCompletePlan, /Step 7/i), "allComplete notice should hand off to Step 7");
 assert.ok(includesLine(allCompletePlan, /nx_task_add/i), "allComplete notice should require nx_task_add");
 
+const memoryPrompt = await systemMessagesFor("s8", "[m] 이번 교훈 저장");
+assert.ok(includesLine(memoryPrompt, /empirical-|external-|pattern-/i), "memory notice should include canonical category prefixes");
+assert.ok(includesLine(memoryPrompt, /kebab-case/i), "memory notice should include kebab-case naming guidance");
+assert.ok(includesLine(memoryPrompt, /Merge-before-create/i), "memory notice should include merge-before-create guidance");
+
+const memoryGcPrompt = await systemMessagesFor("s9", "[m:gc] 중복 정리");
+assert.ok(includesLine(memoryGcPrompt, /Manual GC/i), "memory_gc notice should mention manual GC default");
+assert.ok(includesLine(memoryGcPrompt, /git-recoverable/i), "memory_gc notice should mention git-recoverable deletion");
+assert.ok(includesLine(memoryGcPrompt, /Glob/i), "memory_gc notice should mention Glob usage");
+assert.ok(includesLine(memoryGcPrompt, /merge/i), "memory_gc notice should mention merge-before-delete guidance");
+
 console.log("e2e hook notices passed");

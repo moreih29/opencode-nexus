@@ -8930,6 +8930,298 @@
           "Confirm the prompt-library extension is correct and stable."
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T10:58:09.183Z",
+      "branch": "update-nexus-core-consuming-docs",
+      "plan": {
+        "id": 50,
+        "topic": "Upgrade opencode-nexus to consume @moreih29/nexus-core v0.10.0",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Adopt required v0.10.0 consuming changes and decide whether any optional v0.10.0 features should be implemented now.",
+            "status": "decided",
+            "decision": "Adopt the minimal safe v0.10.0 consumer upgrade: bump `@moreih29/nexus-core` to `^0.10.0`, rerun local generation/build so the refreshed canonical prompts and metadata land in tracked artifacts, and sync the human-authored local docs that would otherwise contradict the new behavior/version. Treat conditional auto-pairing and task-exception awareness as prompt/doc-level changes in this repo (not a new runtime pairing engine), and defer the optional `memory-access` observation hook to a separate follow-up because upstream marks it optional and opencode-nexus has no current reader/writer surface for it.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Current consumer is on `@moreih29/nexus-core ^0.9.0` (`package.json`, generated prompt headers, `.nexus/context/tools.md`). Upstream GitHub docs show `@moreih29/nexus-core` is now at `0.10.0` with a breaking minor release. `CONSUMING.md` + `CHANGELOG.md` + `MIGRATIONS/v0_9_to_v0_10.md` identify four relevant surfaces for opencode-nexus: (1) update devDependency to `^0.10.0`, (2) rebuild generated prompt artifacts because `skills/nx-plan/body.md` body_hash changed, (3) align consumer task decomposition guidance with new conditional auto-pairing + `task-exceptions.yml` vocabulary, and (4) optionally implement memory-access observation hook backed by `memory-access.schema.json`. Local search shows no existing `task_exceptions`, `memory_policy`, or `memory-access` handling, and current generated nx-plan prompt still contains unconditional auto-pairing prose from v0.9.0. Existing local docs also still reference `^0.9.0` in `.nexus/context/tools.md` and do not record a v0.10.0 upgrade in `UPSTREAM.md`.",
+        "created_at": "2026-04-16T10:48:02.445Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement nexus-core v0.10.0 consumer upgrade",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-v010-upgrade",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T10:50:54.038Z",
+          "context": "Upgrade opencode-nexus from `@moreih29/nexus-core ^0.9.0` to `^0.10.0` using upstream GitHub docs (`CONSUMING.md`, `CHANGELOG.md` v0.10.0, `MIGRATIONS/v0_9_to_v0_10.md`). Current repo still carries 0.9.0 in `package.json`, generated prompt headers, and `.nexus/context/tools.md`. Architect review concluded this repo's v0.10.0 delta is regen-first plus human-doc sync; no runtime pairing engine exists locally, so conditional auto-pairing lands through regenerated canonical prompts and aligned local docs. Local docs that look stale: `.nexus/context/tools.md`, `.nexus/context/architecture.md`, `.nexus/context/orchestration.md`, `UPSTREAM.md`. Suggested generated/runtime-delivery surfaces to refresh: `src/agents/generated/*`, `src/skills/generated/*`, `templates/skills/*`, and tracked `.opencode/skills/*` copies if regeneration/update flow touches them.",
+          "approach": "1) Update the devDependency and lockfile for `@moreih29/nexus-core ^0.10.0`. 2) Rebuild/regenerate the prompt artifacts so generated source headers and canonical skill text reflect v0.10.0. 3) Update the stale human-authored docs so they accurately describe the new consumed version and the conditional auto-pairing/task-exception-aware plan behavior. 4) Keep memory-access out of scope for this run unless the upgrade strictly requires it.",
+          "acceptance": "- `package.json` and dependency lock state consume `@moreih29/nexus-core ^0.10.0`.\n- Generated prompt artifacts tracked in the repo refresh to the v0.10.0 source/version and include the updated nx-plan body.\n- Local human-authored docs no longer claim `^0.9.0` and no longer describe unconditional tester/reviewer auto-pairing where that is now outdated.\n- No optional memory-access hook/state implementation is introduced in this task.",
+          "risk": "Generator or build output may surface extra upstream drift beyond the planned doc sync; docs may remain inconsistent if regenerated skill/runtime-delivery copies are missed."
+        },
+        {
+          "id": 2,
+          "title": "Verify v0.10.0 upgrade behavior and documentation consistency",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-v010-verify",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T10:51:04.524Z",
+          "context": "After the implementation task, verify that the v0.10.0 upgrade is complete and consistent with upstream docs. Required upstream actions were: update to `^0.10.0`, rebuild, and align task decomposition guidance with conditional auto-pairing / task-exceptions. Memory-access is intentionally deferred. Verification should cover both generated artifacts and human-authored docs touched by the implementation task.",
+          "approach": "Check the upgraded dependency/version surfaces, inspect regenerated nx-plan-related outputs for the new behavior, and run the relevant repo validation commands (at minimum the standard build/check and conformance path the implementation changed). Also verify that stale docs claiming `^0.9.0` or unconditional auto-pairing have been corrected in the touched local docs.",
+          "acceptance": "- Validation commands required for this upgrade pass.\n- The repo no longer contains the stale intended-to-be-updated `^0.9.0` references in touched authoritative docs/generated headers.\n- nx-plan-related generated or shipped outputs reflect the new v0.10.0 prompt content sufficiently to remove the old unconditional auto-pairing wording from authoritative delivery surfaces.\n- Deferred memory-access remains unimplemented and is not incorrectly documented as completed.",
+          "risk": "A partial regeneration may leave one delivery surface stale even if build passes; docs could drift from generated outputs unless explicitly checked."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Upgrade opencode-nexus to consume @moreih29/nexus-core v0.10.0",
+          "Confirm the consumer upgrade is complete, internally consistent, and safe to report as done."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T11:32:12.114Z",
+      "branch": "update-nexus-core-consuming-docs",
+      "plan": {
+        "id": 51,
+        "topic": "Complete omitted v0.10.0 memory-related consumer uptake",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Decide and execute the missing memory-related v0.10.0 consumer updates: guidance/docs only, or guidance/docs plus memory-access observation hook.",
+            "status": "decided",
+            "decision": "Complete the omitted v0.10.0 memory-policy uptake where opencode-nexus already exposes memory workflows, but continue to defer the optional `memory-access` observation hook. Concretely: update `[m]` / `[m:gc]` runtime guidance (`tag-parser`, `system-prompt`, `hooks`) and user-facing docs (`README*`, relevant local context/upgrade notes) so they reflect the canonical memory policy—category choices (`empirical-`, `external-`, `pattern-`), lowercase kebab-case naming, merge-before-create, manual GC as the default, git-recoverable deletion, and the fact that auto-deletion/telemetry-backed GC are not active locally. Do not add `memory-access.jsonl` or automatic deletion logic in this run.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Re-read upstream `CONSUMING.md` and `MIGRATIONS/v0_9_to_v0_10.md`. v0.10.0 added canonical memory policy vocabulary (`vocabulary/memory_policy.yml`), memory lifecycle prose (`docs/memory-lifecycle-contract.md`), a new shared state schema `conformance/state-schemas/memory-access.schema.json`, and new tag `prose_guidance` for `[m]` / `[m:gc]`. The migration guide keeps `memory-access observation hook` optional for opencode-nexus, but the canonical memory policy itself is now published and local uptake should reflect it where the harness exposes memory workflows. Current opencode-nexus status: memory modes already exist (`[m]`, `[m:gc]`, `[sync]`), but memory guidance is still generic in `src/shared/tag-parser.ts`, `src/plugin/system-prompt.ts`, and `src/plugin/hooks.ts`; README tag docs are also generic. There is no `memory-access.jsonl` path or observation hook, and no local runtime/doc surface mentions canonical memory categories (`empirical-`, `external-`, `pattern-`), naming rules, merge-before-create, manual GC default, or three-signal automatic deletion structure. Existing hook architecture can observe tool executions in `tool.execute.after`, and `.nexus/state/opencode-nexus/` already hosts harness-local files like `agent-tracker.json` and `tool-log.jsonl`, so adding `memory-access.jsonl` is feasible if chosen.",
+        "created_at": "2026-04-16T11:19:58.536Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement omitted v0.10.0 memory-policy uptake",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-memory-policy-uptake",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T11:24:16.575Z",
+          "context": "User requested a second pass on the v0.10.0 consumer upgrade to implement omitted pieces after re-reading upstream consuming/migration docs. Upstream canonical memory assets now include `vocabulary/memory_policy.yml`, `docs/memory-lifecycle-contract.md`, `conformance/state-schemas/memory-access.schema.json`, and new `prose_guidance` for `[m]` / `[m:gc]` in `vocabulary/tags.yml`. Architect review concluded opencode-nexus should now adopt the omitted memory-policy guidance where the harness already exposes memory workflows, while still deferring the optional `memory-access` observation hook. Current local surfaces are too generic: `src/shared/tag-parser.ts`, `src/plugin/system-prompt.ts`, `src/plugin/hooks.ts`, `README.md`, `README.en.md`, and local upgrade/context docs do not mention canonical categories (`empirical-`, `external-`, `pattern-`), lowercase kebab-case naming, merge-before-create, manual GC default, git-recoverable deletion, or the fact that auto-deletion / telemetry-backed GC are not active locally. Existing modified files from the prior v0.10.0 bump remain unstaged on branch `chore/update-nexus-core-consuming-docs`. Relevant upstream guidance: `[m]` should save only non-recoverable project knowledge and refer to canonical naming/category/lifecycle policy; `[m:gc]` should follow memory policy principles with consumer-local thresholds; manual GC is default; automatic deletion, if ever enabled, requires three independent signals; read-event observation remains optional/fallback-based when the harness lacks a read hook.",
+          "approach": "Update the memory save/GC guidance consistently across runtime prompt surfaces and user-facing docs. At minimum: (1) strengthen `buildTagNotice()` in `src/shared/tag-parser.ts`; (2) strengthen memory mode playbooks in `src/plugin/system-prompt.ts`; (3) strengthen `buildStatefulNotice()` memory notices in `src/plugin/hooks.ts`; (4) update README tag documentation (both languages) so users see the new canonical memory rules; (5) update local internal docs/upgrade notes such as `UPSTREAM.md` and any clearly relevant `.nexus/context/*` file to record that memory-policy guidance is now adopted while `memory-access` observation remains deferred; and (6) add/update automated assertions in the most relevant existing tests so the new guidance is checked. Do not introduce `memory-access.jsonl`, automatic deletion, or a read-observation hook in this task.",
+          "acceptance": "- `[m]` guidance in authoritative runtime surfaces mentions canonical memory categories, lowercase kebab-case `.md` naming, and merge-before-create/update-existing preference.\n- `[m:gc]` guidance in authoritative runtime surfaces mentions manual GC default, merge-before-delete, git-recoverable deletion, and that local automatic deletion / telemetry-backed GC are not active.\n- README/user-facing docs no longer describe `[m]` / `[m:gc]` in overly generic terms.\n- Internal upgrade/context docs accurately reflect that memory-policy guidance was adopted in this follow-up while `memory-access` observation remains deferred.\n- Existing or updated tests verify the new memory guidance text and pass.\n- No `memory-access.jsonl` file, read-observation hook, or automatic deletion logic is added.",
+          "risk": "Guidance drift could persist if only one of tag notice/system prompt/stateful notice surfaces is updated; tests may need expansion to avoid regressions; changes must avoid overpromising unsupported auto-GC behavior."
+        },
+        {
+          "id": 2,
+          "title": "Verify memory-policy uptake and non-hook deferral",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-memory-policy-verify",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T11:24:28.621Z",
+          "context": "After implementation, verify that the omitted v0.10.0 memory-policy guidance has been adopted across runtime notices/docs and that the optional `memory-access` observation hook remains deferred. Relevant scope: `src/shared/tag-parser.ts`, `src/plugin/system-prompt.ts`, `src/plugin/hooks.ts`, `README.md`, `README.en.md`, `UPSTREAM.md`, relevant `.nexus/context/*` docs if touched, and the most relevant tests (likely `scripts/e2e-tag-handlers.mjs`, `scripts/e2e-hook-notices.mjs`, `scripts/e2e-system-transform.mjs`, or similar). The user explicitly wanted a second pass after re-reading upstream consuming/migration docs.",
+          "approach": "Run the appropriate build/check/tests, inspect the touched runtime notice/playbook surfaces for the new memory semantics, and confirm no `memory-access` state path/hook or auto-deletion behavior was introduced. Verify docs consistently explain category naming, merge-before-create, manual GC default, git-recoverable deletion, and local non-support for telemetry-backed auto-GC.",
+          "acceptance": "- Build/check and the relevant updated tests pass.\n- Authoritative runtime memory guidance mentions the intended canonical memory-policy concepts.\n- README/internal docs are consistent with runtime guidance.\n- No `memory-access` observation hook/state or automatic deletion logic was introduced.\n- Any remaining drift or risk is reported clearly.",
+          "risk": "A doc-only update could leave runtime notices stale, or vice versa; test coverage might miss one injected surface if not inspected directly."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Complete omitted v0.10.0 memory-related consumer uptake",
+          "Confirm the follow-up memory-policy uptake is complete and that deferred optional features remain explicitly deferred."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T12:11:47.742Z",
+      "branch": "update-nexus-core-consuming-docs",
+      "plan": {
+        "id": 52,
+        "topic": "Implement memory access tracking and automatic memory deletion for v0.10.0 uptake",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Choose a safe implementation design for memory-read observation and automatic memory deletion that satisfies nexus-core contracts and fits opencode-nexus's current hook-based architecture.",
+            "status": "decided",
+            "decision": "Implement memory-read observation and automatic memory deletion now. Use a new harness-local state file `.nexus/state/opencode-nexus/memory-access.jsonl` created on first observed read of a real `.nexus/memory/*.md` file, persisted across sessions, and upserted from the `read` tool only. Implement automatic deletion as an explicitly enabled, conservative pre-close GC step inside `nx_task_close`, backed by repo-local `.nexus/config.json` so opt-in is explicit while satisfying the user's request in this repo. Use a three-signal intersection for eligibility: at least 45 days since last read, at least 6 completed cycles since last read, and `access_count <= 2`. Only run automatic deletion when the git worktree is clean; if eligible files are removed, create a dedicated git commit containing only those memory deletions with a recovery hint, then prune the deleted records from `memory-access.jsonl` before normal cycle close continues.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "The user explicitly wants the previously omitted runtime pieces implemented: `.nexus/state/opencode-nexus/memory-access.jsonl`, a read-observation hook for `.nexus/memory/`, and automatic deletion logic. nexus-core v0.10.0 canonical references now define the contracts: `vocabulary/memory_policy.yml` says access tracking is based on read events only, stores last-access timestamp / access count / last-reader identity, defaults to manual GC, and if automatic deletion is enabled it must require at least three independent signals and git-backed recoverable deletion. `docs/memory-lifecycle-contract.md` further states that `.nexus/state/{harness_id}/memory-access.jsonl` is one JSONL line per file upserted on each observation, and that automatic deletion is opt-in and consumer-local for thresholds. `docs/nexus-outputs-contract.md` says the file path is `.nexus/state/{harness_id}/memory-access.jsonl`, it must be written by the harness read-observation hook (not MCP tools), created on first observation, managed by the harness `[m:gc]` handler during GC, conform to `conformance/state-schemas/memory-access.schema.json`, and must not be git-tracked. Local architecture today: `src/plugin/hooks.ts` already has `tool.execute.after`, sees tool names and arguments, and logs edit-like tools to `.nexus/state/opencode-nexus/tool-log.jsonl`. `.gitignore` already ignores `.nexus/state/*`. There is no `memory-access` path/helper, no read-event handling, and no actual `[m]`/`[m:gc]` runtime implementation beyond prompt/notice guidance. Because auto deletion thresholds and trigger semantics are consumer-local and `opencode-nexus` does not currently have a dedicated memory GC tool, the main design fork is where to implement auto deletion safely: likely as a hook-backed automatic GC pass gated by explicit opt-in configuration and/or tied to `[m:gc]` mode, with deletions performed only via explicit git commits and never on scans/writes alone.",
+        "created_at": "2026-04-16T11:40:52.006Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement memory access tracking and automatic memory GC",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-memory-access-auto-gc",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T11:45:32.842Z",
+          "context": "User explicitly asked to implement the previously omitted runtime pieces from the v0.10.0 memory upgrade: `.nexus/state/opencode-nexus/memory-access.jsonl`, a `.nexus/memory/` read observation hook, and automatic deletion logic. There is no active task cycle; existing uncommitted branch changes from the earlier v0.10.0 upgrade must be preserved. Upstream contracts reviewed from `@moreih29/nexus-core`: read observation only on actual file reads (not glob/grep/write/path mentions), memory access records stored in `.nexus/state/{harness_id}/memory-access.jsonl` using `conformance/state-schemas/memory-access.schema.json`, manual GC default but automatic deletion allowed only when explicitly enabled, requiring at least three independent signals, and every deletion must be git-backed recoverable. Architect decision for opencode-nexus: add `MEMORY_ACCESS_FILE`, create shared helpers for JSONL access records and memory GC, observe only `read` tool completions for real files under `.nexus/memory/`, persist access records across sessions, and implement automatic deletion as a conservative pre-close step inside `nx_task_close`, explicitly enabled for this repo via `.nexus/config.json`. Recommended thresholds: >=45 days since last read, >=6 completed cycles since last read, and `access_count <= 2`. Auto deletion must run only when the git worktree is clean; if it deletes files, create a dedicated commit containing only those memory deletions with a recovery hint, then prune deleted records from `memory-access.jsonl` before normal close continues.",
+          "approach": "Implement the feature in the current architecture with minimal but sufficient surface area: (1) extend shared path/schema utilities for `memory-access.jsonl`; (2) add new shared helpers for reading/upserting/pruning memory access records and evaluating auto-GC eligibility based on access records + `.nexus/history.json`; (3) update `src/plugin/hooks.ts` to record access only on successful `read` tool completion for real files under `.nexus/memory/`, without resetting or deleting the log during session lifecycle; (4) update `src/tools/task.ts` / task-close flow to run an auto-GC pre-close pass when `.nexus/config.json` explicitly enables it, skipping when the worktree is dirty and creating a dedicated recovery-hint git commit when deletions occur; (5) update user/runtime guidance to stop claiming tracking/deletion are inactive and instead describe the enabled-but-safe behavior; (6) add focused e2e coverage for positive/negative observation, persistence across session cleanup, auto-GC success, and dirty-worktree skip. Preserve existing unrelated branch changes.",
+          "acceptance": "- A successful `read` of a real `.nexus/memory/*.md` file creates/upserts `.nexus/state/opencode-nexus/memory-access.jsonl` with schema-conformant records (`path`, `last_accessed_ts`, `access_count`, `last_agent`), incrementing `access_count` on repeated reads.\n- Directory reads, `glob`, `grep`, `write`, `apply_patch`, and reads outside `.nexus/memory/` do not create or update memory-access records.\n- `memory-access.jsonl` persists across session lifecycle events; it is not reset on `session.created` and not deleted on `session.deleted`.\n- Automatic deletion is explicitly enabled for this repo (via `.nexus/config.json` or equivalent repo-local config), uses a three-signal intersection (45+ days since last read, 6+ completed cycles since last read, `access_count <= 2`), and only runs when the git worktree is clean.\n- When auto-GC deletes memory files, it creates a dedicated git commit with a recovery hint and removes the deleted file records from `memory-access.jsonl`; when the worktree is dirty, it skips with an explicit reason and makes no deletions/commit.\n- Runtime/docs/tests are updated to reflect the new active behavior accurately.\n- Relevant build/check/tests pass.",
+          "risk": "Auto-GC touches git and cycle-close behavior, so safety guards and isolated commits are critical; hook logic must avoid false-positive observations from directory reads or non-read tools; adding repo-local config may require careful default handling when the file does not yet exist."
+        },
+        {
+          "id": 2,
+          "title": "Verify memory lifecycle implementation and git-safe GC behavior",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-memory-access-auto-gc",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T11:45:44.955Z",
+          "context": "After implementation, verify the newly added memory lifecycle runtime behavior: `.nexus/state/opencode-nexus/memory-access.jsonl`, read observation on real `.nexus/memory/` file reads, persistence across session lifecycle, and automatic deletion executed from task-close flow only when explicitly enabled and safe. This work is layered on top of the already-dirty feature branch from the v0.10.0 upgrade; verification must distinguish the new runtime memory feature from pre-existing unrelated changes on the branch.",
+          "approach": "Run build/check and the relevant focused e2e coverage. Inspect the resulting runtime/documentation surfaces to confirm the intended semantics. Verify both positive and negative observation cases, session persistence, auto-GC success path (including dedicated deletion commit + recovery hint), and dirty-worktree skip behavior. Also confirm no contract violations such as resetting `memory-access.jsonl` on session start/end or observing non-read events.",
+          "acceptance": "- Build/check and the relevant memory lifecycle tests pass.\n- Observation occurs only for real `.nexus/memory/` file reads and produces schema-conformant access records.\n- `memory-access.jsonl` persists across session lifecycle events.\n- Auto-GC honors the three-signal rule, explicit enablement, clean-worktree guard, and dedicated recovery-hint commit behavior.\n- Dirty-worktree path skips safely without deletion or commit.\n- User/runtime guidance is consistent with the implemented behavior.",
+          "risk": "Because auto-GC creates git commits, verification must ensure the commit is isolated and safe; tests must avoid false positives from the already-modified repository state."
+        },
+        {
+          "id": 3,
+          "title": "Fix stale memory GC test expectation",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-memory-gc-test-fix",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T12:08:35.294Z",
+          "context": "Tester verification found a false-negative in the new memory lifecycle work: `scripts/e2e-system-transform-plan-skill.mjs` still expects the old memory_gc wording containing `not active`, but the implementation now correctly says auto-GC is opt-in via `.nexus/config.json` and requires three-signal eligibility plus no pre-existing staged changes. This mismatch blocks `bun run test:e2e` even though focused memory tests pass. Current branch already contains the memory lifecycle implementation and related docs/runtime changes. Fix only the stale test expectation and any directly coupled assertion text needed to match the implemented behavior.",
+          "approach": "Update the failing test assertion(s) in `scripts/e2e-system-transform-plan-skill.mjs` so they match the current implemented memory_gc playbook semantics (manual GC default, git-recoverable deletion, opt-in via `.nexus/config.json`, and pre-existing staged-change safety gate). Then rerun the minimal relevant command set plus `bun run test:e2e` if feasible or the smallest command that proves the failure is resolved.",
+          "acceptance": "- `scripts/e2e-system-transform-plan-skill.mjs` no longer expects the obsolete `not active` phrasing.\n- The updated test asserts the actual implemented memory_gc behavior.\n- Relevant validation commands pass, or any remaining unrelated failures are clearly identified.",
+          "risk": "Changing the assertion too loosely could reduce coverage; keep the check specific to the implemented semantics."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 1,
+        "cycleTopics": [
+          "Implement memory access tracking and automatic memory deletion for v0.10.0 uptake",
+          "Unblock verification by aligning the stale system-transform memory_gc expectation with the implemented runtime guidance."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T13:00:42.964Z",
+      "branch": "update-nexus-core-consuming-docs",
+      "plan": {
+        "id": 53,
+        "topic": "Realign memory auto-GC and .nexus ignore behavior after v0.10.0 uptake",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Decide whether opencode-nexus should keep active auto-GC + `.nexus/config.json`, or realign to claude-nexus-style access-tracking/manual-GC with `.nexus/.gitignore` as the only whitelist authority.",
+            "status": "decided",
+            "decision": "Revise the earlier decision: remove automatic memory GC entirely, together with `.nexus/config.json` as an active runtime/config surface. Keep only memory-access observation (`memory-access.jsonl`) and manual `[m:gc]` guidance. Runtime/docs/tests must be realigned so opencode-nexus matches the sibling model of access-tracking + manual GC only, with no `nx_task_close` side-effect deletion/commit behavior."
+          },
+          {
+            "id": 2,
+            "title": "Identify and remove stale `.nexus/core` / legacy ignore references so tests and cleanup scripts no longer imply or recreate obsolete core-era paths.",
+            "status": "decided",
+            "decision": "Clean up active stale core/ignore drift with the minimum executable-surface change set: make `.nexus/.gitignore` the sole authority for tracked `.nexus/` whitelist rules; remove all `.nexus` rules from the root `.gitignore`; in `.nexus/.gitignore` remove stale `!core/`, `!core/**`, and `!config.json`, keeping only `context/`, `memory/`, `rules/`, `history.json`, and `.gitignore`; update `scripts/smoke-opencode-run.mjs` so it no longer assumes `.nexus/core/...` or `nx_core_write`; and delete any stray empty `.nexus/core` artifact if present. Do not rewrite archival history or old plan records just to erase historical `.nexus/core` mentions."
+          }
+        ],
+        "research_summary": "Research covered three areas. (1) `claude-nexus` reference: it uses `.nexus/.gitignore` as the only whitelist gate (`/Users/kih/workspaces/areas/claude-nexus/.nexus/.gitignore:1-11`) and its root `.gitignore` does not mention `.nexus/` (`.../claude-nexus/.gitignore:1-13`). It tracks memory-access observations in `src/hooks/gate.ts:498-543` but does not implement automatic GC; `[m:gc]` remains a manual gate in docs/prompt handling. No active `.nexus/config.json` file exists there. (2) Current `opencode-nexus` state: root `.gitignore` now duplicates `.nexus` whitelist logic (`.gitignore:9-16`) while `.nexus/.gitignore` still carries stale `!core/`, `!config.json`, and `!history.json` entries (`.nexus/.gitignore:1-12`). The new memory runtime reads `.nexus/config.json` via `src/shared/memory-gc.ts` and `src/shared/paths.ts`, and runtime/doc surfaces now mention config-based opt-in. (3) Current `core/` creation risk: live source does not create `.nexus/core/` anymore (`src/shared/state.ts:13-25` only creates context/memory/rules/state), and `.nexus/` in the repo currently has no `core/` directory. I found no active source/test mkdir for `.nexus/core`, but there is at least one stale test-script reference in `scripts/smoke-opencode-run.mjs:204-218` that still treats artifacts as `.nexus/core/<layer>/...`, so the empty `core/` folder is more likely legacy/stale tooling fallout than current `ensureNexusStructure()` behavior.",
+        "created_at": "2026-04-16T12:27:57.734Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Remove auto-GC/config while keeping memory access tracking",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-remove-auto-gc",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T12:50:24.446Z",
+          "context": "Plan #53 Issue #1 is decided: remove automatic memory GC and `.nexus/config.json`, but keep memory-access observation (`memory-access.jsonl`) and manual `[m:gc]` guidance. Current branch already contains the prior v0.10.0 upgrade plus a partially implemented memory runtime: `src/shared/memory-access.ts` should stay, but `src/shared/memory-gc.ts`, `.nexus/config.json`, and `nx_task_close` auto-GC behavior should be removed. Runtime/docs/tests currently still mention config-based opt-in auto-GC in `src/plugin/system-prompt.ts`, `src/shared/tag-parser.ts`, `src/plugin/hooks.ts`, `README.md`, `README.en.md`, `UPSTREAM.md`, and memory-related tests. `src/shared/paths.ts` currently exposes `NEXUS_CONFIG_FILE`, and `src/tools/task.ts` calls `runPreCloseMemoryGc(...)`. Existing branch changes must be preserved.",
+          "approach": "Keep the access-tracking path and hook, but delete the auto-GC implementation and its public surface. Expected scope: remove `src/shared/memory-gc.ts`; remove `runPreCloseMemoryGc(...)` integration from `src/tools/task.ts`; remove `.nexus/config.json`; remove any no-longer-needed path/schema exports tied only to config/auto-GC; update runtime guidance/docs to manual `[m:gc]` only (access tracking remains, but no local automatic deletion/commit-on-close); delete or rewrite auto-GC-specific tests (`scripts/e2e-memory-gc-task-close.mjs`, related assertions in `scripts/e2e-system-transform-plan-skill.mjs`, `scripts/e2e-hook-notices.mjs`, `scripts/e2e-tag-handlers.mjs`, `package.json` e2e list) while keeping/expanding access-observation coverage. Preserve the rest of the v0.10.0 changes already on the branch.",
+          "acceptance": "- `memory-access.jsonl` observation support remains implemented and tested.\n- No automatic deletion logic runs from `nx_task_close` or anywhere else.\n- `.nexus/config.json` is removed from the branch and no active runtime code/docs mention it as a feature surface.\n- Runtime/user docs now describe `[m:gc]` as manual GC only.\n- Auto-GC-specific tests are removed or rewritten; relevant build/check/tests still pass.",
+          "risk": "Docs/test drift could remain if one of the memory guidance surfaces still mentions config/auto-GC; removing `NEXUS_CONFIG_FILE` must not break unrelated code if it is still referenced elsewhere."
+        },
+        {
+          "id": 2,
+          "title": "Clean stale .nexus ignore/core references",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-clean-ignore-core-drift",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [],
+          "created_at": "2026-04-16T12:50:42.425Z",
+          "context": "Plan #53 Issue #2 is decided: make `.nexus/.gitignore` the sole authority for tracked `.nexus/` whitelist rules; remove all `.nexus` rules from root `.gitignore`; remove stale `!core/`, `!core/**`, and `!config.json` from `.nexus/.gitignore`; update `scripts/smoke-opencode-run.mjs` so it no longer assumes `.nexus/core/...` or `nx_core_write`; delete any stray empty `.nexus/core` artifact if present. Current live runtime does not create `.nexus/core`, and the repo's `.nexus/` directory currently has no `core/` entry. The main stale executable surface is `scripts/smoke-opencode-run.mjs`, which still comments/tracks artifacts as `.nexus/core/<layer>/...` and still accepts `nx_core_write` wording in the `[m]` smoke case. Existing branch changes from the v0.10.0 upgrade must be preserved.",
+          "approach": "Update ignore policy and the stale smoke harness with the minimum active-surface change set. Expected scope: strip `.nexus` exceptions from root `.gitignore`; rewrite `.nexus/.gitignore` to whitelist only `context/`, `memory/`, `rules/`, `history.json`, and `.gitignore`; update `scripts/smoke-opencode-run.mjs` artifact tracking and assertions to use the flat `.nexus/{memory,rules,...}` layout and current write-based behavior; remove any stray empty `.nexus/core` artifact only if it exists, but do not touch archival files like `.nexus/history.json` that mention old paths historically. Preserve unrelated branch changes.",
+          "acceptance": "- Root `.gitignore` no longer governs `.nexus` tracking.\n- `.nexus/.gitignore` no longer whitelists `core/` or `config.json`.\n- `scripts/smoke-opencode-run.mjs` no longer references `.nexus/core/...` or `nx_core_write`.\n- No archival history/plan records are rewritten just to erase old `.nexus/core` mentions.\n- Relevant tests/build still pass.",
+          "risk": "Changing ignore authority in only one file would create drift; smoke script assertions may need careful updates so cleanup still removes generated artifacts correctly."
+        },
+        {
+          "id": 3,
+          "title": "Verify manual-GC realignment and ignore cleanup",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-manual-gc-ignore-cleanup",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-16T12:50:57.816Z",
+          "context": "After the two implementation tasks complete, verify that opencode-nexus now matches the decided model: memory-access observation remains, automatic GC/config are removed, and `.nexus/.gitignore` is the only active `.nexus` whitelist authority. Verification should cover runtime/docs/tests plus the stale smoke-path cleanup. This work is on top of the already-modified branch `chore/update-nexus-core-consuming-docs`.",
+          "approach": "Run the relevant validation commands (build/check/e2e or the focused subset needed), inspect the touched runtime/doc surfaces, and confirm there is no remaining active `.nexus/config.json` or auto-GC path. Also confirm the ignore cleanup and smoke script no longer imply `.nexus/core` or `nx_core_write`. Report PASS/FAIL with any drift by severity.",
+          "acceptance": "- Build/check and the relevant tests pass.\n- `memory-access` observation remains active and tested.\n- No auto-GC/config runtime behavior remains.\n- Root `.gitignore` no longer manages `.nexus`, and `.nexus/.gitignore` is cleaned up as decided.\n- `scripts/smoke-opencode-run.mjs` no longer assumes `.nexus/core` or `nx_core_write`.\n- Any remaining drift is clearly reported.",
+          "risk": "Feature removal may leave stale wording/tests behind even if core code builds; verification must catch both runtime and documentation drift."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Realign memory auto-GC and .nexus ignore behavior after v0.10.0 uptake",
+          "Confirm the branch now reflects the final plan decisions cleanly and safely."
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

@@ -25,6 +25,7 @@ export function createNexusPaths(projectRoot: string) {
     TASKS_FILE: path.join(STATE_ROOT, "tasks.json"),
     AGENT_TRACKER_FILE: path.join(HARNESS_NAMESPACE_ROOT, "agent-tracker.json"),
     TOOL_LOG_FILE: path.join(HARNESS_NAMESPACE_ROOT, "tool-log.jsonl"),
+    MEMORY_ACCESS_FILE: path.join(HARNESS_NAMESPACE_ROOT, "memory-access.jsonl"),
     ARTIFACTS_ROOT: path.join(STATE_ROOT, "artifacts")
   };
 }
@@ -34,7 +35,6 @@ export function isNexusInternalPath(filePath: string, projectRoot: string): bool
 
   const allowed = [
     path.join(projectRoot, ".nexus", "state"),
-    path.join(projectRoot, ".nexus", "config.json"),
     path.join(projectRoot, "AGENTS.md"),
     path.join(projectRoot, ".opencode")
   ];

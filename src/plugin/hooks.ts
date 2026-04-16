@@ -23,6 +23,7 @@ import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
 import { aggregateFilesForSession, appendToolLogEntry, resetToolLog } from "../shared/tool-log.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
+import { upsertMemoryAccessRecord } from "../shared/memory-access.js";
 import { buildNexusSystemPrompt } from "./system-prompt.js";
 import type { NexusPluginState } from "../plugin-state.js";
 
@@ -219,6 +220,8 @@ export function createHooks(ctx: PluginContext) {
       const subagentInvocation = input.tool === "task" ? resolveSubagentInvocation(ctx.state, input.args) : null;
       const sessionID = pickSessionID(input) ?? pickSessionID(output.metadata) ?? subagentInvocation?.sessionID ?? null;
       const taskHandles = input.tool === "task" ? extractParticipantHandles(output.metadata) : {};
+
+      await observeMemoryReadAccess({ input, output, sessionID, paths, projectRoot });
 
       if (input.tool === "task") {
         const agentType = pickString(input.args, ["subagent_type", "agent", "type"]);
@@ -765,6 +768,72 @@ function pickSessionID(input: unknown): string | null {
   return null;
 }
 
+async function observeMemoryReadAccess(args: {
+  input: ToolInput & { args: Record<string, unknown> };
+  output: { title: string; output: string; metadata: unknown };
+  sessionID: string | null;
+  paths: ReturnType<typeof createNexusPaths>;
+  projectRoot: string;
+}): Promise<void> {
+  if (args.input.tool !== "read") {
+    return;
+  }
+  if (!isSuccessfulToolExecution(args.output)) {
+    return;
+  }
+
+  const targetPath = getTargetPath(args.input.args, args.projectRoot);
+  if (!targetPath) {
+    return;
+  }
+
+  const normalizedTarget = path.resolve(targetPath);
+  if (!normalizedTarget.startsWith(`${path.resolve(args.paths.MEMORY_ROOT)}${path.sep}`)) {
+    return;
+  }
+
+  try {
+    const stat = await fs.stat(normalizedTarget);
+    if (!stat.isFile()) {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  const inputRecord: Record<string, unknown> = { ...args.input };
+  const agentID = pickString(inputRecord, ["agent", "agent_id", "agentID", "agentId"]) ?? args.sessionID ?? "unknown";
+
+  try {
+    await upsertMemoryAccessRecord(args.paths.MEMORY_ACCESS_FILE, {
+      filePath: normalizedTarget,
+      agentID
+    });
+  } catch {
+    // memory access observation must never block tool execution.
+  }
+}
+
+function isSuccessfulToolExecution(output: { title: string; output: string; metadata: unknown }): boolean {
+  if (/error|failed/i.test(output.title)) {
+    return false;
+  }
+  if (/^error\b/i.test(output.output.trim())) {
+    return false;
+  }
+  if (output.metadata && typeof output.metadata === "object") {
+    const meta = output.metadata as Record<string, unknown>;
+    const status = pickString(meta, ["status", "state", "result"]);
+    if (status && /(error|failed)/i.test(status)) {
+      return false;
+    }
+    if (meta.error === true) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function shouldResetAgentTrackerOnSessionCreated(event: unknown, state: NexusPluginState): boolean {
   if (!event || typeof event !== "object") {
     return true;
@@ -1028,11 +1097,11 @@ async function buildStatefulNotice(
 
   if (mode === "memory") {
     const userContent = prompt.replace(/\[m\]/gi, "").trim();
-    return `[nexus] Memory save mode. Compress and write to .nexus/memory/{appropriate_topic}.md. Update existing related files first; create new if none exists. Content: ${userContent}`;
+    return `[nexus] Memory save mode. Save only non-recoverable working knowledge to .nexus/memory/{category-topic}.md (categories: empirical-, external-, pattern-). Use lowercase kebab-case .md filenames with descriptive topics and no dates/versions. Merge-before-create: update existing related files first; create new only if none exists. Content: ${userContent}`;
   }
 
   if (mode === "memory_gc") {
-    return "[nexus] Memory GC mode. Use Glob to list .nexus/memory/*.md, then merge related entries and delete redundant files using Write tool.";
+    return "[nexus] Memory GC mode. Manual GC is default. Use Glob to list .nexus/memory/*.md, merge related entries before deletion, and keep deletions git-recoverable.";
   }
 
   return fallback;

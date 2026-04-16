@@ -154,6 +154,14 @@ export const InvocationContinuityHandlesSchema = z
     resume_handles: handles.resume_handles ?? {}
   }));
 
+export const MemoryAccessRecordSchema = z.object({
+  path: z.string().min(1),
+  last_accessed_ts: z.string().datetime(),
+  access_count: z.number().int().min(0),
+  last_agent: z.string().min(1),
+  schema_version: z.string().regex(/^\d+\.\d+$/).optional()
+});
+
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskItem = z.infer<typeof TaskItemSchema>;
 export type TasksFile = z.infer<typeof TasksFileSchema>;
@@ -165,6 +173,7 @@ export type Invocation = z.infer<typeof InvocationSchema>;
 export type AgentTracker = z.infer<typeof AgentTrackerSchema>;
 export type InvocationLifecycleStatus = z.infer<typeof InvocationLifecycleStatusSchema>;
 export type InvocationContinuityHandles = z.infer<typeof InvocationContinuityHandlesSchema>;
+export type MemoryAccessRecord = z.infer<typeof MemoryAccessRecordSchema>;
 
 function normalizeDiscussionEntry(entry: string | PlanDiscussionEntry): PlanDiscussionEntry {
   if (typeof entry !== "string") {

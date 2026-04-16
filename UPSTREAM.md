@@ -50,6 +50,18 @@ Phase 1이 2026-04-11에 완료되었다. opencode-nexus는 `@moreih29/nexus-cor
 - **history.json schema_version 도입** — `appendHistory`가 매 cycle에 `schema_version: "0.5"`를 자동 주입하고 파일 최상위에도 동일 값 기록. `HISTORY_SCHEMA_VERSION` 상수를 `src/shared/history.ts`로 export.
 - **conformance bin 직접 호출** — v0.4.0 `scripts/validate-conformance.mjs` graceful skip shim 제거. `bunx nexus-validate-conformance`를 spawn하는 단순 wrapper로 교체. v0.5.0이 `package.json#bin`과 `files` whitelist에 `scripts/`를 포함시킨 결과로 npm tarball에서 직접 실행 가능.
 
+#### v0.10.0 Upgrade (2026-04-16, `chore/nexus-core-0.10.0-upgrade`)
+
+`@moreih29/nexus-core ^0.9.0` → `^0.10.0` 업그레이드. consumer required action(의존성 bump + 재생성 + 로컬 문서 동기화)을 반영했고, 후속 패치에서 memory policy 가이던스와 memory access observation runtime을 정렬했다.
+
+주요 변경:
+
+- **dependency/lock 갱신** — `package.json`, `bun.lock`을 `^0.10.0` 기준으로 갱신.
+- **generated prompt refresh** — `bun run generate:template` 경유로 `src/{agents,skills}/generated/*`, `templates/skills/nx-plan/SKILL.md`를 재생성하여 nx-plan Step 7 규칙을 조건부 verification auto-pairing + `vocabulary/task-exceptions.yml` 예외 카탈로그 기준으로 동기화.
+- **human-authored context sync** — `.nexus/context/{tools,architecture,orchestration}.md`의 nexus-core 버전 및 task decomposition 설명을 v0.10.0 기준으로 정렬.
+- **memory policy uptake 완료(후속)** — `[m]`/`[m:gc]` runtime notice 및 README 계열 문서에 canonical memory policy vocabulary(카테고리 접두사, kebab-case 네이밍, merge-before-create, 수동 GC 기본, git-recoverable deletion)를 반영.
+- **memory lifecycle runtime realignment(후속2)** — `.nexus/state/opencode-nexus/memory-access.jsonl` read-observation hook(`read` 성공 + `.nexus/memory/` real file만)과 세션 경계 간 access 기록 유지는 유지하고, 자동 메모리 삭제 및 `.nexus/config.json` runtime surface는 제거했다. `[m:gc]`는 수동 GC 가이드(병합 우선 + git-recoverable deletion)만 제공한다.
+
 claude-nexus는 Phase 2에서 동일 패키지를 consume하는 방향으로 전환한다. 두 프로젝트는 여전히 sibling 관계이며, `@moreih29/nexus-core`가 canonical source다.
 
 ---

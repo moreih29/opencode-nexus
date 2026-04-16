@@ -89,7 +89,7 @@ let passed = 0;
   console.log('PASS [10] [m:gc] takes priority over [m] in same message');
 }
 
-// Case 11: buildTagNotice returns non-empty strings for sync, memory, memory_gc
+// Case 11: buildTagNotice includes memory-policy guidance for memory modes
 {
   const syncNotice = buildTagNotice("sync");
   assert.ok(
@@ -102,14 +102,28 @@ let passed = 0;
     typeof memoryNotice === "string" && memoryNotice.length > 0,
     `[11] buildTagNotice("memory") should return non-empty string, got "${memoryNotice}"`
   );
+  assert.ok(memoryNotice.includes("empirical-") && memoryNotice.includes("external-") && memoryNotice.includes("pattern-"),
+    `[11] memory notice should include canonical category prefixes`);
+  assert.ok(memoryNotice.includes("lowercase kebab-case") || memoryNotice.includes("kebab-case"),
+    `[11] memory notice should mention lowercase kebab-case naming`);
+  assert.ok(memoryNotice.includes("Merge-before-create"),
+    `[11] memory notice should mention merge-before-create preference`);
 
   const memoryGcNotice = buildTagNotice("memory_gc");
   assert.ok(
     typeof memoryGcNotice === "string" && memoryGcNotice.length > 0,
     `[11] buildTagNotice("memory_gc") should return non-empty string, got "${memoryGcNotice}"`
   );
+  assert.ok(memoryGcNotice.includes("Manual GC") || memoryGcNotice.includes("manual GC"),
+    `[11] memory_gc notice should mention manual GC default`);
+  assert.ok(memoryGcNotice.includes("git-recoverable"),
+    `[11] memory_gc notice should mention git-recoverable deletion`);
+  assert.ok(memoryGcNotice.includes("Glob") || memoryGcNotice.includes("glob"),
+    `[11] memory_gc notice should mention Glob usage`);
+  assert.ok(memoryGcNotice.includes("merge") || memoryGcNotice.includes("Merge"),
+    `[11] memory_gc notice should mention merge-before-delete guidance`);
   passed++;
-  console.log('PASS [11] buildTagNotice("sync"/"memory"/"memory_gc") returns non-empty strings');
+  console.log('PASS [11] buildTagNotice memory modes include memory-policy guidance');
 }
 
 // Case 12: buildNexusSystemPrompt mode=sync includes MODE PLAYBOOK (sync) section
@@ -123,27 +137,37 @@ let passed = 0;
   console.log('PASS [12] buildNexusSystemPrompt(mode="sync") contains "MODE PLAYBOOK (sync)"');
 }
 
-// Case 13: buildNexusSystemPrompt mode=memory includes .nexus/memory
+// Case 13: buildNexusSystemPrompt mode=memory includes policy-specific save guidance
 {
   const result = buildNexusSystemPrompt({ mode: "memory", agents: NEXUS_AGENT_CATALOG, skills: NEXUS_SKILL_CATALOG });
   assert.ok(
     result.includes(".nexus/memory"),
     `[13] buildNexusSystemPrompt mode=memory should contain ".nexus/memory"`
   );
+  assert.ok(result.includes("empirical-") && result.includes("external-") && result.includes("pattern-"),
+    `[13] memory mode should include canonical category prefixes`);
+  assert.ok(result.includes("Merge-before-create"),
+    `[13] memory mode should include merge-before-create guidance`);
   passed++;
-  console.log('PASS [13] buildNexusSystemPrompt(mode="memory") contains ".nexus/memory"');
+  console.log('PASS [13] buildNexusSystemPrompt(mode="memory") includes policy-specific save guidance');
 }
 
-// Case 14: buildNexusSystemPrompt mode=memory_gc includes gc/merge/Glob
+// Case 14: buildNexusSystemPrompt mode=memory_gc includes policy-specific GC guidance
 {
   const result = buildNexusSystemPrompt({ mode: "memory_gc", agents: NEXUS_AGENT_CATALOG, skills: NEXUS_SKILL_CATALOG });
-  const hasSubstring = result.includes("gc") || result.includes("merge") || result.includes("Glob");
-  assert.ok(
-    hasSubstring,
-    `[14] buildNexusSystemPrompt mode=memory_gc should contain "gc", "merge", or "Glob"`
-  );
+  const lower = result.toLowerCase();
+  assert.ok(result.includes("Manual GC") || result.includes("manual GC"),
+    `[14] memory_gc mode should mention manual GC default`);
+  assert.ok(lower.includes("merge") && (lower.includes("delete") || lower.includes("deletion")),
+    `[14] memory_gc mode should include merge-before-delete guidance`);
+  assert.ok(result.includes("git-recoverable"),
+    `[14] memory_gc mode should mention git-recoverable deletion`);
+  assert.ok(result.includes("Glob") || result.includes("glob"),
+    `[14] memory_gc mode should mention Glob usage`);
+  assert.ok(result.includes("merge") || result.includes("Merge"),
+    `[14] memory_gc mode should mention merge-before-delete guidance`);
   passed++;
-  console.log('PASS [14] buildNexusSystemPrompt(mode="memory_gc") contains "gc"/"merge"/"Glob"');
+  console.log('PASS [14] buildNexusSystemPrompt(mode="memory_gc") includes policy-specific GC guidance');
 }
 
 console.log(`\n✓ e2e-tag-handlers.mjs: ${passed} cases passed`);

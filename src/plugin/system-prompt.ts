@@ -192,8 +192,9 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
   if (mode === "memory") {
     return [
       "MODE PLAYBOOK (memory save):",
-      "- Compress and refine the content, then write to .nexus/memory/{appropriate_topic}.md using Write tool.",
-      "- If a related file already exists in .nexus/memory/, update it instead of creating a new one.",
+      "- Save only non-recoverable working knowledge in .nexus/memory/{category-topic}.md using Write tool (categories: empirical-, external-, pattern-).",
+      "- Use lowercase kebab-case .md filenames with descriptive topic names; avoid dates or version numbers in filenames.",
+      "- Merge-before-create: update an existing related file first, and create a new file only when no suitable file exists.",
       "- Keep entries concise; prefer structured lists or short paragraphs over verbatim transcription."
     ].join("\n");
   }
@@ -201,9 +202,10 @@ function buildModePlaybook(mode: BuildSystemInput["mode"]): string {
   if (mode === "memory_gc") {
     return [
       "MODE PLAYBOOK (memory gc):",
+      "- Manual GC is the default. Review files deliberately rather than applying automatic deletion.",
       "- Use Glob to collect all .nexus/memory/*.md files.",
       "- Identify related, duplicate, or outdated entries across files.",
-      "- Merge related content into consolidated files and delete superseded ones using Write and Bash tools."
+      "- Merge related content before deletion and keep deletions git-recoverable."
     ].join("\n");
   }
 

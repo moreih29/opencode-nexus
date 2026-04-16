@@ -64,7 +64,7 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 3. **Session Setup** — 리서치 완료 후 `nx_plan_start(topic, issues, research_summary)` 호출. 이슈 리스트 사용자 확인
 4. **Per-issue Analysis** — 한 번에 하나의 이슈. 현재 상태 요약 → (복잡 이슈는 HOW subagent 병렬 spawn) → 옵션 비교 표 + 권고안 제시 → 사용자 자유 응답 대기 → `[d]` 태그로 `nx_plan_decide` 호출 → 파생 이슈 즉시 점검 후 `nx_plan_update(action='add')`로 제안
 5. **Gap check + Wrap-up** — 모든 이슈 decided 후 원래 topic과 갭 점검. 갭 있으면 이슈 추가 후 Step 4 반복, 없으면 Step 6으로
-6. **Plan Document Generation** — 각 decided 이슈를 task로 분해하여 `nx_task_add(plan_issue, approach, acceptance, risk, owner)`, engineer task에 tester 자동 페어링, writer task에 reviewer 페어링. `.nexus/context/` 업데이트 task 포함. `[run]` 전환 안내
+6. **Plan Document Generation** — 각 decided 이슈를 task로 분해하여 `nx_task_add(plan_issue, approach, acceptance, risk, owner)`, verification 페어링은 acceptance 기준 조건부 적용(엔지니어 task의 runtime-behavior 검증 항목, writer task의 deliverable 검증 항목) + `vocabulary/task-exceptions.yml` 예외를 반영. `.nexus/context/` 업데이트 task 포함. `[run]` 전환 안내
 
 ### nx-run 흐름
 

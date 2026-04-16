@@ -123,10 +123,10 @@ export function buildTagNotice(mode: NexusTagMode): string | null {
     return "[nexus] Sync mode detected. Invoke skill({name:'nx-sync'}) or follow the context synchronization workflow.";
   }
   if (mode === "memory") {
-    return "[nexus] Memory save mode detected. Compress and write to .nexus/memory/{topic}.md via Write tool. Update existing related files first; create new file if none exists.";
+    return "[nexus] Memory save mode detected. Save only non-recoverable working knowledge to .nexus/memory/{category-topic}.md via Write tool (categories: empirical-, external-, pattern-). Use lowercase kebab-case .md filenames with descriptive topics (no dates or versions). Merge-before-create: update existing related files first, create new only when no suitable file exists.";
   }
   if (mode === "memory_gc") {
-    return "[nexus] Memory GC mode detected. Use Glob to list .nexus/memory/*.md, then merge or delete related/redundant files.";
+    return "[nexus] Memory GC mode detected. Manual GC is the default. Use Glob to list .nexus/memory/*.md, merge related entries before considering deletion, and keep deletions git-recoverable.";
   }
   return null;
 }

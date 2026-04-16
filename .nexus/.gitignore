@@ -1,12 +1,9 @@
 *
-!core/
-!core/**
 !context/
 !context/**
 !memory/
 !memory/**
 !rules/
 !rules/**
-!config.json
 !history.json
 !.gitignore

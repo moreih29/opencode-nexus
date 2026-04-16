@@ -128,10 +128,19 @@ This entrypoint routes to the canonical `nx_init` tool.
 | `[plan]` | Open decision mode before implementation | `[plan] discuss database migration strategy` |
 | `[run]` | Execute work through Nexus task pipeline | `[run] implement the migration plan` |
 | `[sync]` | Sync `.nexus/context/` docs with current code state | `[sync] refresh context docs after recent code changes` |
-| `[m]` | Save a lesson or reference into `.nexus/memory/` | `[m] save the incident takeaway` |
-| `[m:gc]` | Merge or prune redundant memory files | `[m:gc] clean up overlapping memory notes` |
+| `[m]` | Save non-recoverable knowledge into `.nexus/memory/` under memory policy | `[m] save the incident takeaway` |
+| `[m:gc]` | Policy-based manual GC (merge first, git-recoverable deletion) | `[m:gc] clean up overlapping memory notes` |
 | `[d]` | Record the current meeting decision | `Use option 2 [d]` |
 | `[rule]` | Save durable team conventions | `[rule:testing] always run typecheck before publish` |
+
+### Memory Policy (`[m]`, `[m:gc]`)
+
+- `[m]` stores only **non-recoverable working knowledge**.
+- Use lowercase kebab-case `.md` filenames with descriptive topics; avoid dates/versions in filenames.
+- Prefer canonical category prefixes: `empirical-`, `external-`, `pattern-`.
+- Follow **merge-before-create**: update an existing related memory file before creating a new one.
+- `[m:gc]` is **manual by default**. Merge before delete, and keep deletions git-recoverable.
+- Successful `read` operations on real `.nexus/memory/*.md` files upsert access records in `.nexus/state/opencode-nexus/memory-access.jsonl`.
 
 ## Built-in Agents
 
@@ -182,7 +191,6 @@ This entrypoint routes to the canonical `nx_init` tool.
 - `context/` — static design documents (architecture, orchestration, principles, etc.)
 - `memory/` — lessons learned, references, anti-patterns
 - `rules/` — team conventions
-- `config.json` — Nexus config
 - `history.json` — archived cycles
 - `state/` — active runtime state such as plan/task/run trackers
 

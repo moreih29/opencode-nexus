@@ -128,10 +128,19 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 | `[plan]` | 구현 전 의사결정 모드 | `[plan] DB 마이그레이션 전략 논의` |
 | `[run]` | Nexus task pipeline으로 실행 | `[run] 마이그레이션 계획 구현` |
 | `[sync]` | `.nexus/context/` 동기화 모드 | `[sync] 최근 코드 변경을 컨텍스트 문서에 반영` |
-| `[m]` | `.nexus/memory/`에 메모 저장 | `[m] 이번 장애 교훈 저장` |
-| `[m:gc]` | 메모 정리 및 병합 | `[m:gc] 중복 memory 정리` |
+| `[m]` | 비복구성 지식을 정책에 맞춰 `.nexus/memory/`에 저장 | `[m] 이번 장애 교훈 저장` |
+| `[m:gc]` | 정책 기반 수동 GC(병합 우선, 삭제는 git 복구 가능) | `[m:gc] 중복 memory 정리` |
 | `[d]` | 현재 미팅의 결정 기록 | `2안으로 가자 [d]` |
 | `[rule]` | 팀의 지속 규칙 저장 | `[rule:testing] publish 전에 typecheck 필수` |
+
+### Memory Policy (`[m]`, `[m:gc]`)
+
+- `[m]`는 **복구 불가능한 작업 지식만** 저장합니다.
+- 파일명은 `lowercase-kebab-case.md` + 설명형 토픽을 사용하고, 날짜/버전 표기는 파일명에서 피합니다.
+- 카테고리는 canonical 접두사(`empirical-`, `external-`, `pattern-`)를 우선 사용합니다.
+- 저장 시 **merge-before-create**를 적용해 기존 관련 파일 업데이트를 우선합니다.
+- `[m:gc]`는 기본적으로 **수동 GC**입니다. 삭제 전에 병합을 우선하고, 삭제는 git에서 복구 가능하도록 수행합니다.
+- `.nexus/memory/*.md` 파일을 `read`로 성공적으로 열면 `.nexus/state/opencode-nexus/memory-access.jsonl`에 access 기록이 누적됩니다.
 
 ## 내장 에이전트
 
@@ -182,7 +191,6 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 - `context/` — 정적 설계 문서 (architecture, orchestration, principles 등)
 - `memory/` — lessons learned, references, anti-patterns
 - `rules/` — 팀 규칙
-- `config.json` — Nexus 설정
 - `history.json` — 아카이브된 사이클 기록
 - `state/` — 현재 plan/task 중심 실행 상태
 

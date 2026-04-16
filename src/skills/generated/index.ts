@@ -1,5 +1,5 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.9.0 (ff5fb5de66dc2bf5f45dfba141901ccca7eb48e9)
+// Source: @moreih29/nexus-core@0.10.0 (23c72e53a32308b015eb90468dee3cb6e80eb655)
 // Aggregates all skill prompts and metadata.
 
 import { PROMPT as nx_run_prompt, META as nx_run_meta } from './nx-run.js';

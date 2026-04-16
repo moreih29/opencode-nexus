@@ -54,7 +54,7 @@ let passed = 0;
   console.log("PASS [3] mode=sync includes nexus-skill nx-sync block + body substring");
 }
 
-// Case 4: mode "memory" — no nexus-skill block, but .nexus/memory playbook present
+// Case 4: mode "memory" — no nexus-skill block, with memory-policy save guidance
 {
   const result = buildNexusSystemPrompt({ mode: "memory", agents: NEXUS_AGENT_CATALOG, skills: NEXUS_SKILL_CATALOG });
   assert.ok(
@@ -65,24 +65,44 @@ let passed = 0;
     result.includes(".nexus/memory"),
     `[4] Expected ".nexus/memory" in memory mode output (playbook)`
   );
+  assert.ok(
+    result.includes("empirical-") && result.includes("external-") && result.includes("pattern-"),
+    `[4] Expected canonical category prefixes in memory mode output`
+  );
+  assert.ok(
+    result.includes("Merge-before-create"),
+    `[4] Expected merge-before-create guidance in memory mode output`
+  );
   passed++;
-  console.log("PASS [4] mode=memory has no nexus-skill block + .nexus/memory playbook present");
+  console.log("PASS [4] mode=memory has no nexus-skill block + policy save guidance");
 }
 
-// Case 5: mode "memory_gc" — no nexus-skill block + gc/merge/Glob substring
+// Case 5: mode "memory_gc" — no nexus-skill block + policy GC guidance
 {
   const result = buildNexusSystemPrompt({ mode: "memory_gc", agents: NEXUS_AGENT_CATALOG, skills: NEXUS_SKILL_CATALOG });
+  const lower = result.toLowerCase();
   assert.ok(
     !result.includes("<nexus-skill"),
     `[5] Expected NO <nexus-skill> block in memory_gc output`
   );
-  const hasGcSubstring = result.includes("Glob") || result.includes("gc") || result.includes("merge");
   assert.ok(
-    hasGcSubstring,
-    `[5] Expected "Glob", "gc", or "merge" in memory_gc mode output`
+    result.includes("Manual GC") || result.includes("manual GC"),
+    `[5] Expected manual GC guidance in memory_gc mode output`
+  );
+  assert.ok(
+    lower.includes("merge") && (lower.includes("delete") || lower.includes("deletion")),
+    `[5] Expected merge-before-delete guidance in memory_gc mode output`
+  );
+  assert.ok(
+    result.includes("git-recoverable"),
+    `[5] Expected git-recoverable deletion guidance in memory_gc mode output`
+  );
+  assert.ok(
+    lower.includes("glob") && lower.includes(".nexus/memory"),
+    `[5] Expected glob + .nexus/memory guidance in memory_gc mode output`
   );
   passed++;
-  console.log("PASS [5] mode=memory_gc has no nexus-skill block + gc/merge/Glob in playbook");
+  console.log("PASS [5] mode=memory_gc has no nexus-skill block + policy GC guidance");
 }
 
 // Case 6: mode "idle" — nudge substring present (manual/proactively/explicitly)

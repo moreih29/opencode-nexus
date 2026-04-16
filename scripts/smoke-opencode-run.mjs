@@ -213,8 +213,8 @@ function trackArtifacts(events) {
     const match = output.match(/^Wrote\s+([\w/.-]+\.md)/);
     if (match) {
       const relative = match[1];
-      // Core knowledge: .nexus/core/<layer>/topic.md
-      const absPath = path.join(PROJECT_DIR, ".nexus", "core", relative);
+      // Knowledge artifacts: .nexus/<layer>/topic.md
+      const absPath = path.join(PROJECT_DIR, ".nexus", relative);
       artifactPaths.push(absPath);
     }
   }
@@ -228,24 +228,19 @@ async function runGroupBasic() {
   console.log("\n[basic] Group A — basic tags");
   const r = makeReporter("basic");
 
-  // A1: [m] tag → nx_core_write (layer=memory) OR native write with .nexus/memory path
+  // A1: [m] tag → native write with .nexus/memory path
   {
     console.log("  [basic/A1] [m] save smoke memo");
     try {
       const { events } = await runOpencode("[m] 스모크 테스트 저장 — smoke-run-harness");
       trackArtifacts(events);
       const tools = filterToolUses(events);
-      const nxMatch = tools.find(
-        (e) => e.part?.tool === "nx_core_write" && e.part?.state?.input?.layer === "memory"
-      );
       const writeMatch = tools.find((e) => {
         if (e.part?.tool !== "write") return false;
         const p = e.part?.state?.input?.filePath ?? e.part?.state?.input?.path ?? "";
         return typeof p === "string" && p.includes(".nexus/memory/");
       });
-      if (nxMatch) {
-        r.pass("nx_core_write called with layer=memory");
-      } else if (writeMatch) {
+      if (writeMatch) {
         const wp = writeMatch.part?.state?.input?.filePath ?? writeMatch.part?.state?.input?.path;
         r.pass(`[m] routed through native write tool — target: ${wp}`);
         // Track for cleanup

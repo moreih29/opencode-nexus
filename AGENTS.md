@@ -11,10 +11,10 @@ Use agents when parallel work or a second specialized perspective is helpful.
 | Name | Category | Task | Agent |
 |---|---|---|---|
 | architect | HOW | Technical design — evaluates How, reviews architecture, advises on implementation approach | architect |
-| designer | HOW | UX/UI design — evaluates user experience, interaction patterns, and how users will experience the product | designer |
-| reviewer | CHECK | Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables | reviewer |
 | engineer | DO | Implementation — writes code, debugs issues, follows specifications from Lead and architect | engineer |
+| designer | HOW | UX/UI design — evaluates user experience, interaction patterns, and how users will experience the product | designer |
 | strategist | HOW | Business strategy — evaluates market positioning, competitive landscape, and business viability of decisions | strategist |
+| reviewer | CHECK | Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables | reviewer |
 | researcher | DO | Independent investigation — conducts web searches, gathers evidence, and reports findings with citations | researcher |
 | postdoc | HOW | Research methodology and synthesis — designs investigation approach, evaluates evidence quality, writes synthesis documents | postdoc |
 | tester | CHECK | Testing and verification — tests, verifies, validates stability and security of implementations | tester |

@@ -43,7 +43,7 @@
     "check": "bun run generate:prompts && tsc -p tsconfig.json --noEmit",
     "generate:template": "bun run build && bun scripts/generate-template.mjs",
     "validate:conformance": "node scripts/validate-conformance.mjs",
-    "test:e2e": "bun run build && bun run validate:conformance && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-session-cleanup.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-pipeline-evaluator.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-task-after-owner-warning.mjs && bun scripts/e2e-tool-log-attribution.mjs && bun scripts/e2e-agent-tracker-reset.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-agent-tracker-core.mjs && bun scripts/e2e-orchestration-core-persistence.mjs && bun scripts/e2e-run-continuity-core.mjs && bun scripts/e2e-run-continuity-persistence.mjs && bun scripts/e2e-plan-continuity-core.mjs && bun scripts/e2e-plan-start-defaults.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-prompts-generated.mjs && bun scripts/e2e-capability-coverage.mjs && bun scripts/e2e-conformance.mjs && bun scripts/e2e-loader-smoke.mjs && bun scripts/e2e-system-transform-plan-skill.mjs && bun scripts/e2e-entrypoint-skills.mjs && bun scripts/e2e-subagent-prompts.mjs && bun scripts/e2e-tag-handlers.mjs && bun scripts/e2e-plan-resume-inject.mjs",
+    "test:e2e": "bun run build && bun run validate:conformance && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-memory-access-observation.mjs && bun scripts/e2e-session-cleanup.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-pipeline-evaluator.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-task-after-owner-warning.mjs && bun scripts/e2e-tool-log-attribution.mjs && bun scripts/e2e-agent-tracker-reset.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-agent-tracker-core.mjs && bun scripts/e2e-orchestration-core-persistence.mjs && bun scripts/e2e-run-continuity-core.mjs && bun scripts/e2e-run-continuity-persistence.mjs && bun scripts/e2e-plan-continuity-core.mjs && bun scripts/e2e-plan-start-defaults.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-prompts-generated.mjs && bun scripts/e2e-capability-coverage.mjs && bun scripts/e2e-conformance.mjs && bun scripts/e2e-loader-smoke.mjs && bun scripts/e2e-system-transform-plan-skill.mjs && bun scripts/e2e-entrypoint-skills.mjs && bun scripts/e2e-subagent-prompts.mjs && bun scripts/e2e-tag-handlers.mjs && bun scripts/e2e-plan-resume-inject.mjs",
     "prepack": "bun run generate:template"
   },
   "dependencies": {
@@ -52,7 +52,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@moreih29/nexus-core": "^0.9.0",
+    "@moreih29/nexus-core": "^0.10.0",
     "@opencode-ai/plugin": "latest",
     "@types/node": "^22.10.1",
     "typescript": "^5.6.3",
