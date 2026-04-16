@@ -18,6 +18,9 @@ const EXPECTED_SUBAGENT_IDS = [
   "reviewer"
 ];
 
+const EXPECTED_RESTRICTED_BUILTIN_IDS = ["general", "explore"];
+const EXPECTED_TASK_RESTRICTED_IDS = [...EXPECTED_SUBAGENT_IDS, ...EXPECTED_RESTRICTED_BUILTIN_IDS];
+
 let passed = 0;
 
 // Case 1: createConfigHook runs without error and populates config.agent
@@ -116,14 +119,14 @@ let passed = 0;
   console.log("PASS [5] user-predefined agent config is preserved by createConfigHook");
 }
 
-// Sanity: total agent count = 9 subagents + 1 primary
+// Sanity: total agent count = 9 Nexus subagents + 2 restricted built-ins + 1 primary
 {
   const hook = createConfigHook();
   const config = {};
   await hook(config);
 
   const totalAgents = Object.keys(config.agent).length;
-  const expectedTotal = EXPECTED_SUBAGENT_IDS.length + 1; // +1 for nexus primary
+  const expectedTotal = EXPECTED_SUBAGENT_IDS.length + EXPECTED_RESTRICTED_BUILTIN_IDS.length + 1; // +1 for nexus primary
   assert.equal(
     totalAgents,
     expectedTotal,
@@ -131,13 +134,13 @@ let passed = 0;
   );
 }
 
-// Case 6: task and nx_task_close must be hidden from all subagents
+// Case 6: task and nx_task_close must be hidden from all Nexus subagents and restricted built-ins
 {
   const hook = createConfigHook();
   const config = {};
   await hook(config);
 
-  for (const id of EXPECTED_SUBAGENT_IDS) {
+  for (const id of EXPECTED_TASK_RESTRICTED_IDS) {
     const entry = config.agent[id];
     assert.equal(
       entry?.tools?.task,
@@ -152,7 +155,7 @@ let passed = 0;
   }
 
   passed++;
-  console.log(`PASS [6] all ${EXPECTED_SUBAGENT_IDS.length} subagents disallow task and nx_task_close`);
+  console.log(`PASS [6] all ${EXPECTED_TASK_RESTRICTED_IDS.length} restricted agents disallow task and nx_task_close`);
 }
 
 // Case 7: Partial subagent override receives additive defaults and merged tools
@@ -185,6 +188,37 @@ let passed = 0;
 
   passed++;
   console.log("PASS [7] partial subagent override is additive-merged with enforced task guards");
+}
+
+// Case 8: general/explore receive enforced task guards without losing existing fields
+{
+  const hook = createConfigHook();
+  const config = {
+    agent: {
+      general: {
+        model: "custom-general-model",
+        tools: {
+          bash: true,
+          task: true,
+          nx_task_close: true
+        }
+      }
+    }
+  };
+  await hook(config);
+
+  const general = config.agent.general;
+  assert.equal(general.model, "custom-general-model", `[8] general.model should preserve user value`);
+  assert.equal(general.tools.bash, true, `[8] general.tools should preserve user-specified keys`);
+  assert.equal(general.tools.task, false, `[8] general.tools.task should be enforced to false`);
+  assert.equal(general.tools.nx_task_close, false, `[8] general.tools.nx_task_close should be enforced to false`);
+
+  const explore = config.agent.explore;
+  assert.equal(explore?.tools?.task, false, `[8] explore.tools.task should default to false`);
+  assert.equal(explore?.tools?.nx_task_close, false, `[8] explore.tools.nx_task_close should default to false`);
+
+  passed++;
+  console.log("PASS [8] general/explore receive enforced task guards");
 }
 
 console.log(`\n✓ e2e-subagent-prompts.mjs: ${passed} cases passed`);

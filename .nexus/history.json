@@ -8594,6 +8594,342 @@
           "Provide an explicit verification pass over both CLI and guard changes."
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T03:26:09.274Z",
+      "branch": "cli-setup-guard-hardening",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Relax task guard and extend config-level blocking",
+          "status": "completed",
+          "owner": "lead",
+          "owner_agent_id": "nexus",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-16T03:22:50.184Z",
+          "context": "User wants [run] change focused on recursive task prevention: relax runtime task delegation guard so missing/unverifiable provenance no longer blocks Nexus lead, and extend config-level tool blocking so built-in general/explore also have tools.task=false and tools.nx_task_close=false. User does not care about custom agents.",
+          "approach": "Adjust runtime task guard to block only explicit non-nexus callers or verified non-nexus child sessions; allow unknown/unverifiable provenance. Update config hook to enforce task/task_close denial on general and explore agent entries in addition to Nexus subagents. Add/repair tests covering relaxed guard behavior and built-in agent tool blocking.",
+          "acceptance": "- task guard no longer rejects task calls solely because caller provenance is missing or unverifiable\n- explicit non-nexus callers and verified child subagent callers are still rejected for task delegation\n- config hook enforces tools.task=false and tools.nx_task_close=false for general and explore agents\n- tests cover relaxed guard semantics and config-level blocking for general/explore\n- build and relevant e2e tests pass",
+          "risk": "Main risk is over-relaxing guard and allowing unintended callers; mitigate by keeping explicit non-nexus and verified child-session blocks while limiting scope to recursive-task prevention."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 1,
+        "decisionCount": 0,
+        "cycleTopics": [
+          "Restore lead task delegation while keeping recursion protection and extending config safety for general/explore."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T04:01:29.476Z",
+      "branch": "cli-setup-guard-hardening",
+      "plan": {
+        "id": 46,
+        "topic": "CLI setup command redesign for grouped model configuration and dynamic provider discovery",
+        "issues": [
+          {
+            "id": 1,
+            "title": "What should the setup command's primary interaction model be: grouped-by-role defaults first, with optional all-at-once flow, or a different default?",
+            "status": "decided",
+            "decision": "Adopt Option A. The CLI setup command should default to grouped-by-role guided configuration, with an optional all-at-once single-model shortcut for users who want speed. The grouped default should map directly to the meaningful setup surface: nexus primary, HOW, DO, CHECK, and built-in general/explore. The all-at-once path should be implemented as a convenience wrapper over the same canonical grouped config semantics, not as a separate persistence model.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "How should the CLI discover providers/models dynamically from the local OpenCode environment, and what should the fallback behavior be when discovery is partial or unavailable?",
+            "status": "decided",
+            "decision": "Adopt Option A. The CLI setup command should use a discovery-first runtime pipeline based on the local OpenCode environment: use `opencode providers list` as the primary provider inventory source, `opencode debug config` as context for existing/resolved model values and prefills, and `opencode models <provider>` for concrete model candidates per selected provider. Fallback must be explicit and progressive: if provider discovery is empty or unavailable, ask the user to choose a provider manually; if model enumeration fails for one provider, degrade only that provider to manual model entry; if all discovery is unavailable, fall back to full manual provider/model entry. Do not rely on a hardcoded provider catalog as the primary UX path.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 3,
+            "title": "What config write semantics should grouped setup use for Nexus/HOW/DO/CHECK/general/explore so it aligns with existing agent config merge behavior and prior setup decisions?",
+            "status": "decided",
+            "decision": "Adopt Option A. Grouped CLI setup should persist only targeted concrete `agent.<id>.model` values for the surfaced setup roles it owns: `nexus`, HOW agents, DO agents, CHECK agents, and built-in `general`/`explore`. It should preserve all other agent fields and leave unrelated, disabled, hidden, or custom agents untouched by default, including `build` and `plan`. Grouping and inheritance are setup-time concepts only; persistence should remain concrete and OpenCode-native. `general` and `explore` should conceptually inherit the standard tier by default during setup, but the resolved model values should be written explicitly to `agent.general.model` and `agent.explore.model` rather than introducing persistent group metadata or dynamic inheritance semantics.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 4,
+            "title": "What command/flag/interactive UX should support both guided grouped setup and scriptable non-interactive usage without breaking current CLI expectations?",
+            "status": "decided",
+            "decision": "Adopt Option A. Keep `setup` as the single CLI command for model configuration. The default interactive UX should be a guided grouped setup flow with discovery-first provider/model selection, while non-interactive usage should support explicit grouped flags for scriptable configuration. Add `--all-model` as the preferred explicit all-at-once shortcut, keep existing `--model` behavior as a backward-compatible alias for the same semantics, and allow more specific grouped flags to override the all-at-once baseline. Preserve command-specific help and keep interactive and scripted usage as two entry styles for the same `setup` command rather than splitting into subcommands.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          }
+        ],
+        "research_summary": "Current CLI `setup` is implemented only in `src/cli.ts` and is intentionally very narrow: it accepts a single `--model` value, prompts for one free-text model string in interactive mode, and then writes that same value into every `agent.<id>.model` entry via `applySetupModel()` (`src/cli.ts:757-790`). There is no provider discovery, no per-role grouping, and no distinction between Nexus/HOW/DO/CHECK/general/explore in the CLI today. Existing e2e coverage (`scripts/e2e-setup-template.mjs:137-161`) asserts this current single-model behavior. Recent plan history is relevant: plan #41 decided that built-in `general` and `explore` should be part of the setup model surface, that `models`/grouped assignment is the canonical conceptual shape, and that `general`/`explore` should inherit the standard tier by default with optional override (`.nexus/history.json:7857-7879`). OpenCode CLI capabilities also support dynamic discovery in this environment: `opencode providers list` returns configured/authenticated providers, and `opencode debug config` shows resolved agent model state including current `general`/`explore` values and existing per-agent overrides. That means the user’s concern about hardcoded providers is directionally correct for the CLI surface: the current CLI does not inspect local provider state at all, even though the platform exposes commands that could support discovery-first UX.",
+        "created_at": "2026-04-16T03:31:54.960Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement grouped discovery-first CLI setup redesign",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-cli-setup-redesign",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 4,
+          "deps": [],
+          "created_at": "2026-04-16T03:50:59.821Z",
+          "context": "Implement plan #46 decisions across issues 1-4. Current `src/cli.ts` setup flow only supports a single `--model` that broadcasts to all agents, and existing e2e coverage in `scripts/e2e-setup-template.mjs` asserts that behavior. Relevant prior decisions: grouped-by-role guided setup is the default interactive UX; discovery should use `opencode providers list`, `opencode debug config`, and `opencode models <provider>` with explicit fallback; persistence should write targeted concrete `agent.<id>.model` values only for `nexus`, HOW, DO, CHECK, `general`, and `explore`; `build`/`plan`/hidden/custom agents should remain untouched; `setup` remains one command with `--all-model` preferred and `--model` as back-compat alias. Existing worktree has unrelated dirty files (`package.json`, `src/create-config.ts`, `src/plugin/hooks.ts`, `scripts/e2e-subagent-prompts.mjs`, `scripts/e2e-team-policy.mjs`, `.nexus/history.json`) that must be preserved.",
+          "approach": "Update `src/cli.ts` to add grouped setup option parsing, targeted write semantics, discovery helpers and interactive grouped flow, plus command help/examples that reflect `--all-model` and grouped flags. Preserve non-interactive scriptability, keep `setup` as the single command, and ensure `--all-model` provides the baseline while specific group flags override it. Update `scripts/e2e-setup-template.mjs` to cover the new help surface and core non-interactive setup semantics. Keep changes minimal and avoid touching unrelated dirty files.",
+          "acceptance": "- `opencode-nexus setup --help` documents grouped setup, `--all-model`, and grouped override flags without regressing command-specific help boundaries\n- Non-interactive `setup` supports `--all-model` and grouped model flags, with `--model` preserved as a backward-compatible alias for all-at-once behavior\n- Setup writes only surfaced role models (`nexus`, HOW, DO, CHECK, `general`, `explore`) and does not rewrite unrelated/disabled/custom agents by default\n- Group-specific flags override the all-at-once baseline deterministically\n- Interactive `setup` defaults to grouped flow and exposes a one-shot all-model shortcut; discovery-first logic uses OpenCode CLI with explicit fallback behavior\n- Updated setup e2e coverage reflects the new CLI contract and passes",
+          "risk": "Highest risk is concentrated in `src/cli.ts` complexity: parsing conflicts, terminal prompting branches, and subprocess discovery behavior can easily regress existing install/update/setup paths. Keep precedence rules simple, scope writes narrowly, and preserve old `--model` compatibility carefully."
+        },
+        {
+          "id": 2,
+          "title": "Verify CLI setup redesign",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-cli-setup-redesign",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 4,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T03:50:59.825Z",
+          "context": "Verification task for the CLI setup redesign from plan #46 after the engineer task completes. Targets `src/cli.ts` and `scripts/e2e-setup-template.mjs`, with existing unrelated dirty files in the worktree that should not affect the verdict.",
+          "approach": "Review the final changed files, run the smallest meaningful automated checks that exercise the new setup behavior, and report PASS/FAIL against the acceptance criteria. At minimum verify build/typecheck viability and targeted e2e coverage for the CLI setup contract.",
+          "acceptance": "- Engineer task acceptance criteria are satisfied\n- Relevant automated checks for the new setup behavior pass, or failures are reported concretely with file/command evidence\n- Existing install/update command behavior and command-level help boundaries are not obviously regressed by the setup redesign",
+          "risk": "Verification must distinguish intended setup-surface changes from unrelated pre-existing dirty worktree changes and should avoid over-attributing failures outside the touched area."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "CLI setup command redesign for grouped model configuration and dynamic provider discovery",
+          "Confirm the redesign is correct and ready for user review."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T04:22:15.647Z",
+      "branch": "cli-setup-guard-hardening",
+      "plan": {
+        "id": 47,
+        "topic": "Refine CLI setup UX with prompt library, provider back-navigation, and clean completion exit",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Which dedicated CLI/prompt library should replace the current custom interactive prompt implementation while keeping the existing command surface and testability reasonable?",
+            "status": "decided",
+            "decision": "Adopt a prompts-only library migration for this refinement cycle. Replace the current custom interactive prompt layer with `@clack/prompts` while keeping the existing command parser/help surface for now. This directly addresses the interactive UX problem with lower risk than a simultaneous parser rewrite, and preserves the established `install`/`update`/`setup` command model.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "How should the interactive provider->model flow support going back from model selection to provider selection, and how should completion output/exit differ between interactive and non-interactive modes?",
+            "status": "decided",
+            "decision": "Treat provider selection and model selection as a reversible two-step wizard. At the model step, provide an explicit `Change provider` path in addition to manual model entry, and preserve current selection context when navigating back. For completion, split output by mode: interactive TTY runs should show a concise human-readable success summary and exit cleanly, while non-interactive runs should keep structured JSON output for automation. The interactive flow must end with an explicit completion message and immediate process termination.",
+            "how_agents": [
+              "designer"
+            ]
+          }
+        ],
+        "research_summary": "The current `setup` redesign in `src/cli.ts` still uses a custom readline/raw-TTY prompt system for interactivity. The user reports three concrete follow-ups after trying it: (1) adopt a dedicated CLI/prompt library because the current interaction feels visually poor, (2) add an escape path from detailed model selection back to provider selection when the provider was chosen incorrectly, and (3) fix an interactive completion hang where setup prints the success payload and appears not to exit until keyboard interrupt. Current code shows likely contributing factors: custom `promptChoiceRaw()` manually calls `ttyInput.resume()` and toggles raw mode but never explicitly pauses stdin after completion, and interactive setup currently always prints JSON success output even in TTY mode. The target area remains `src/cli.ts`, with likely `package.json` dependency changes and updated setup e2e coverage. Existing archived decisions from plan #46 still apply: keep `setup` as the single command, grouped setup is the default interactive flow, discovery remains provider/model discovery-first, and persistence stays limited to surfaced roles only.",
+        "created_at": "2026-04-16T04:13:21.040Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Adopt prompt library and refine interactive setup flow",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-cli-setup-polish",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T04:15:36.068Z",
+          "context": "Implement plan #47 decisions on top of the current grouped/discovery-first setup work in `src/cli.ts`. User requested three concrete refinements: (1) use a dedicated CLI/prompt library because the current interactive UX is visually poor, (2) add an explicit path from model selection back to provider selection when the wrong provider was chosen, and (3) fix the interactive completion behavior where setup appears to hang after dumping JSON, replacing it with a clean human-readable completion message and immediate exit. Current code uses a custom readline/raw-TTY prompt layer in `src/cli.ts`, still prints JSON output in interactive mode, and likely keeps stdin alive via manual prompt management. Existing decisions from archived plan #46 still apply: keep `setup` as the single command, grouped setup remains the default interactive flow, discovery remains `opencode providers list` + `opencode debug config` + `opencode models <provider>`, and persistence remains limited to surfaced roles only. New plan #47 decisions: adopt `@clack/prompts` as a prompts-only library migration while keeping the current command parser/help surface; treat provider/model selection as a reversible two-step wizard with a `Change provider` action; interactive TTY output should show a concise human-readable success summary and exit cleanly, while non-interactive mode keeps JSON. Relevant files likely include `src/cli.ts`, `package.json`, `scripts/e2e-setup-template.mjs`, and lockfile updates if dependency installation requires them. Preserve unrelated dirty files already in the worktree (`src/create-config.ts`, `src/plugin/hooks.ts`, `scripts/e2e-subagent-prompts.mjs`, `scripts/e2e-team-policy.mjs`, existing `.nexus/history.json` changes except normal archival updates).",
+          "approach": "Replace the bespoke interactive prompt implementation with a small adapter around `@clack/prompts`, keeping existing parse/help semantics stable. Update the provider->model flow so model selection can return to provider selection without restarting the wizard, while still allowing manual model entry. Split completion output by mode: interactive runs should display a readable success summary/outro and terminate cleanly; non-interactive runs should retain machine-readable JSON. Update setup e2e coverage to validate the new help/output contract and interactive behavior as far as the harness reasonably supports. Keep the change focused to the setup CLI surface and avoid broader parser refactors.",
+          "acceptance": "- Interactive setup uses a dedicated prompt library instead of the current custom raw-TTY/readline prompt implementation\n- Provider->model selection supports an explicit path from model selection back to provider selection, alongside manual model entry\n- Interactive setup completion no longer leaves the process hanging and no longer dumps raw JSON by default; it shows a clear human-readable success message and exits cleanly\n- Non-interactive setup still emits structured JSON and remains scriptable\n- Existing `install`/`update` command surface and command-specific help boundaries are preserved\n- Updated tests/build checks covering the new CLI behavior pass",
+          "risk": "Prompt-library migration can easily break existing terminal-driven e2e expectations, cancel handling, or interactive exit semantics. Keep the parser/help surface stable, isolate prompt-library calls behind small helpers, and verify both interactive and non-interactive completion behavior explicitly."
+        },
+        {
+          "id": 2,
+          "title": "Verify prompt-library setup refinements",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-cli-setup-polish",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T04:15:36.100Z",
+          "context": "Verification task for plan #47 after the engineer refines the CLI setup flow with a prompt library, back-navigation, and clean completion behavior. Target area is the setup CLI surface and related tests/build output. Unrelated dirty files remain in the worktree and should not be treated as failures unless they interfere directly.",
+          "approach": "Review the changed files, run the smallest meaningful automated checks that cover the new prompt-library integration, provider back-navigation path, and interactive/non-interactive completion behavior, and report PASS/FAIL with concrete evidence.",
+          "acceptance": "- Engineer task acceptance criteria are satisfied\n- Relevant automated checks for the refined setup flow pass, or failures are reported concretely\n- The interactive completion path is evidently clean and non-interactive JSON behavior still works\n- Install/update help boundaries are not obviously regressed",
+          "risk": "Automated verification of interactive flows may need targeted harness assertions rather than full visual fidelity checks; distinguish intended UX changes from unrelated worktree noise."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Refine CLI setup UX with prompt library, provider back-navigation, and clean completion exit",
+          "Confirm the refined setup UX is correct and ready for review."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T04:34:08.113Z",
+      "branch": "cli-setup-guard-hardening",
+      "plan": {
+        "id": 48,
+        "topic": "Polish overall CLI visual design and interactive output consistency",
+        "issues": [
+          {
+            "id": 1,
+            "title": "What overall CLI visual design system should be applied across help text and command success output so the tool feels cohesive without overcomplicating a small command surface?",
+            "status": "decided",
+            "decision": "Apply a restrained shared CLI visual system across top-level help, command help, and human-facing success output. The design should emphasize scanability and consistency rather than ornament: stable section order, better visual hierarchy, concise labeled blocks, and compact completion summaries. Keep the command surface unchanged and avoid a broad parser rewrite or heavy decorative styling.",
+            "how_agents": [
+              "designer"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "How should interactive TTY output versus non-interactive/scripted output be standardized across install, update, and setup so the CLI looks polished while preserving automation compatibility?",
+            "status": "decided",
+            "decision": "Standardize output policy across `install`, `update`, and `setup`: interactive TTY runs should show concise human-readable success summaries, while non-interactive or scripted runs should emit a single structured JSON object on stdout. Reuse the existing `setup` precedent, keep machine-readable non-TTY behavior as the automation contract, and preserve command/flag surfaces.",
+            "how_agents": [
+              "architect"
+            ]
+          }
+        ],
+        "research_summary": "Current CLI design is uneven across surfaces. `setup` now uses `@clack/prompts` for real TTY interaction, but top-level and command help remain plain text, and `install`/`update` still print raw JSON success payloads regardless of whether the run was interactive. User feedback is that `setup` is mostly satisfactory except the final completion styling, and they want the rest of the CLI to look more intentionally designed as well. Current help output from `dist/cli.js` is functionally correct but visually plain. Existing command surface should remain stable (`install`, `update`, `setup`), and there is active dirty state in unrelated files that must be preserved. The likely implementation surface is still centered in `src/cli.ts` with accompanying e2e coverage in `scripts/e2e-setup-template.mjs`. The newly added `@clack/prompts` dependency creates an opportunity to standardize interactive summaries and maybe human-readable TTY success output without forcing a broader parser rewrite or changing non-interactive machine-readable behavior.",
+        "created_at": "2026-04-16T04:26:18.248Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Polish CLI help and human-facing command output",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-cli-visual-polish",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T04:28:21.943Z",
+          "context": "Implement plan #48 decisions on the current CLI state. Current `setup` interactive flow and prompt layer are acceptable, but the user wants the whole CLI to feel prettier and more cohesive. Current issues observed: top-level and command help are still plain and visually flat; `install` and `update` still emit JSON success payloads even in interactive TTY usage; `setup` completion works but its final summary could be more polished. Plan #48 decisions: apply a restrained shared visual system across help and human-facing success output, with stable section hierarchy and compact summaries; standardize output policy so TTY runs of `install`, `update`, and `setup` show human-readable summaries, while non-interactive runs keep single-object JSON output. Existing command surface (`install`, `update`, `setup`) and parser/help boundaries should remain stable. Relevant implementation is likely centered in `src/cli.ts` with regression updates in `scripts/e2e-setup-template.mjs`. Preserve unrelated dirty files already in the worktree (`src/create-config.ts`, `src/plugin/hooks.ts`, `scripts/e2e-subagent-prompts.mjs`, `scripts/e2e-team-policy.mjs`, existing `.nexus/history.json` changes except normal archival updates).",
+          "approach": "Keep the parser and command set intact. Refine help-printing functions for clearer hierarchy and consistency, polish `setup`'s human summary, and add shared human-readable TTY completion summaries for `install` and `update` while leaving non-TTY JSON unchanged. Update or extend setup e2e coverage to assert the new TTY/non-TTY contract and help output expectations without overcoupling tests to decorative details. Keep styling restrained and terminal-friendly.",
+          "acceptance": "- Top-level help and command-specific help are visibly more structured and consistent without changing the command surface\n- Interactive TTY success output for `install`, `update`, and `setup` is human-readable and cohesive rather than raw JSON\n- Non-interactive/scripted runs of `install`, `update`, and `setup` still emit structured JSON on stdout\n- `setup` final completion summary is cleaner and more intentional than the current text dump\n- Existing install/update/setup behavior and help boundaries are preserved aside from the intended visual/output improvements\n- Updated automated checks covering the revised help/output behavior pass",
+          "risk": "Main risk is over-styling or accidentally breaking automation assumptions for `install`/`update`. Keep the non-TTY JSON contract stable, keep TTY summaries concise, and avoid tests that depend on exact decorative spacing unless necessary."
+        },
+        {
+          "id": 2,
+          "title": "Verify CLI visual polish changes",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-cli-visual-polish",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T04:28:22.053Z",
+          "context": "Verification task for plan #48 after the engineer polishes help and human-facing output across install/update/setup. Relevant area is the CLI surface and related tests. Unrelated dirty files remain in the worktree and should not be treated as failures unless they directly interfere.",
+          "approach": "Review the changed CLI output/help behavior and run the smallest meaningful automated checks that verify TTY vs non-TTY output behavior and help consistency. Report PASS/FAIL with concrete evidence.",
+          "acceptance": "- Engineer task acceptance criteria are satisfied\n- Relevant automated checks for the revised help/output behavior pass, or failures are reported concretely\n- Non-TTY JSON output still works for install/update/setup and TTY runs now use human-readable summaries\n- Help boundaries remain intact",
+          "risk": "TTY behavior checks may need targeted harness assertions rather than exact full-text matches; distinguish intended wording changes from real regressions."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Polish overall CLI visual design and interactive output consistency",
+          "Confirm the CLI polish changes are correct and automation-safe."
+        ]
+      }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T04:46:01.064Z",
+      "branch": "cli-setup-guard-hardening",
+      "plan": {
+        "id": 49,
+        "topic": "Extend prompt-library interactive UX to install/update and remaining CLI prompts",
+        "issues": [
+          {
+            "id": 1,
+            "title": "How should interactive prompt-library usage be extended across install, update, and setup handoff while preserving fallback behavior and current command semantics?",
+            "status": "decided",
+            "decision": "Extend the `@clack/prompts` interactive layer beyond setup-specific model selection to the remaining human-interactive CLI prompts: install/update scope and pin/version prompts, and the install->setup handoff prompt. Keep the current command/flag surface unchanged, and preserve the existing readline-style fallback path for forced/non-real TTY harnesses where Clack cannot run. The old custom raw-select prompt layer should no longer be the primary interactive path for install/update."
+          },
+          {
+            "id": 2,
+            "title": "What regression coverage is needed to verify that install/update now use the prompt library in real TTY mode while non-interactive behavior remains stable?",
+            "status": "decided",
+            "decision": "Update CLI e2e coverage to validate the new interactive contract at the behavior level: install/update interactive flows should still succeed under the harness fallback path, while non-interactive stdout contracts remain stable. Verification should continue to rely on build/check plus targeted CLI e2e coverage, without over-coupling tests to decorative prompt rendering."
+          }
+        ],
+        "research_summary": "User clarified the intended scope: `setup` already uses the new prompt library for provider/model selection, but `install` and `update` interactive prompting still use the old custom/readline prompt layer. Current `src/cli.ts` confirms that `resolveInteractiveOptions()` and `promptSetupHandoff()` still go through legacy `promptChoice()` / `promptText()` helpers, while only setup-specific prompts use `@clack/prompts` through `promptSetupChoice()` / `promptSetupText()`. The desired change is to extend the prompt-library usage to the rest of the interactive CLI surfaces, keeping non-interactive/scripted behavior intact and preserving the existing command surface.",
+        "created_at": "2026-04-16T04:41:27.486Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Extend prompt-library prompts to install/update flows",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-cli-prompt-extension",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-16T04:41:55.246Z",
+          "context": "Implement plan #49 on top of the current CLI state. User clarified that the intended gap is specifically this: setup already uses the new prompt library for provider/model selection, but install/update interactive prompting still uses the old custom/readline prompt helpers. Current `src/cli.ts` confirms `resolveInteractiveOptions()` and `promptSetupHandoff()` still call legacy `promptChoice()` / `promptText()`, while setup-specific flows use `@clack/prompts` via `promptSetupChoice()` / `promptSetupText()`. The desired change is to extend prompt-library usage to the remaining human-interactive CLI prompts while preserving non-interactive behavior and current command/flag surfaces. Existing worktree is already dirty in unrelated files (`src/create-config.ts`, `src/plugin/hooks.ts`, `scripts/e2e-subagent-prompts.mjs`, `scripts/e2e-team-policy.mjs`, `.nexus/history.json`, plus current in-progress CLI-related files) and those unrelated edits must be preserved.",
+          "approach": "Refactor interactive prompting so install/update scope selection, pin selection, version/path text input, and install->setup handoff use the shared prompt-library path when running in a real TTY, with the existing readline fallback preserved for forced/non-real TTY harnesses. Keep parser/flags/output contracts stable. Minimize scope to `src/cli.ts` and any necessary CLI e2e adjustments in `scripts/e2e-setup-template.mjs`.",
+          "acceptance": "- Install/update interactive prompts use the prompt-library path in real TTY mode rather than the old custom raw-select/readline stack as the primary UX\n- The install->setup handoff prompt also uses the shared prompt-library path in real TTY mode\n- Fallback behavior for forced/non-real TTY test harnesses still works\n- Non-interactive install/update/setup behavior remains unchanged\n- Existing command surface/help/output contracts are preserved\n- Updated build/check and relevant CLI e2e coverage pass",
+          "risk": "Main risk is breaking the test harness fallback path or leaving mixed prompt behavior behind. Keep fallback intact, avoid changing parser/help/output semantics, and scope the refactor to prompt helpers only."
+        },
+        {
+          "id": 2,
+          "title": "Verify prompt-library extension across CLI flows",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-cli-prompt-extension",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-16T04:41:55.372Z",
+          "context": "Verification task for plan #49 after the engineer extends prompt-library usage to install/update and setup handoff. Target area is the CLI interactive prompt layer and related CLI e2e coverage. Unrelated dirty files remain in the worktree and should not be treated as failures unless they directly interfere.",
+          "approach": "Review the changed CLI prompt helpers and run the smallest meaningful automated checks that verify install/update/handoff still work, fallback harness behavior remains valid, and non-interactive behavior is unchanged. Report PASS/FAIL with concrete evidence.",
+          "acceptance": "- Engineer task acceptance criteria are satisfied\n- Relevant automated checks for install/update/setup interactive and non-interactive behavior pass, or failures are reported concretely\n- Fallback harness behavior remains functional\n- Command/help/output contracts are not obviously regressed",
+          "risk": "Real-TTY prompt-library usage may not be directly reproducible in automated harness checks; distinguish real-TTY code-path adoption from fallback-path coverage and report evidence accordingly."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 2,
+        "decisionCount": 2,
+        "cycleTopics": [
+          "Extend prompt-library interactive UX to install/update and remaining CLI prompts",
+          "Confirm the prompt-library extension is correct and stable."
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

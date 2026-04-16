@@ -457,25 +457,26 @@ async function enforceTaskTeamPolicy(
 ): Promise<void> {
   const inputRecord: Record<string, unknown> = { ...input };
   const callerAgent = pickString(inputRecord, ["agent", "agent_id", "agentID", "agentId", "role"]);
-  if (callerAgent && callerAgent.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
-    throw new Error(`task is Nexus-lead only. Caller "${callerAgent}" is not allowed.`);
-  }
-  if (callerAgent && callerAgent.toLowerCase() === NEXUS_PRIMARY_AGENT_ID) {
+  const normalizedCallerAgent = callerAgent?.toLowerCase() ?? null;
+  if (normalizedCallerAgent === NEXUS_PRIMARY_AGENT_ID) {
     return;
+  }
+  if (normalizedCallerAgent && isTaskDelegationBlockedAgent(normalizedCallerAgent)) {
+    throw new Error(`task delegation recursion is blocked. Caller "${callerAgent}" is not allowed.`);
   }
 
   const sessionID = pickSessionID(input) ?? pickSessionID(args);
   if (!sessionID) {
-    throw new Error("task is Nexus-lead only. Missing caller provenance for task delegation.");
+    return;
   }
 
   const sessionInvocation = await resolveLatestSessionInvocation(paths, sessionID);
   if (!sessionInvocation) {
-    throw new Error("task is Nexus-lead only. Cannot verify caller provenance for task delegation.");
+    return;
   }
 
-  if (sessionInvocation.agent_type.toLowerCase() !== NEXUS_PRIMARY_AGENT_ID) {
-    throw new Error(`task is Nexus-lead only. Session caller "${sessionInvocation.agent_type}" is not allowed.`);
+  if (isTaskDelegationBlockedAgent(sessionInvocation.agent_type)) {
+    throw new Error(`task delegation recursion is blocked. Session caller "${sessionInvocation.agent_type}" is not allowed.`);
   }
 }
 
@@ -685,6 +686,11 @@ function isDoOrCheckAgent(agentType: string): boolean {
   return Object.values(AGENT_META).some(
     (agent) => (agent.category === "do" || agent.category === "check") && agent.id === normalized
   );
+}
+
+function isTaskDelegationBlockedAgent(agentType: string): boolean {
+  const normalized = agentType.toLowerCase();
+  return normalized === "general" || normalized === "explore" || isHowAgent(normalized) || isDoOrCheckAgent(normalized);
 }
 
 function pickString(source: Record<string, unknown>, keys: string[]): string | null {

@@ -17,18 +17,11 @@ const paths = createNexusPaths(root);
 await ensureNexusStructure(paths);
 await fs.writeFile(paths.TASKS_FILE, JSON.stringify({ tasks: [] }, null, 2), "utf8");
 
-await assert.rejects(
-  () => hooks["tool.execute.before"]({ tool: "task" }, { args: { subagent_type: "engineer", description: "no caller" } }),
-  /Missing caller provenance|Cannot verify caller provenance/i
-);
+await hooks["tool.execute.before"]({ tool: "task" }, { args: { subagent_type: "engineer", description: "no caller" } });
 
-await assert.rejects(
-  () =>
-    hooks["tool.execute.before"](
-      { tool: "task", sessionID: "ses-unknown" },
-      { args: { subagent_type: "engineer", description: "unknown session" } }
-    ),
-  /Cannot verify caller provenance/i
+await hooks["tool.execute.before"](
+  { tool: "task", sessionID: "ses-unknown" },
+  { args: { subagent_type: "engineer", description: "unknown session" } }
 );
 
 await hooks["tool.execute.before"](
@@ -38,7 +31,17 @@ await hooks["tool.execute.before"](
 
 await assert.rejects(
   () => hooks["tool.execute.before"]({ tool: "task", agent: "engineer" }, { args: { subagent_type: "engineer", description: "do work" } }),
-  /Nexus-lead only/i
+  /recursion is blocked|not allowed/i
+);
+
+await assert.rejects(
+  () => hooks["tool.execute.before"]({ tool: "task", agent: "general" }, { args: { subagent_type: "engineer", description: "general recurse" } }),
+  /recursion is blocked|not allowed/i
+);
+
+await assert.rejects(
+  () => hooks["tool.execute.before"]({ tool: "task", agent: "explore" }, { args: { subagent_type: "engineer", description: "explore recurse" } }),
+  /recursion is blocked|not allowed/i
 );
 
 await hooks["tool.execute.before"](
@@ -60,7 +63,7 @@ await hooks["tool.execute.after"](
 
 await assert.rejects(
   () => hooks["tool.execute.before"]({ tool: "task", sessionID: "ses-eng-1" }, { args: { subagent_type: "engineer", description: "nested task" } }),
-  /Nexus-lead only/i
+  /recursion is blocked|not allowed/i
 );
 
 await hooks["tool.execute.before"](

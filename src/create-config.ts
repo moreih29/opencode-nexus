@@ -7,6 +7,13 @@ import { AGENT_META, AGENT_PROMPTS } from "./agents/prompts.js";
 
 type ConfigLike = Record<string, unknown>;
 
+const TASK_DELEGATION_DISABLED_TOOLS = {
+  task: false,
+  nx_task_close: false
+} as const;
+
+const RESTRICTED_BUILTIN_AGENT_IDS = ["general", "explore"] as const;
+
 export function createConfigHook() {
   return async (config: ConfigLike): Promise<void> => {
     const currentAgent = toRecord(config.agent);
@@ -22,6 +29,10 @@ export function createConfigHook() {
         prompt: AGENT_PROMPTS[meta.id],
         tools: buildSubagentToolPolicy(meta.disallowedTools as string[])
       });
+    }
+
+    for (const agentId of RESTRICTED_BUILTIN_AGENT_IDS) {
+      nextAgent[agentId] = mergeAgentToolRestrictions(toRecord(nextAgent[agentId]), TASK_DELEGATION_DISABLED_TOOLS);
     }
 
     config.agent = nextAgent;
@@ -95,8 +106,7 @@ function mergeSubagentAgentEntry(
     ...defaults.tools,
     ...toRecord(existing.tools)
   };
-  mergedTools.task = false;
-  mergedTools.nx_task_close = false;
+  Object.assign(mergedTools, TASK_DELEGATION_DISABLED_TOOLS);
 
   return {
     ...defaults,
@@ -105,13 +115,25 @@ function mergeSubagentAgentEntry(
   };
 }
 
+function mergeAgentToolRestrictions(
+  existing: Record<string, unknown>,
+  restrictions: Record<string, boolean>
+): Record<string, unknown> {
+  return {
+    ...existing,
+    tools: {
+      ...toRecord(existing.tools),
+      ...restrictions
+    }
+  };
+}
+
 function buildSubagentToolPolicy(disallowedTools: string[]): Record<string, boolean> {
   const policy: Record<string, boolean> = {};
   for (const toolName of disallowedTools) {
     policy[toolName] = false;
   }
-  policy.task = false;
-  policy.nx_task_close = false;
+  Object.assign(policy, TASK_DELEGATION_DISABLED_TOOLS);
   return policy;
 }
 

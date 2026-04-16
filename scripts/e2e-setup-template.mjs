@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
 async function runCliTty(args, answers) {
-  await new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     const child = spawn("node", ["dist/cli.js", ...args], {
       cwd: repoRoot,
       env: {
@@ -30,7 +30,7 @@ async function runCliTty(args, answers) {
     }, 10000);
 
     const maybeAnswerPrompt = () => {
-      const waitingForPrompt = /(Select an option \[[0-9]+\]: |Project directory \[[^\]]+\]: |Plugin version(?: \[[^\]]+\])?: |Updated plugin version(?: \[[^\]]+\])?: |Model for agent\.\*\.model(?: \[[^\]]+\])?: )$/.test(stdout);
+      const waitingForPrompt = /(Select an option \[[0-9]+\]: |Project directory \[[^\]]+\]: |Plugin version(?: \[[^\]]+\])?: |Updated plugin version(?: \[[^\]]+\])?: |(?:Nexus primary|HOW agents|DO agents|CHECK agents|general agent|explore agent|All surfaced roles) provider(?: \[[^\]]+\])?: |(?:Nexus primary|HOW agents|DO agents|CHECK agents|general agent|explore agent|All surfaced roles) model(?: \[[^\]]+\])?: )$/.test(stdout);
       if (!waitingForPrompt || answerIndex >= answers.length) {
         return;
       }
@@ -53,7 +53,7 @@ async function runCliTty(args, answers) {
     child.on("close", (code) => {
       clearTimeout(timeout);
       if (code === 0) {
-        resolve(undefined);
+        resolve({ stdout, stderr });
         return;
       }
       reject(new Error(`interactive cli failed (${code}): ${(stderr || stdout).trim()}`));
@@ -104,7 +104,9 @@ assert.match(updateHelpResult.stdout, /--version <value>/);
 
 const setupHelpResult = await execFileAsync("node", ["dist/cli.js", "setup", "--help"], { cwd: repoRoot });
 assert.match(setupHelpResult.stdout, /Setup command/);
-assert.match(setupHelpResult.stdout, /--model <value>/);
+assert.match(setupHelpResult.stdout, /--all-model <value>/);
+assert.match(setupHelpResult.stdout, /--how-model <value>/);
+assert.match(setupHelpResult.stdout, /--model <value>\s+Backward-compatible alias/);
 assert.ok(!setupHelpResult.stdout.includes("--no-pin"), "setup help should stay model-focused");
 
 const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-project-"));
@@ -135,37 +137,130 @@ const userConfig = JSON.parse(await fs.readFile(userConfigPath, "utf8"));
 assert.equal(userConfig.plugin.includes("opencode-nexus"), true);
 
 const setupConfigPath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-")), "opencode.json");
-await execFileAsync(
+const setupRunResult = await execFileAsync(
   "node",
-  ["dist/cli.js", "setup", "--scope", "user", "--config", setupConfigPath, "--model", "openai/gpt-5.3-codex"],
+  [
+    "dist/cli.js",
+    "setup",
+    "--scope",
+    "user",
+    "--config",
+    setupConfigPath,
+    "--all-model",
+    "openai/gpt-5.3-codex",
+    "--how-model",
+    "anthropic/claude-sonnet-4",
+    "--general-model",
+    "openai/gpt-5.4-mini"
+  ],
   { cwd: repoRoot }
 );
+const setupRunPayload = JSON.parse(setupRunResult.stdout);
+assert.equal(setupRunPayload.ok, true);
+assert.equal(setupRunPayload.command, "setup");
 const setupConfig = JSON.parse(await fs.readFile(setupConfigPath, "utf8"));
 assert.equal(setupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
+assert.equal(setupConfig.agent.architect.model, "anthropic/claude-sonnet-4");
 assert.equal(setupConfig.agent.engineer.model, "openai/gpt-5.3-codex");
+assert.equal(setupConfig.agent.general.model, "openai/gpt-5.4-mini");
+assert.equal(setupConfig.agent.explore.model, "openai/gpt-5.3-codex");
+
+const setupAliasConfigPath = path.join(
+  await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-alias-")),
+  "opencode.json"
+);
+await execFileAsync(
+  "node",
+  ["dist/cli.js", "setup", "--scope", "user", "--config", setupAliasConfigPath, "--model", "openai/gpt-5.4"],
+  { cwd: repoRoot }
+);
+const setupAliasConfig = JSON.parse(await fs.readFile(setupAliasConfigPath, "utf8"));
+assert.equal(setupAliasConfig.agent.nexus.model, "openai/gpt-5.4");
+assert.equal(setupAliasConfig.agent.general.model, "openai/gpt-5.4");
+
+const targetedSetupConfigPath = path.join(
+  await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-targeted-")),
+  "opencode.json"
+);
+await fs.writeFile(
+  targetedSetupConfigPath,
+  JSON.stringify(
+    {
+      agent: {
+        custom: { model: "custom/keep-this", notes: "preserve" },
+        build: { model: "build/keep-this", disable: true },
+        plan: { model: "plan/keep-this", disable: true }
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+await execFileAsync(
+  "node",
+  ["dist/cli.js", "setup", "--scope", "user", "--config", targetedSetupConfigPath, "--all-model", "openai/gpt-5.3-codex"],
+  { cwd: repoRoot }
+);
+const targetedSetupConfig = JSON.parse(await fs.readFile(targetedSetupConfigPath, "utf8"));
+assert.equal(targetedSetupConfig.agent.custom.model, "custom/keep-this");
+assert.equal(targetedSetupConfig.agent.custom.notes, "preserve");
+assert.equal(targetedSetupConfig.agent.build.model, "build/keep-this");
+assert.equal(targetedSetupConfig.agent.plan.model, "plan/keep-this");
+assert.equal(targetedSetupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
+assert.equal(targetedSetupConfig.agent.general.model, "openai/gpt-5.3-codex");
 
 const interactiveProjectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-interactive-project-"));
-await runCliTty(["install"], ["2", interactiveProjectRoot, "1", "7.7.7", "2"]);
+const interactiveInstallResult = await runCliTty(["install"], ["2", interactiveProjectRoot, "1", "7.7.7", "2"]);
+assert.match(interactiveInstallResult.stdout, /Install complete\./);
+assert.match(interactiveInstallResult.stdout, /Plugin: opencode-nexus@7\.7\.7/);
+assert.ok(!interactiveInstallResult.stdout.includes('"command": "install"'));
 
 const interactiveInstallConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
 assert.equal(interactiveInstallConfig.plugin.includes("opencode-nexus@7.7.7"), true);
 
-await runCliTty(["update", "--scope", "project", "--directory", interactiveProjectRoot], ["1", "8.8.8"]);
+const interactiveUpdateResult = await runCliTty(["update", "--scope", "project", "--directory", interactiveProjectRoot], ["1", "8.8.8"]);
+assert.match(interactiveUpdateResult.stdout, /Update complete\./);
+assert.match(interactiveUpdateResult.stdout, /Plugin: opencode-nexus@8\.8\.8/);
+assert.ok(!interactiveUpdateResult.stdout.includes('"command": "update"'));
 const interactiveUpdateConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
 assert.equal(interactiveUpdateConfig.plugin.includes("opencode-nexus@8.8.8"), true);
 assert.equal(interactiveUpdateConfig.plugin.includes("opencode-nexus@7.7.7"), false);
 
-await runCliTty(["setup", "--scope", "project", "--directory", interactiveProjectRoot], ["openai/gpt-5.3-codex"]);
+const interactiveSetupResult = await runCliTty(["setup", "--scope", "project", "--directory", interactiveProjectRoot], ["2", "", ""]);
+assert.match(interactiveSetupResult.stdout, /Setup complete\./);
+assert.ok(!interactiveSetupResult.stdout.includes('"command": "setup"'));
 const interactiveSetupConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
-assert.equal(interactiveSetupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
-assert.equal(interactiveSetupConfig.agent.tester.model, "openai/gpt-5.3-codex");
+assert.ok(typeof interactiveSetupConfig.agent.nexus.model === "string" && interactiveSetupConfig.agent.nexus.model.length > 0);
+assert.equal(interactiveSetupConfig.agent.nexus.model, interactiveSetupConfig.agent.tester.model);
+assert.equal(interactiveSetupConfig.agent.nexus.model, interactiveSetupConfig.agent.general.model);
 
 const nonInteractiveConfigPath = path.join(
   await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-noninteractive-")),
   "opencode.json"
 );
-await execFileAsync("node", ["dist/cli.js", "install", "--config", nonInteractiveConfigPath], { cwd: repoRoot });
+const nonInteractiveInstallResult = await execFileAsync("node", ["dist/cli.js", "install", "--config", nonInteractiveConfigPath], {
+  cwd: repoRoot
+});
+const nonInteractiveInstallPayload = JSON.parse(nonInteractiveInstallResult.stdout);
+assert.equal(nonInteractiveInstallPayload.ok, true);
+assert.equal(nonInteractiveInstallPayload.command, "install");
+assert.equal(nonInteractiveInstallPayload.configPath, nonInteractiveConfigPath);
 const nonInteractiveConfig = JSON.parse(await fs.readFile(nonInteractiveConfigPath, "utf8"));
 assert.equal(nonInteractiveConfig.plugin.includes(`opencode-nexus@${packageVersion}`), true);
+
+const nonInteractiveUpdateResult = await execFileAsync(
+  "node",
+  ["dist/cli.js", "update", "--config", nonInteractiveConfigPath, "--version", "6.6.6"],
+  { cwd: repoRoot }
+);
+const nonInteractiveUpdatePayload = JSON.parse(nonInteractiveUpdateResult.stdout);
+assert.equal(nonInteractiveUpdatePayload.ok, true);
+assert.equal(nonInteractiveUpdatePayload.command, "update");
+assert.equal(nonInteractiveUpdatePayload.configPath, nonInteractiveConfigPath);
+assert.equal(nonInteractiveUpdatePayload.pluginSpec, "opencode-nexus@6.6.6");
+
+const nonInteractiveUpdatedConfig = JSON.parse(await fs.readFile(nonInteractiveConfigPath, "utf8"));
+assert.equal(nonInteractiveUpdatedConfig.plugin.includes("opencode-nexus@6.6.6"), true);
 
 console.log("e2e setup template + cli passed");
