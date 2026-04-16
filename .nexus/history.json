@@ -8478,6 +8478,122 @@
           "Fix workflow warning after v0.6.0 release"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-16T02:10:39.749Z",
+      "branch": "cli-setup-guard-hardening",
+      "plan": {
+        "id": 45,
+        "topic": "opencode-nexus CLI 도움말/인터랙션 UX 개선",
+        "issues": [
+          {
+            "id": 1,
+            "title": "도움말을 top-level / command-level로 어떻게 분리할지",
+            "status": "decided",
+            "decision": "도움말 UX는 B안으로 간다. top-level help와 command-level help를 분리한다. top-level help는 사용 가능한 커맨드 목록과 간단한 설명, 진입 예시만 보여주고, `install --help`와 `update --help`는 해당 커맨드의 사용법, 관련 옵션, 예시만 보여준다. 내부적으로는 `help + optional command` 형태로 파싱/렌더링 맥락을 보존해 향후 command metadata 레지스트리로 확장 가능하도록 한다. 현재 규모에서는 별도 무거운 registry 도입은 보류한다.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 2,
+            "title": "인터랙티브 선택 UI를 어떤 방식으로 구현할지",
+            "status": "decided",
+            "decision": "interactive selection UI는 C안으로 간다. standalone CLI의 선택형 질문은 기본적으로 내장 raw TTY 기반 single-select UI를 사용해 방향키(Up/Down)로 이동하고 Enter로 확정한다. 다만 raw mode를 사용할 수 없거나 비TTY/제한된 실행 환경에서는 현재의 숫자/문자 입력 기반 promptChoice 흐름으로 fallback한다. 이 결정은 외부 프롬프트 라이브러리 도입 없이도 install/update/setup의 현재 범위를 커버하면서, 실제 터미널 사용자에게는 기대에 맞는 방향키 선택 UX를 제공하고 테스트/자동화 환경 호환성도 유지하기 위한 것이다.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 3,
+            "title": "task delegation guard를 fail-closed로 바꾸고 caller provenance가 없으면 기본 차단할지",
+            "status": "decided",
+            "decision": "`task` delegation guard는 독립 안건으로 유지하되, 원인 분석상 issue #5와 연동된 문제로 다룬다. 대응은 둘 다 수행한다. (1) `createConfigHook()`를 additive merge로 바꿔 사용자가 `agent.<id>`에 `mode/model`만 명시해도 Nexus 기본 `description/prompt/tools`가 누락되지 않게 하고, 특히 모든 서브에이전트에 `tools.task = false`와 `tools.nx_task_close = false`가 merge 이후에도 항상 적용되게 한다. (2) 런타임 `task` delegation guard는 fail-open이 아니라 fail-closed로 강화한다. caller provenance(`agent`, `sessionID` 등)가 확인되지 않으면 기본 차단하고, Nexus lead로 확정 가능한 경우에만 `task`를 허용한다. 즉 1차 방어는 config-level tool exposure 차단, 2차 방어는 runtime-level fail-closed enforcement로 이중화한다. 또한 회귀 방지를 위해 기존 agent partial override가 있는 config에서도 subagent `task`/`nx_task_close` 차단이 유지되는 테스트와, caller metadata가 없을 때 `task`가 거부되는 테스트를 추가한다.",
+            "how_agents": [
+              "architect"
+            ]
+          },
+          {
+            "id": 4,
+            "title": "standalone CLI가 모델 설정까지 담당할지, 아니면 설치와 설정을 분리할지",
+            "status": "decided",
+            "decision": "standalone CLI의 책임은 두 단계로 분리한다. `install`/`update`는 플러그인 등록과 버전 관리에 집중하고, 모델 설정은 별도의 `setup` 명령이 담당한다. 다만 사용성 관점에서 `install` 성공 직후 사용자가 원하면 즉시 `setup` 흐름으로 이어질 수 있게 handoff를 제공한다. `setup`은 user/project scope의 `opencode.json`에 대한 모델 선택 보조 도구로 한정하며, 주 책임은 `agent.*.model` 값을 쓰는 것이다. prompt/tools/description 같은 Nexus 기본 주입까지 CLI가 직접 소유하지 않는다. 이 분리는 현재 help surface를 작게 유지하면서도 모델 설정을 first-class로 노출할 수 있게 한다.",
+            "how_agents": [
+              "architect",
+              "designer"
+            ]
+          },
+          {
+            "id": 5,
+            "title": "createConfigHook가 기존 agent 엔트리에 additive merge를 수행해 partial user overrides를 안전하게 지원할지",
+            "status": "decided",
+            "decision": "`createConfigHook()`는 기존 `agent.<id>` 엔트리를 replace/skip하지 않고 additive merge를 수행한다. 사용자가 명시한 `mode`, `model`, `description`, `prompt`, `tools` 등 기존 값은 우선 보존하고, 빠진 필드만 Nexus 기본값으로 채운다. top-level agent 엔트리는 field-by-field merge를 적용하며, `tools`는 객체 전체 교체가 아니라 key-by-key merge를 적용한다. 서브에이전트에 대한 `task=false`와 `nx_task_close=false` 가드는 merge 이후에도 항상 강제되어 사용자 설정으로 우회되지 않게 한다. 이 결정의 목적은 사용자가 `opencode.json`에 모델이나 일부 필드만 명시해도 Nexus 기본 prompt/tools/description이 안전하게 유지되도록 하는 것이다."
+          }
+        ],
+        "research_summary": "현재 CLI 구현은 src/cli.ts 단일 파일에 집중되어 있다. 도움말은 printHelp() 하나로 top-level과 command-level을 구분하지 않고 'install'과 'update'의 옵션/예시를 한 번에 출력한다(src/cli.ts:44-69, parseArgs 72-160). 또한 command 뒤의 --help도 별도 커맨드 맥락 없이 동일한 전역 help로 귀결된다(src/cli.ts:107-109). 인터랙티브 입력은 node:readline/promises 기반이며, promptChoice()가 번호 목록을 출력하고 사용자가 숫자나 value 문자열을 직접 입력해야 한다(src/cli.ts:199-230). 화살표 이동/엔터 선택을 지원하는 TUI형 선택 UI는 현재 없다. 패키지 의존성에는 관련 프롬프트 라이브러리가 없고(package.json:49-59), 기존 e2e는 숫자 입력 패턴을 전제로 CLI를 검증한다(scripts/e2e-setup-template.mjs:13-62, 118-126).",
+        "created_at": "2026-04-16T01:01:39.243Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Implement CLI help, setup command, and interactive selection UX",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-cli-surface",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 4,
+          "deps": [],
+          "created_at": "2026-04-16T02:00:56.719Z",
+          "context": "Apply plan decisions from issues #1, #2, and #4. Relevant files: src/cli.ts, scripts/e2e-setup-template.mjs, and any minimal CLI-facing docs if needed. Current CLI only supports install/update, prints one combined help block, and uses numeric readline choice input. Decided direction: top-level vs command-level help split; add separate setup command for model-only configuration with install->setup handoff; implement raw TTY single-select with fallback to current text input when raw mode/TTY is unavailable.",
+          "approach": "Keep the change minimal and centered in src/cli.ts. Introduce command-aware help rendering, add setup parsing/execution for scope + model selection that writes agent.<id>.model values into opencode.json, preserve install/update as plugin/version operations, and add a prompt primitive that uses raw-TTY arrow-key selection with Enter but falls back to current readline promptChoice behavior in constrained environments. Update or extend e2e coverage for help/setup/interactive fallback paths.",
+          "acceptance": "- `opencode-nexus --help` shows only top-level commands and relevant global help\n- `opencode-nexus install --help`, `update --help`, and `setup --help` show only command-relevant usage/options/examples\n- CLI supports `setup` as a separate command for model-only configuration in user/project scope\n- `install` can hand off to `setup` interactively without forcing it in non-interactive mode\n- Interactive single-select uses arrow keys + Enter when raw TTY is available and falls back safely otherwise\n- Existing non-interactive install/update behavior remains compatible, with relevant tests updated or added",
+          "risk": "Most risk is concentrated in terminal state handling and maintaining scriptable behavior while adding setup. Keep fallback behavior explicit and avoid broad CLI refactors."
+        },
+        {
+          "id": 2,
+          "title": "Harden config merge and fail-closed task delegation guard",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer-guard-merge",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 3,
+          "deps": [],
+          "created_at": "2026-04-16T02:00:56.826Z",
+          "context": "Apply plan decisions from issues #3 and #5. Relevant files: src/create-config.ts, src/plugin/hooks.ts, scripts/e2e-subagent-prompts.mjs, scripts/e2e-team-policy.mjs. Current createConfigHook skips any pre-existing agent entry entirely, so user-defined mode/model can prevent prompt/tools/description injection. Current runtime task guard blocks some nested task calls but is fail-open when caller provenance like sessionID is absent.",
+          "approach": "Refactor createConfigHook to perform additive field-by-field merge for existing agent entries, with key-by-key merge for tools and hard enforcement of subagent `task=false` and `nx_task_close=false`. Keep user-provided mode/model/prompt/description/tool overrides unless a safety invariant must be enforced. In hooks, change task delegation enforcement to fail-closed: if caller provenance cannot prove Nexus lead ownership, reject the task call. Add regression coverage for partial agent overrides and for task calls with missing caller metadata.",
+          "acceptance": "- Existing `agent.<id>` entries receive missing Nexus defaults via additive merge instead of being skipped wholesale\n- User-specified mode/model values remain intact after config hook execution\n- All subagents end up with `tools.task === false` and `tools.nx_task_close === false`, including when agent entries already exist\n- Runtime `task` delegation is rejected when caller provenance is missing or cannot be resolved to Nexus lead\n- Regression tests cover both partial agent override merge and fail-closed task enforcement",
+          "risk": "Behavior changes in config merging can affect self-hosting or user-customized agent entries; keep merge additive and narrowly scoped. Guard hardening may surface hidden nested task usage in existing tests."
+        },
+        {
+          "id": 3,
+          "title": "Verify CLI and guard hardening changes",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester-cli-guard-verify",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-16T02:00:56.840Z",
+          "context": "Verification task after the two engineer tasks complete. Targets the CLI command surface changes and the config/guard hardening changes. Relevant checks likely include setup/help e2e scripts and nested-task policy regressions.",
+          "approach": "Review the changed files, run the smallest meaningful automated checks that cover the acceptance criteria, and report PASS/FAIL with concrete findings. Reopen implementation only if acceptance criteria are not met.",
+          "acceptance": "- Command-level help/setup behavior matches the accepted plan decisions\n- Partial agent overrides still receive required Nexus defaults and subagent task restrictions\n- Missing-provenance task calls are denied\n- Relevant automated tests/build checks pass or failures are reported concretely",
+          "risk": "Verification may need to distinguish raw-TTY-only behavior from fallback behavior in headless test environments."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 5,
+        "cycleTopics": [
+          "opencode-nexus CLI 도움말/인터랙션 UX 개선",
+          "Provide an explicit verification pass over both CLI and guard changes."
+        ]
+      }
     }
   ],
   "schema_version": "0.5"
