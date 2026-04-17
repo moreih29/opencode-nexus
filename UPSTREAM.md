@@ -62,6 +62,17 @@ Phase 1이 2026-04-11에 완료되었다. opencode-nexus는 `@moreih29/nexus-cor
 - **memory policy uptake 완료(후속)** — `[m]`/`[m:gc]` runtime notice 및 README 계열 문서에 canonical memory policy vocabulary(카테고리 접두사, kebab-case 네이밍, merge-before-create, 수동 GC 기본, git-recoverable deletion)를 반영.
 - **memory lifecycle runtime realignment(후속2)** — `.nexus/state/opencode-nexus/memory-access.jsonl` read-observation hook(`read` 성공 + `.nexus/memory/` real file만)과 세션 경계 간 access 기록 유지는 유지하고, 자동 메모리 삭제 및 `.nexus/config.json` runtime surface는 제거했다. `[m:gc]`는 수동 GC 가이드(병합 우선 + git-recoverable deletion)만 제공한다.
 
+#### v0.12.0 Upgrade (2026-04-17, `chore/nexus-core-0.12.0-upgrade`)
+
+`@moreih29/nexus-core ^0.11.0`을 건너뛰고(`"v0.11.0 → v0.12.0 직접 upgrade를 권장"` 가이드 준수) `^0.12.0`으로 직접 업그레이드했다. v0.12.0이 v0.11.0의 §9 runtime injection surface 3종을 회수(retraction)했지만, opencode-nexus는 `harness_docs_refs` generic loop consumer라 expander 소스 수정 없이 재생성/동기화만으로 대응했다.
+
+주요 변경:
+
+- **dependency/lock 갱신** — `package.json`, `bun.lock`을 `^0.12.0` 기준으로 갱신.
+- **§9 retraction 반영(재생성 중심)** — upstream `skills/nx-run/meta.yml`에서 `harness_docs_refs: nexus_hook_mapping`가 제거됨에 따라 `src/skills/generated/nx-run.ts`, `templates/skills/nx-run/SKILL.md`, `.opencode/skills/nx-run/SKILL.md`의 해당 harness-specific 섹션이 자동 제거됐다(consumer expander 코드 변경 없음).
+- **orphan harness-content 정리** — consumer 의무가 철회된 `harness-content/nexus-hook-mapping.md`를 삭제하여 dead context drift risk를 제거했다.
+- **preserved surface 확인** — v0.11.0에서 도입된 §9 rewrite, RFC 2119 dual gate, DROP 9, session-end fixture, 3-consumer ecosystem 관련 보존 항목은 v0.12.0에서도 유지됨을 기준으로 회귀 없이 통과했다.
+
 claude-nexus는 Phase 2에서 동일 패키지를 consume하는 방향으로 전환한다. 두 프로젝트는 여전히 sibling 관계이며, `@moreih29/nexus-core`가 canonical source다.
 
 ---

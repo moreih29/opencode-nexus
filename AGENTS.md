@@ -11,12 +11,12 @@ Use agents when parallel work or a second specialized perspective is helpful.
 | Name | Category | Task | Agent |
 |---|---|---|---|
 | architect | HOW | Technical design — evaluates How, reviews architecture, advises on implementation approach | architect |
-| engineer | DO | Implementation — writes code, debugs issues, follows specifications from Lead and architect | engineer |
 | designer | HOW | UX/UI design — evaluates user experience, interaction patterns, and how users will experience the product | designer |
-| strategist | HOW | Business strategy — evaluates market positioning, competitive landscape, and business viability of decisions | strategist |
-| reviewer | CHECK | Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables | reviewer |
-| researcher | DO | Independent investigation — conducts web searches, gathers evidence, and reports findings with citations | researcher |
+| engineer | DO | Implementation — writes code, debugs issues, follows specifications from Lead and architect | engineer |
 | postdoc | HOW | Research methodology and synthesis — designs investigation approach, evaluates evidence quality, writes synthesis documents | postdoc |
+| researcher | DO | Independent investigation — conducts web searches, gathers evidence, and reports findings with citations | researcher |
+| reviewer | CHECK | Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables | reviewer |
+| strategist | HOW | Business strategy — evaluates market positioning, competitive landscape, and business viability of decisions | strategist |
 | tester | CHECK | Testing and verification — tests, verifies, validates stability and security of implementations | tester |
 | writer | DO | Technical writing — transforms research findings, code, and analysis into clear documents and presentations for the intended audience | writer |
 
@@ -27,10 +27,10 @@ Use optional coordination labels when grouping related subagent work.
 
 | Skill | Trigger | Purpose |
 |---|---|---|
-| nx-run | [run] | Execution — user-directed agent composition |
 | nx-init | skill({ name: "nx-init" }) | Project onboarding — scan, mission, essentials, context generation |
-| nx-sync | [sync] | Context knowledge synchronization |
 | nx-plan | [plan] | Structured planning — subagent-based analysis, deliberate decisions, produce execution plan |
+| nx-run | [run] | Execution — user-directed agent composition |
+| nx-sync | [sync] | Context knowledge synchronization |
 
 ### Tags
 
