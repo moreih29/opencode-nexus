@@ -71,7 +71,7 @@
 
 ## 도구 실행 훅 동작
 
-### `tool.execute.before` — 편집 가드레일
+### `tool.execute.before` — 편집 가드레일 및 KNOWLEDGE_INDEX 주입
 
 편집류 도구(edit, write, patch, multiedit 등)에 대해 태스크 사이클 상태를 평가하여 차등 가드레일을 적용한다:
 
@@ -82,7 +82,9 @@
 | `active` | 편집 허용 |
 | `completed-open` | 보호(block/warning) — 태스크 사이클 종료 권장 |
 
-### `tool.execute.after` — 미완료 태스크 경고
+추가로 `task` 도구 호출 시 `appendKnowledgeIndexToTaskArgs(paths, args)`를 통해 `.nexus/{context,memory,rules}`의 파일 목록을 `KNOWLEDGE_INDEX:` 블록으로 주입하여 subagent_spawn continuity를 지원한다.
+
+### `tool.execute.after` — 미완료 태스크 경고 및 knowledge-index 캐시 무효화
 
 도구 실행 완료 후, 다음 조건을 확인하여 경고 메시지를 추가한다:
 
@@ -91,6 +93,18 @@
 3. "다음 태스크가 아직 완료되지 않았습니다" 경고와 함께 태스크 목록 표시
 
 이는 의도하지 않은 종료를 방지하고 태스크 사이클의 완전한 종료를 유도한다.
+
+추가로 편집 대상 경로가 `.nexus/{context,memory,rules}` 하위일 경우 `invalidateKnowledgeIndex(projectRoot)`를 호출하여 knowledge-index 캐시를 무효화한다.
+
+### 세션 컴팩팅 스냅샷 (`experimental.session.compacting`)
+
+세션 컴팩팅 시 `buildCompactionStateSnapshot(paths)`가 `[nexus-state-snapshot]` prefix의 multi-line 구조 스냅샷을 생성한다:
+
+- `active mode`: `plan` | `run` | `idle`
+- `plan`: topic 및 issues(제목+status, 최대 20개)
+- `tasks`: 태스크(제목+status, 최대 30개) 및 ready-task set(의존성 완료된 pending 태스크)
+- `knowledge_index`: context/memory/rules 파일명(각 최대 50개)
+- `active agents`: 활성 에이전트 목록(coordination_label 포함, 최대 30개)
 
 ### 동적 상태 알림 (Dynamic Stateful Notices)
 

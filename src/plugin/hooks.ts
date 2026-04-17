@@ -18,12 +18,17 @@ import {
   type DelegationTrackerRegistrar,
   writeAgentTracker
 } from "../shared/agent-tracker.js";
+import {
+  appendKnowledgeIndexToTaskArgs,
+  invalidateKnowledgeIndex
+} from "../shared/knowledge-index.js";
 import { TasksFileSchema } from "../shared/schema.js";
 import { createNexusPaths, isNexusInternalPath } from "../shared/paths.js";
 import { ensureNexusStructure, fileExists, readTasksSummary, resetAgentTracker } from "../shared/state.js";
 import { aggregateFilesForSession, appendToolLogEntry, resetToolLog } from "../shared/tool-log.js";
 import { buildTagNotice, detectAttendeeMentions, detectNexusTag, detectRuleTags } from "../shared/tag-parser.js";
 import { upsertMemoryAccessRecord } from "../shared/memory-access.js";
+import { buildCompactionStateSnapshot } from "../shared/context-snapshot.js";
 import { buildNexusSystemPrompt } from "./system-prompt.js";
 import type { NexusPluginState } from "../plugin-state.js";
 
@@ -162,6 +167,7 @@ export function createHooks(ctx: PluginContext) {
     "tool.execute.before": async (input: ToolInput, output: ToolOutput) => {
       if (input.tool === "task") {
         output.args = await injectPlanContinuityForTask(paths, output.args);
+        output.args = await appendKnowledgeIndexToTaskArgs(paths, output.args);
       }
 
       const sessionID = pickSessionID(input) ?? pickSessionID(output.args);
@@ -265,6 +271,9 @@ export function createHooks(ctx: PluginContext) {
 
       if (isEditLikeTool(input.tool)) {
         const targetPath = getTargetPath(input.args, projectRoot);
+        if (targetPath && shouldInvalidateKnowledgeIndexFromPath(targetPath, paths)) {
+          invalidateKnowledgeIndex(projectRoot);
+        }
         if (targetPath && !isNexusInternalPath(targetPath, projectRoot)) {
           try {
             if (sessionID) {
@@ -336,61 +345,7 @@ export function createHooks(ctx: PluginContext) {
     },
 
     "experimental.session.compacting": async (_input: unknown, output: { context: string[]; prompt?: string }) => {
-      const parts: string[] = [];
-
-      // Mode: plan > run > idle
-      const hasPlan = await fileExists(paths.PLAN_FILE);
-      const hasTasks = await fileExists(paths.TASKS_FILE);
-      const mode = hasPlan ? "plan" : hasTasks ? "run" : "idle";
-      parts.push(`mode=${mode}`);
-
-      // Task summary
-      const taskSummary = await readTasksSummary(paths.TASKS_FILE);
-      if (taskSummary) {
-        const { total, pending, in_progress } = taskSummary;
-        parts.push(`tasks: ${total} total (${pending} pending, ${in_progress} in_progress)`);
-      }
-
-      // Plan state
-      if (hasPlan) {
-        try {
-          const raw = JSON.parse(await fs.readFile(paths.PLAN_FILE, "utf8")) as {
-            topic?: unknown;
-            issues?: Array<{ status?: unknown }>;
-          };
-          const issues = Array.isArray(raw.issues) ? raw.issues : [];
-          const decidedCount = issues.filter((i) => i.status === "decided" || i.status === "tasked").length;
-          parts.push(`plan: "${String(raw.topic ?? "unknown")}" (${decidedCount}/${issues.length} decided)`);
-        } catch {
-          // skip plan info on parse error
-        }
-      }
-
-      // Context file count
-      try {
-        const contextFiles = await fs.readdir(paths.CONTEXT_ROOT);
-        const contextFileCount = contextFiles.filter((f) => f.endsWith(".md")).length;
-        if (contextFileCount > 0) {
-          parts.push(`context: ${contextFileCount} files`);
-        }
-      } catch {
-        // skip context count on error
-      }
-
-      // Active agents
-      try {
-        const tracker = await readAgentTracker(paths.AGENT_TRACKER_FILE);
-        const active = tracker.invocations
-          .filter((inv) => isInvocationActive(inv.status))
-          .map((inv) => inv.agent_type ?? "unknown");
-        if (active.length > 0) {
-          parts.push(`active agents: ${active.join(", ")}`);
-        }
-      } catch {
-        // skip agent list on error
-      }
-
-      output.context.push(`[nexus-state] ${parts.join(" | ")}`);
+      output.context.push(await buildCompactionStateSnapshot(paths));
     },
 
     "experimental.chat.system.transform": async (
@@ -971,6 +926,17 @@ async function safeUnlink(filePath: string): Promise<void> {
   } catch {
     // noop
   }
+}
+
+function shouldInvalidateKnowledgeIndexFromPath(
+  targetPath: string,
+  paths: ReturnType<typeof createNexusPaths>
+): boolean {
+  const resolvedTarget = path.resolve(targetPath);
+  return [paths.CONTEXT_ROOT, paths.MEMORY_ROOT, paths.RULES_ROOT].some((root) => {
+    const resolvedRoot = path.resolve(root);
+    return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`);
+  });
 }
 
 async function cleanupHarnessSessionState(paths: ReturnType<typeof createNexusPaths>): Promise<void> {

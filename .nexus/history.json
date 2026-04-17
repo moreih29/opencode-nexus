@@ -9322,6 +9322,111 @@
         "decisionCount": 0,
         "cycleTopics": []
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-17T11:57:26.902Z",
+      "branch": "nexus-core-hook-gap-remediation",
+      "plan": {
+        "id": 54,
+        "topic": "nexus-core §9 hook 주입 가이드와 opencode-nexus 구현의 gap 분석",
+        "issues": [
+          {
+            "id": 1,
+            "title": "subagent_spawn 시 .nexus/memory·context·rules 지식 인덱스 주입 누락",
+            "status": "decided",
+            "decision": "A안 채택. subagent_spawn 시점에 `.nexus/memory/`, `.nexus/context/`, `.nexus/rules/`의 knowledge index를 런타임 기준으로 수집해 subagent 초기 컨텍스트에 prepend/append 방식으로 주입한다. 구현은 consumer-local hook 경로(`tool.execute.before`의 task 처리 주변)에서 수행하고, 최신성은 유지하되 지연은 세션/변경 기반 캐시로 완화한다. 정적 body 확장(B)이나 schema 확장(C)은 후순위로 둔다."
+          },
+          {
+            "id": 2,
+            "title": "context_compact 재주입 정보가 counts 위주 — 이슈 타이틀·ready-task set·지식 파일 인덱스 결여",
+            "status": "decided",
+            "decision": "B안 채택. `context_compact` 시점에는 1-line count 요약 대신 구조화된 multi-line session snapshot을 재주입한다. 포함 항목은 active mode, plan topic과 issue 목록(제목+status), task 목록과 ready-task set, `.nexus/context|memory|rules` knowledge index, active agent list다. 토큰 비용은 증가하지만 context compaction의 목적이 복원력 확보인 만큼 state hint가 아니라 state restoration에 가깝게 설계한다."
+          },
+          {
+            "id": 3,
+            "title": "session_end 경로가 exit/quit 커맨드와 session.deleted 두 갈래로 분기 — 자연 종료 시 완료-미닫은-사이클 경고 미도달",
+            "status": "decided",
+            "decision": "B안 채택. session_end 이벤트에 LLM 프롬프트를 추가 주입하는 것은 무의미(세션 종료 후 LLM 인퍼런스 없음)하다는 판단에 따라 현 상태를 유지한다. 근거: ①nexus-core §9 session_end 요구는 user-facing warning + file cleanup이지 LLM-facing 주입이 아님, ②`command.execute.before`의 exit/quit 경로가 명시적 종료에 대한 user warning을 이미 커버함, ③`session.deleted` 훅이 agent-tracker/tool-log cleanup과 영속 파일 보존을 이미 충족함, ④다음 세션 시작 시 completed-open cycle 경고는 `experimental.chat.system.transform` + `buildIdleStatefulNotice`가 이미 LLM에게 주입함. 자연 종료(창 닫기/프로세스 kill) 시 사용자 직접 경고는 플랫폼이 user-visible shutdown hook을 제공하지 않는 한 consumer 범위 밖이므로 별도 upstream 추적 이슈로만 남긴다(recovery marker 도입 시 기존 idle notice와 중복이라 취소)."
+          },
+          {
+            "id": 4,
+            "title": "post_tool_use tool-log 스코프가 edit-like 도구로 한정 — nexus-core 가이드는 전체 도구 로깅을 암시",
+            "status": "decided",
+            "decision": "B안 채택. `post_tool_use` tool-log 스코프는 현 edit-like 도구 한정을 유지한다. 근거: ①nexus-core가 \"schema definition pending\"을 명시해 consumer 재량을 인정하고 있음, ②`files_touched` aggregation(bounded-tier resume의 권위 소스) 목적은 현 스코프로 완전 충족됨, ③`.nexus/memory/` read 감사는 `memory-access.jsonl` 별도 훅(nexus-outputs-contract 규정)에서 이미 커버됨, ④전면 로깅은 JSONL 팽창 비용이 실질 효용 대비 큼. 단, nexus-core \"observed across all consumers\" 문구와의 divergence는 `UPSTREAM.md` 또는 `docs/deferred-from-claude-nexus.md`에 intentional divergence로 기록하고, 향후 nexus-core가 tool-log schema를 확정하면 그 시점에 한 번에 정렬한다."
+          },
+          {
+            "id": 5,
+            "title": "session_start 시 legacy 루트 agent-tracker.json silent removal 및 .nexus/.gitignore 자동 작성 누락",
+            "status": "decided",
+            "decision": "A안 채택. `ensureNexusStructure` 내부에 두 가지 session_start SHOULD를 추가한다. ①`.nexus/.gitignore`를 `state/` 엔트리(및 현 수동 파일과 정렬된 예외 목록)로 초기 작성하되 존재하면 skip(`ensureFile` 패턴 재사용)하여 사용자 수정 보호. ②루트 legacy `.nexus/state/agent-tracker.json`를 session_start 시 silent removal. 근거: ①현 레포는 증상 없으나 클린 체크아웃/업그레이드 환경에서 regression 위험이 있는 방어 코드 성격, ②nexus-core §9가 두 항목 모두 SHOULD로 명시(루트 tracker는 v0.7.0+ \"silently remove\"로 파괴성까지 상위에서 승인), ③구현 비용은 각 한 줄 수준이고 `.gitignore` 템플릿은 상수화해 generate 경로와 엮을 여지 확보."
+          }
+        ],
+        "research_summary": "\n**Sources 비교 대상**\n- nexus-core `docs/consumer-implementation-guide.md §9 (Hook Event Lifecycle)` 8 이벤트: session_start / user_message / subagent_spawn / subagent_complete / pre_tool_use / post_tool_use / session_end / context_compact\n- nexus-core `docs/consumer-implementation-guide.md §10 (Subagent Orchestration)` spawn 시 지식 인덱스 주입 규정\n- nexus-core `docs/nexus-outputs-contract.md` agent-tracker.json / memory-access.jsonl 주체 규정\n- opencode-nexus `src/plugin/hooks.ts` (1258줄), `src/plugin/system-prompt.ts`, `src/shared/state.ts`\n\n**커버리지 매핑**\n\n| nexus-core event | opencode-nexus 대응 | 상태 |\n|---|---|---|\n| session_start | `event: session.created` → `ensureNexusStructure` + `resetAgentTracker` + `resetToolLog` + `syncAgentsMdTemplate` | 부분 (`.gitignore` 자동생성 / legacy `state/agent-tracker.json` 정리 누락) |\n| user_message | `chat.message`(프롬프트 캡쳐) + `experimental.chat.system.transform`(notice 주입) | 분산 구현, 전환 OK |\n| subagent_spawn | `tool.execute.before` (task 등록 + plan continuity `task_id` 주입) | **지식 인덱스 주입 없음** |\n| subagent_complete | `tool.execute.after` (`delegationTracker.end` + `mergeFilesTouched` + `buildOwnerIncompleteTaskWarning`) | 잘 구현됨 (owner별 경고는 nexus-core 최소치 초과) |\n| pre_tool_use | `tool.execute.before` → `throw new Error(...)` | 기능 OK, reason actionability 약함 |\n| post_tool_use | `tool.execute.after` → edit-like 도구만 `appendToolLogEntry` | **스코프 축소 (read/task/기타 도구 미기록)** |\n| session_end | 둘로 분기: `command.execute.before` (exit/quit 워닝) + `event: session.deleted` (cleanup) | 자연 종료 미커버, completed-open 경고가 exit 커맨드 명시에만 묶임 |\n| context_compact | `experimental.session.compacting` → 1-line `[nexus-state] mode=... tasks:… plan:\"...\" (N/M) context:N files active:…` | counts 위주, 이슈 타이틀/ready-task set/파일 인덱스 누락 |\n\n**핵심 발견**\n1. **subagent_spawn 지식 인덱스 주입 누락** — nexus-core §9/§10 모두 `.nexus/memory,context,rules` 파일 경로를 subagent 초기 컨텍스트에 SHOULD 주입하도록 규정하지만, opencode-nexus는 system-prompt에 `.nexus/` 읽기를 유도하는 플레이북 문구만 넣고 실제 인덱스는 넘기지 않음. subagent는 항상 Glob으로 재발견해야 함.\n2. **post_tool_use 로깅 스코프 축소** — nexus-core는 모든 도구 호출에 대한 로그 append를 암시(스키마 미정의). opencode-nexus는 `isEditLikeTool`만 로그. `files_touched` aggregation 목적으로는 OK하나, nexus-core가 기술한 \"timestamp/agent_id/tool/file/result\" 항목 수집 범위에서 벗어남.\n3. **context_compact 재주입 정보량 부족** — 이슈 상태별 리스트(제목 포함), ready-task set, `.nexus/memory,rules` 파일 인덱스를 §9가 명시하지만, opencode-nexus는 전부 수치 요약 또는 미포함.\n4. **session_end 커버리지 파편화** — `command.execute.before`는 명시적 exit/quit 커맨드에만 반응. 프로세스 종료/UI 종료/다른 shutdown 경로에서는 완료-미닫은-사이클 경고가 나오지 않음. `session.deleted` 경로는 파일 cleanup만 수행.\n5. **session_start 소규모 누락** — nexus-core v0.7.0+ SHOULD인 legacy 루트 `.nexus/state/agent-tracker.json` silent removal과 `.nexus/.gitignore` 초기 작성이 `ensureNexusStructure`에 없음. 현 레포는 이미 존재하나, 새 consumer/클린 셋업 시 regression 가능.\n\n**비교적 잘 된 곳**\n- subagent_complete의 `owner`별 미완 task escalation (`[nexus] Escalation: ... #N, #M`) — nexus-core SHOULD보다 구체적.\n- plan 모드 `task_id` auto-inject continuity — nexus-core가 요구하지는 않지만 resume routing을 실제로 구동하는 실용 확장.\n- attendee mention (@architect 등) 탐지 후 HOW 위임 안내 — 컨슈머 확장이나 spec 이탈 아님.\n- tool-log → `files_touched` aggregation + `mergeFilesTouchedForChildSession` — bounded-tier resume 평가의 권위 소스 기준 충실.\n\n**판단 기준**\n- SHOULD 미구현은 \"gap\"이나 enforcement는 아님. 보완 여부는 subagent의 실제 동작 품질(지식 발견, 경고 도달, 컨텍스트 압축 후 복원력)에 미치는 영향으로 가중.\n- MAY 확장(attendee, plan continuity inject)은 nexus-core 이탈이 아닌 컨슈머-local 추가로 수용 가능 — 보완 아이템에서 제외.\n",
+        "created_at": "2026-04-17T11:07:32.385Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "hooks.ts: knowledge index 주입 + context_compact 구조화 snapshot",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 1,
+          "created_at": "2026-04-17T11:20:05.692Z",
+          "context": "Plan #54 Issue #1(A안)과 Issue #2(B안) 결정사항 병합 구현. 두 변경이 모두 src/plugin/hooks.ts를 수정하므로 파일 충돌 방지 위해 하나의 엔지니어링 태스크로 결합.\n\n참고 파일:\n- src/plugin/hooks.ts (1258줄) — tool.execute.before(task 처리), experimental.session.compacting\n- src/shared/state.ts — readTasksSummary 등 기존 유틸\n- src/shared/paths.ts — NEXUS_ROOT, MEMORY_ROOT, CONTEXT_ROOT, RULES_ROOT, AGENT_TRACKER_FILE, PLAN_FILE, TASKS_FILE\n- src/shared/agent-tracker.ts — readAgentTracker, isInvocationActive\n\nnexus-core 참고:\n- ~/workspaces/areas/nexus-core/docs/consumer-implementation-guide.md §9 subagent_spawn / context_compact\n- §10 Subagent Orchestration / Context passing의 \"knowledge index: file paths in .nexus/memory/, .nexus/context/, .nexus/rules/\"\n\n현재 컨텍스트:\n- subagent에 아직 knowledge index가 주입되지 않음 → DELEGATION_PLAYBOOK 텍스트로만 유도\n- context_compact는 1-line `[nexus-state] ...` count 요약만 재주입 중\n\n테스트 인프라:\n- scripts/e2e-subagent-prompts.mjs, scripts/e2e-system-transform.mjs, scripts/e2e-hook-notices.mjs 등 관련 e2e 존재\n- 새 테스트가 필요하면 패턴을 따라 scripts/e2e-*.mjs로 추가",
+          "approach": "【Issue #1 — knowledge index 주입】\n1. src/shared/knowledge-index.ts 신설. \n   - `collectKnowledgeIndex(paths): Promise<{context:string[]; memory:string[]; rules:string[]}>` — fs.readdir로 각 디렉터리 .md 파일 목록 수집(하위 디렉터리는 shallow 기준, 현 구조가 flat).\n   - `formatKnowledgeIndexBlock(index): string` — nexus-core §10 Context passing 포맷에 맞춘 \"KNOWLEDGE_INDEX:\" 블록 문자열 생성.\n   - 세션 스코프 캐시: 모듈 레벨 Map<string, {snapshot, mtime}> 또는 간단히 WeakMap. `tool.execute.after`에서 `.nexus/memory|context|rules` write 감지 시 invalidate.\n2. src/plugin/hooks.ts `tool.execute.before`의 `input.tool === \"task\"` 분기에 knowledge index injection 추가:\n   - 기존 `injectPlanContinuityForTask` 바로 다음 라인에 `injectKnowledgeIndexForTask(paths, output.args)` 호출.\n   - task tool의 `prompt` 또는 `description` 인자에 `\\n\\nKNOWLEDGE_INDEX:\\n...` 를 append(기존 값 보존).\n   - args에 prompt/description 모두 없으면 no-op.\n3. 캐시 invalidate는 최소한으로: `tool.execute.after`에서 edit-like 도구가 .nexus/{memory,context,rules} 하위 경로를 수정했을 때만 cache clear.\n\n【Issue #2 — context_compact 구조화 snapshot】\n4. hooks.ts `experimental.session.compacting` 핸들러를 재작성:\n   - 현 1-line 대신 multi-line 블록을 `output.context.push(...)`.\n   - 포함 섹션:\n     a. `active mode` (plan/run/idle)\n     b. `plan` — topic + issue list `#id title [pending|decided|tasked]` (최대 20개, 이상이면 truncate 표시)\n     c. `tasks` — `#id title [status]` + `ready tasks: #id, #id, ...` (deps 미해소 제외)\n     d. `knowledge_index` — context/*.md, memory/*.md, rules/*.md 파일명 목록(단순 basename 나열)\n     e. `active agents` — tracker에서 isInvocationActive인 invocation의 agent_type + coordination_label\n   - 토큰 팽창을 막기 위해 각 섹션별 최대 개수 제한(plan issues 20, tasks 30, knowledge index 50).\n\n【공통】\n5. 기존 1-line 요약을 넣는 hooks 코드는 제거. 대신 top에 `[nexus-state-snapshot]` marker를 두어 로그/grep 용이성 유지.\n6. 새 helper 함수는 hooks.ts 내부 private 또는 src/shared/ 하위 새 파일에 배치 — hooks.ts가 이미 1258줄로 크므로 **별도 파일 분리 권장**.\n7. 기존 테스트 영향 확인: e2e-hook-notices.mjs, e2e-subagent-prompts.mjs, e2e-system-transform.mjs, e2e-session-cleanup.mjs가 영향 범위. compacting 훅은 직접 테스트가 없을 수 있으므로 필요 시 e2e-context-compact-snapshot.mjs 신규 추가.\n8. 빌드 후 `bun run check` 통과, 관련 e2e 스크립트 개별 실행으로 회귀 없음 확인.",
+          "acceptance": "1. `bun run check` 통과 (tsc 오류 0).\n2. `src/shared/knowledge-index.ts`(또는 동등 위치) 신설되고 export된 함수가 존재한다.\n3. src/plugin/hooks.ts `tool.execute.before`에서 `task` 도구 호출 시 args.prompt 또는 args.description에 `KNOWLEDGE_INDEX:` 블록이 append된다(기존 내용 보존).\n4. `experimental.session.compacting` 출력이 단일 라인이 아닌 multi-line 구조로 변경되고, 최소 다음 필드가 포함된다: mode, plan(있으면 issue 제목+status), tasks(있으면 task 제목+status + ready-task set), knowledge_index(context/memory/rules 파일명), active agents.\n5. 기존 e2e 관련 스크립트(e2e-hook-notices, e2e-subagent-prompts, e2e-system-transform, e2e-session-cleanup)가 모두 통과한다.\n6. 캐시 invalidation이 `.nexus/memory|context|rules` 하위 edit 감지 시 동작한다(최소한 e2e smoke로 확인).\n7. 변경 파일 범위: src/plugin/hooks.ts, src/shared/knowledge-index.ts(신규), 필요 시 scripts/e2e-*.mjs(신규) — 다른 영역 수정 금지.",
+          "risk": "- hooks.ts는 이미 1258줄로 변경 위험이 큼 → 헬퍼는 외부 파일로 분리 필수\n- 캐시 누수 또는 invalidation 누락 시 stale knowledge index 전파 가능 → 세션 스코프 캐시는 key를 projectRoot+sessionID로 두어 cross-session 누수 차단\n- context_compact 토큰 팽창 우려 → 섹션별 상한 강제\n- 기존 e2e가 1-line 요약을 문자열 비교로 검증하고 있으면 전부 실패할 수 있음 → 기대치 업데이트 필요"
+        },
+        {
+          "id": 2,
+          "title": "ensureNexusStructure: .gitignore 자동 작성 + legacy root tracker silent removal",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 5,
+          "created_at": "2026-04-17T11:20:30.204Z",
+          "context": "Plan #54 Issue #5(A안) 결정사항.\n\n참고 파일:\n- src/shared/state.ts — ensureNexusStructure 본체\n- src/shared/paths.ts — NEXUS_ROOT, STATE_ROOT 등 경로 상수\n- 현 레포의 .nexus/.gitignore 내용(참조 템플릿):\n  ```\n  state/\n  *\n  !context/\n  !context/**\n  !memory/\n  !memory/**\n  !rules/\n  !rules/**\n  !history.json\n  !.gitignore\n  ```\n- nexus-core consumer-implementation-guide.md §9 session_start\n\n현 상태:\n- ensureFile 유틸 존재 (if exists skip 패턴) → .gitignore 자동 작성에 그대로 재사용 가능\n- 루트 legacy agent-tracker.json(path.join(STATE_ROOT,\"agent-tracker.json\"))은 현 레포에 없지만 v0.7.0+ SHOULD 위반 상태\n\n테스트 인프라:\n- scripts/e2e-init-sync.mjs, scripts/e2e-lifecycle.mjs, scripts/e2e-setup-template.mjs가 ensureNexusStructure 경로 검증 영역",
+          "approach": "1. src/shared/state.ts ensureNexusStructure에 다음 추가:\n   a. `.nexus/.gitignore` ensureFile(path, template) — template 상수는 파일 상단 또는 templates/ 디렉터리에 별도 상수로 둔다. `ensureFile`이 이미 exists 시 skip하므로 사용자 수정 보호 보장.\n   b. `safeUnlink(path.join(STATE_ROOT, \"agent-tracker.json\"))` — fs.unlink에 ENOENT 무시. hooks.ts의 `safeUnlink`와 동일 패턴.\n2. GITIGNORE_TEMPLATE 상수는 state.ts 내부 또는 templates/nexus-gitignore.txt로 정의. 단일 truth source로 향후 generate 연동 가능.\n3. 변경 범위: src/shared/state.ts(주), src/shared/paths.ts는 STATE_ROOT가 이미 노출되어 있으면 수정 불필요.\n4. e2e 영향 평가:\n   - e2e-init-sync.mjs, e2e-lifecycle.mjs가 디렉터리 구조 검증하면 .gitignore 추가 필드 assertion을 업데이트해야 할 수 있음.\n   - legacy tracker unlink는 존재하지 않을 때 no-op이어야 하므로 현 e2e에는 영향 없음.\n5. 새 테스트: 필요 시 scripts/e2e-session-start-defense.mjs 추가해 (a) fresh .nexus 생성 시 .gitignore 내용 assertion, (b) 루트에 agent-tracker.json 임시 생성 후 ensureNexusStructure 호출 → removed 확인.\n6. `bun run check` 통과 후 관련 e2e 실행.",
+          "acceptance": "1. `bun run check` 통과.\n2. ensureNexusStructure 호출 후 `.nexus/.gitignore`가 없으면 생성되어 있고, 존재하면 내용 보존된다(ensureFile 패턴).\n3. 루트 `.nexus/state/agent-tracker.json`이 존재하면 session.created 경로에서 unlink되고, 없으면 no-op으로 에러 없음.\n4. `.nexus/state/opencode-nexus/agent-tracker.json`(harness namespace 쪽)은 영향받지 않음.\n5. e2e-init-sync, e2e-lifecycle 등 기존 e2e 통과.\n6. 변경 파일 범위: src/shared/state.ts (+ 필요 시 templates/ 또는 paths.ts), scripts/e2e-*.mjs(신규 가능).",
+          "risk": "- .gitignore 내용이 사용자가 수정한 패턴과 충돌 가능 → ensureFile \"if exists skip\"으로 보호됨(단 최초 작성 시는 템플릿 내용이 그대로 들어감)\n- legacy tracker가 다른 consumer(claude-nexus)와 공유되던 경로였을 가능성 → v0.4.0에서 이미 harness namespace로 이동 완료, 공유 목적 아님 확인됨(참고 UPSTREAM.md)\n- 루트 tracker가 있었을 때 아직 읽고 있는 코드가 남아있으면 regression → rg로 확인 후 없는지 확정 필요"
+        },
+        {
+          "id": 3,
+          "title": "UPSTREAM.md: post_tool_use tool-log scope intentional divergence 기록",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 4,
+          "created_at": "2026-04-17T11:20:52.990Z",
+          "context": "Plan #54 Issue #4(B안) 결정사항. 코드 변경 없이 문서만 업데이트.\n\n참고 파일:\n- /Users/kih/workspaces/areas/opencode-nexus/UPSTREAM.md (§ Intentional Divergences 섹션 이미 존재)\n- /Users/kih/workspaces/areas/opencode-nexus/src/plugin/hooks.ts (tool.execute.after + isEditLikeTool gate)\n- /Users/kih/workspaces/areas/opencode-nexus/src/shared/memory-access.ts (memory-access.jsonl 별도 훅)\n- /Users/kih/workspaces/areas/nexus-core/docs/consumer-implementation-guide.md §9 post_tool_use\n- /Users/kih/workspaces/areas/nexus-core/docs/nexus-outputs-contract.md (memory-access.jsonl 규정)\n\n결정 요약:\n- opencode-nexus는 tool-log.jsonl을 edit-like 도구로만 append\n- 근거: nexus-core \"schema definition pending\" → consumer 재량, files_touched aggregation 목적 충족, memory-read는 memory-access.jsonl 별도 훅이 커버, 전면 로깅의 JSONL 팽창 비용\n- nexus-core가 schema를 확정하면 그때 정렬\n\n기존 UPSTREAM.md 구조:\n- \"## Intentional Divergences\" 섹션 하단에 `.nexus/` 구조 관련 divergence가 먼저 기록되어 있고, \"기타 divergence는 docs/deferred-from-claude-nexus.md 참조\"로 마무리.\n- docs/deferred-from-claude-nexus.md 존재 여부는 확인 필요. 없으면 UPSTREAM.md에 직접 추가.",
+          "approach": "1. UPSTREAM.md \"## Intentional Divergences\" 섹션 내부에 \"### post_tool_use tool-log scope\" 하위 섹션 신설.\n2. 구성:\n   - 첫 단락: 사실 진술 — nexus-core SHOULD/observed practice와 opencode-nexus 현 구현 차이.\n   - 두 번째 단락: 근거 4개를 불릿으로 정리(schema pending, files_touched 목적, memory-access 별도 커버, JSONL 팽창 비용).\n   - 세 번째 단락: 재정렬 트리거 — nexus-core가 tool-log schema를 확정하면 그 시점에 전면 로깅으로 전환한다는 약속.\n3. 레퍼런스 링크: nexus-core consumer-implementation-guide.md §9 post_tool_use와 nexus-outputs-contract.md memory-access.jsonl 섹션 경로 포함.\n4. docs/deferred-from-claude-nexus.md가 존재하면 거기로 옮기고 UPSTREAM.md에는 pointer만. 없으면 UPSTREAM.md에 직접 기록.\n5. 코드 변경 금지. 오직 UPSTREAM.md(+ 필요 시 docs/deferred-from-claude-nexus.md)만 수정.\n6. 작성 언어는 UPSTREAM.md 기존 톤(혼재 한·영이지만 항목 제목은 영문)과 일치시킴.",
+          "acceptance": "1. UPSTREAM.md에 post_tool_use tool-log scope divergence 항목이 추가되고, 사실/근거/재정렬 트리거 3단 구조를 갖춘다.\n2. 근거 4개(schema pending, files_touched 목적 충족, memory-access 별도 커버, JSONL 팽창 비용)가 모두 명시된다.\n3. nexus-core 참조 링크가 2개 이상 포함된다.\n4. 코드 파일은 변경되지 않는다(git diff로 src/ 변경 0 확인).\n5. 문서 작성 톤이 기존 UPSTREAM.md와 일관된다.",
+          "risk": "- docs/deferred-from-claude-nexus.md 존재 여부에 따라 위치가 바뀔 수 있음 → 우선 UPSTREAM.md에 full text 기록 후 이후 정리 가능\n- 표현이 과하게 단정적이면 nexus-core와의 관계가 경색될 수 있음 → SHOULD 위반이 아닌 \"consumer 재량 범위\"로 프레이밍"
+        },
+        {
+          "id": 4,
+          "title": "검증: build + typecheck + 관련 e2e 회귀 확인",
+          "status": "completed",
+          "owner": "tester",
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "created_at": "2026-04-17T11:21:21.402Z",
+          "context": "Plan #54 Issue #1/#2/#5 구현 결과와 #4 문서 변경의 검증 단계.\n\n대상:\n- Task #1: hooks.ts knowledge index 주입 + context_compact 구조화 snapshot\n- Task #2: ensureNexusStructure 방어 코드\n- Task #3: UPSTREAM.md divergence 기록\n\n검증 경로:\n- `bun run check` (generate:prompts + tsc noEmit)\n- `bun run build` (dist 재생성)\n- 관련 e2e 스크립트(scripts/e2e-*.mjs):\n  - 직접 영향: e2e-hook-notices, e2e-subagent-prompts, e2e-system-transform, e2e-session-cleanup, e2e-init-sync, e2e-lifecycle, e2e-agent-tracker-reset, e2e-plan-continuity-core, e2e-plan-resume-inject\n  - 간접 영향: e2e-smoke, e2e-guardrails, e2e-context, e2e-conformance\n- git diff로 변경 범위 대조 (선언된 파일 외 수정 금지)\n\n환경:\n- darwin, bun 1.3.9, typescript 5.6.3\n- 브랜치: feat/nexus-core-hook-gap-remediation",
+          "approach": "1. git diff로 Task #1~#3이 선언된 파일 범위만 수정했는지 확인. 범위 이탈 시 FAIL 보고.\n2. `bun run check` 실행 → 타입 에러 0 확인.\n3. 위 \"직접 영향\" e2e 스크립트를 개별 실행해 통과 확인.\n4. 위 \"간접 영향\" e2e 스크립트 전수 통과 확인.\n5. acceptance 런타임 검증:\n   - Task #1 acceptance #3: task 도구에 prompt/description이 있는 fixture로 injectKnowledgeIndexForTask 호출 후 KNOWLEDGE_INDEX 블록 append 여부 확인(가능하면 e2e 스크립트 fixture로).\n   - Task #1 acceptance #4: experimental.session.compacting 핸들러가 multi-line 블록 출력을 내는지 확인.\n   - Task #2 acceptance #2,#3: 빈 디렉터리에서 ensureNexusStructure 실행 → .gitignore 생성, 기존 파일 존재 시 보존, 루트 legacy tracker 존재 시 제거 확인.\n   - Task #3 acceptance: UPSTREAM.md diff에서 새 섹션 + 근거 4개 + nexus-core 참조 2개 확인.\n6. 결과 report: PASS/FAIL + 각 acceptance 체크 + 발견된 심각도별 이슈.\n7. FAIL이면 담당 엔지니어(Task #1 또는 #2) 또는 writer(Task #3)에게 rework 요청 사유를 명확히 작성.",
+          "acceptance": "1. `bun run check` PASS.\n2. 선언된 직접/간접 e2e 스크립트 전수 PASS.\n3. 각 태스크의 acceptance 항목별로 PASS/FAIL 명시된 report 생성.\n4. 변경 범위 이탈 없음(선언 외 파일 수정 0).\n5. FAIL 발생 시 severity(blocker/major/minor)와 rework 사유가 report에 포함된다.",
+          "risk": "- e2e 전수 실행이 오래 걸릴 수 있음 → 직접 영향 셋 먼저, 통과 시 간접 영향 추가\n- compacting hook은 opencode experimental API라 테스트 fixture 접근성이 제한적일 수 있음 → 핵심 헬퍼 함수 단위 assertion으로 대체 가능"
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 4,
+        "decisionCount": 5,
+        "cycleTopics": [
+          "nexus-core §9 hook 주입 가이드와 opencode-nexus 구현의 gap 분석",
+          "태스크 1~3 변경이 기존 hook/state/doc 계약을 깨지 않는지, 그리고 acceptance가 런타임에서 실제로 충족되는지 회귀 없이 확인"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

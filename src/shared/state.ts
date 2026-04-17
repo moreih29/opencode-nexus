@@ -3,6 +3,18 @@ import path from "node:path";
 import { AgentTrackerSchema, TasksFileSchema, type TaskStatus } from "./schema.js";
 import { HARNESS_ID, type NexusPaths } from "./paths.js";
 
+const NEXUS_GITIGNORE_TEMPLATE = `state/
+*
+!context/
+!context/**
+!memory/
+!memory/**
+!rules/
+!rules/**
+!history.json
+!.gitignore
+`;
+
 export interface TasksSummary {
   total: number;
   pending: number;
@@ -19,9 +31,11 @@ export async function ensureNexusStructure(paths: NexusPaths): Promise<void> {
   await fs.mkdir(paths.HARNESS_NAMESPACE_ROOT, { recursive: true });
   await fs.mkdir(paths.ARTIFACTS_ROOT, { recursive: true });
 
+  await ensureFile(path.join(paths.NEXUS_ROOT, ".gitignore"), NEXUS_GITIGNORE_TEMPLATE);
   await ensureFile(paths.HISTORY_FILE, JSON.stringify({ cycles: [] }, null, 2) + "\n");
   await ensureFile(paths.AGENT_TRACKER_FILE, JSON.stringify(createInitialAgentTracker(), null, 2) + "\n");
   await ensureFile(paths.TOOL_LOG_FILE, "");
+  await safeUnlink(path.join(paths.STATE_ROOT, "agent-tracker.json"));
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
@@ -84,6 +98,17 @@ async function ensureFile(filePath: string, content: string): Promise<void> {
     return;
   }
   await fs.writeFile(filePath, content, "utf8");
+}
+
+async function safeUnlink(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
 }
 
 function createInitialAgentTracker() {
