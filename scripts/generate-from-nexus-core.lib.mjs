@@ -795,7 +795,13 @@ export function deriveSkillTriggerDisplay(meta, pluginName) {
  * Transform one skill's meta + body.
  * Returns a structured object for TypeScript literal emission (commit #2).
  * If meta.harness_docs_refs is a non-empty array, appends each harness doc
- * from harness-docs/{ref}.md to the prompt body. Missing files warn but do not fail.
+ * from harness-content/{ref}.md to the prompt body.
+ *
+ * Resolution order per ref:
+ * 1) {ref}.md (existing behavior)
+ * 2) {ref-with-underscores-replaced-by-hyphens}.md (consumer canonical naming fallback)
+ *
+ * Missing files warn but do not fail.
  * @param {any} meta
  * @param {string} body - already verified
  * @param {string} pluginName
@@ -822,16 +828,30 @@ export function transformSkill(meta, body, pluginName, label = '') {
   let prompt = transformBody(body);
   if (Array.isArray(meta.harness_docs_refs) && meta.harness_docs_refs.length > 0) {
     for (const ref of meta.harness_docs_refs) {
-      const docPath = join(OPENCODE_NEXUS_ROOT, 'harness-content', `${ref}.md`);
+      const candidates = [join(OPENCODE_NEXUS_ROOT, 'harness-content', `${ref}.md`)];
+      const hyphenRef = ref.replaceAll('_', '-');
+      if (hyphenRef !== ref) {
+        candidates.push(join(OPENCODE_NEXUS_ROOT, 'harness-content', `${hyphenRef}.md`));
+      }
+
       let content;
-      try {
-        content = readFileSync(docPath, 'utf8');
-      } catch {
+      let resolvedPath = null;
+      for (const candidate of candidates) {
+        try {
+          content = readFileSync(candidate, 'utf8');
+          resolvedPath = candidate;
+          break;
+        } catch {
+          // Try next candidate.
+        }
+      }
+      if (resolvedPath === null) {
         console.warn(
-          `[generate-from-nexus-core] harness_docs_refs: "${ref}.md" not found at ${docPath} — skipping`
+          `[generate-from-nexus-core] harness_docs_refs: "${ref}" not found. Tried: ${candidates.join(', ')} — skipping`
         );
         continue;
       }
+
       prompt += `\n\n---\n\n## Harness-Specific: ${ref}\n\n${content}`;
     }
   }

@@ -9222,6 +9222,69 @@
           "Confirm the branch now reflects the final plan decisions cleanly and safely."
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-17T05:13:29.232Z",
+      "branch": "sync-nexus-core-consumer-guide",
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Inspect latest nexus-core consumer docs and identify required opencode-nexus updates",
+          "status": "completed",
+          "owner": "researcher",
+          "owner_agent_id": "researcher",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [],
+          "created_at": "2026-04-17T05:00:26.361Z",
+          "context": "User requested [run] after nexus-core was updated. Compare current upstream nexus-core consuming documentation on GitHub against the current opencode-nexus implementation and local generated prompts/docs. Identify concrete impacted files and recommended updates. Repo is opencode-nexus on branch chore/sync-nexus-core-consumer-guide. No file edits in this task; produce a concise impact report with exact source references and specific target files to update.",
+          "approach": "Inspect GitHub-hosted nexus-core consumer docs and recent related commits, compare against local opencode-nexus hook/system prompt/skill generation behavior, and enumerate actionable deltas.",
+          "acceptance": "Return a report listing upstream references, observed behavior changes or clarifications, impacted local files, and recommended next implementation steps.",
+          "risk": "Upstream docs may be descriptive rather than normative; call out uncertainty explicitly."
+        },
+        {
+          "id": 2,
+          "title": "Apply opencode-nexus updates required by latest nexus-core consuming docs",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-17T05:00:26.363Z",
+          "context": "After the research task identifies impacted areas, update opencode-nexus code/docs/generation outputs to align with or accurately reflect the latest nexus-core consuming docs where appropriate. Keep changes scoped to confirmed impacts only.",
+          "approach": "Use the research report as the source of truth, then modify the necessary files. Prefer minimal, objective updates. Preserve OpenCode-specific behavior where the upstream docs are harness-neutral; avoid speculative changes.",
+          "acceptance": "Relevant files are updated consistently, no unrelated changes are introduced, and generated artifacts stay in sync if generation is required.",
+          "risk": "Could accidentally overfit to harness-neutral docs; keep implementation grounded in verified upstream changes."
+        },
+        {
+          "id": 3,
+          "title": "Verify updated implementation against targeted tests/checks",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 0,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-17T05:00:26.365Z",
+          "context": "After implementation, run the smallest reliable set of checks covering the updated areas, and report PASS/FAIL with any findings. Prefer focused tests first; expand only if needed.",
+          "approach": "Inspect changed files and select targeted checks or scripts. Validate that generated outputs and behavior remain consistent.",
+          "acceptance": "Provide PASS/FAIL for executed checks and note any residual risks.",
+          "risk": "A narrow test set may miss unrelated regressions; call out coverage limits."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 3,
+        "decisionCount": 0,
+        "cycleTopics": [
+          "Confirm the update is correct and stable enough to report back."
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

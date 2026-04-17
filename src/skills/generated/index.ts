@@ -1,17 +1,17 @@
 // AUTO-GENERATED — do not edit by hand.
-// Source: @moreih29/nexus-core@0.10.0 (23c72e53a32308b015eb90468dee3cb6e80eb655)
+// Source: @moreih29/nexus-core@0.11.0 (7d32c9e06ec206980cbc1399d29c8cb754cd0d5a)
 // Aggregates all skill prompts and metadata.
 
-import { PROMPT as nx_run_prompt, META as nx_run_meta } from './nx-run.js';
 import { PROMPT as nx_init_prompt, META as nx_init_meta } from './nx-init.js';
 import { PROMPT as nx_sync_prompt, META as nx_sync_meta } from './nx-sync.js';
 import { PROMPT as nx_plan_prompt, META as nx_plan_meta } from './nx-plan.js';
+import { PROMPT as nx_run_prompt, META as nx_run_meta } from './nx-run.js';
 
 export const SKILL_PROMPTS: Record<string, string> = {
-  "nx-run": nx_run_prompt,
   "nx-init": nx_init_prompt,
   "nx-sync": nx_sync_prompt,
   "nx-plan": nx_plan_prompt,
+  "nx-run": nx_run_prompt,
 };
 
 export const SKILL_META: Record<string, {
@@ -21,13 +21,6 @@ export const SKILL_META: Record<string, {
   trigger_display: string;
   purpose: string;
 }> = {
-  "nx-run": {
-    id: "nx-run",
-    name: "nx-run",
-    description: "Execution — user-directed agent composition.",
-    trigger_display: "[run]",
-    purpose: "Execution — user-directed agent composition",
-  },
   "nx-init": {
     id: "nx-init",
     name: "nx-init",
@@ -48,5 +41,12 @@ export const SKILL_META: Record<string, {
     description: "Structured multi-perspective analysis to decompose issues, align on decisions, and produce an enriched plan before execution. Plan only — does not execute.",
     trigger_display: "[plan]",
     purpose: "Structured planning — subagent-based analysis, deliberate decisions, produce execution plan",
+  },
+  "nx-run": {
+    id: "nx-run",
+    name: "nx-run",
+    description: "Execution — user-directed agent composition.",
+    trigger_display: "[run]",
+    purpose: "Execution — user-directed agent composition",
   },
 };
