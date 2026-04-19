@@ -159,11 +159,13 @@ const setupRunPayload = JSON.parse(setupRunResult.stdout);
 assert.equal(setupRunPayload.ok, true);
 assert.equal(setupRunPayload.command, "setup");
 const setupConfig = JSON.parse(await fs.readFile(setupConfigPath, "utf8"));
-assert.equal(setupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
-assert.equal(setupConfig.agent.architect.model, "anthropic/claude-sonnet-4");
-assert.equal(setupConfig.agent.engineer.model, "openai/gpt-5.3-codex");
-assert.equal(setupConfig.agent.general.model, "openai/gpt-5.4-mini");
-assert.equal(setupConfig.agent.explore.model, "openai/gpt-5.3-codex");
+// setup은 isolated config (opencode-nexus.jsonc) 구조에 `agents.<id>.model`로 기록한다.
+assert.equal(setupConfig.version, 1);
+assert.equal(setupConfig.agents.nexus.model, "openai/gpt-5.3-codex");
+assert.equal(setupConfig.agents.architect.model, "anthropic/claude-sonnet-4");
+assert.equal(setupConfig.agents.engineer.model, "openai/gpt-5.3-codex");
+assert.equal(setupConfig.agents.general.model, "openai/gpt-5.4-mini");
+assert.equal(setupConfig.agents.explore.model, "openai/gpt-5.3-codex");
 
 const setupAliasConfigPath = path.join(
   await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-alias-")),
@@ -175,21 +177,26 @@ await execFileAsync(
   { cwd: repoRoot }
 );
 const setupAliasConfig = JSON.parse(await fs.readFile(setupAliasConfigPath, "utf8"));
-assert.equal(setupAliasConfig.agent.nexus.model, "openai/gpt-5.4");
-assert.equal(setupAliasConfig.agent.general.model, "openai/gpt-5.4");
+assert.equal(setupAliasConfig.agents.nexus.model, "openai/gpt-5.4");
+assert.equal(setupAliasConfig.agents.general.model, "openai/gpt-5.4");
 
-const targetedSetupConfigPath = path.join(
-  await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-targeted-")),
-  "opencode.json"
+// setup은 isolated config 파일만 건드린다. nexus taxonomy 외 agent 는 저장되지 않고,
+// 기존 agents[id].tools 등 non-model 필드는 보존됨이 scripts/e2e-cli-setup.mjs 의
+// "setup preserves existing isolated tools" 시나리오에서 커버된다.
+const preservedSetupConfigPath = path.join(
+  await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-setup-preserved-")),
+  "opencode-nexus.jsonc"
 );
 await fs.writeFile(
-  targetedSetupConfigPath,
+  preservedSetupConfigPath,
   JSON.stringify(
     {
-      agent: {
-        custom: { model: "custom/keep-this", notes: "preserve" },
-        build: { model: "build/keep-this", disable: true },
-        plan: { model: "plan/keep-this", disable: true }
+      version: 1,
+      agents: {
+        architect: {
+          model: "preexisting/model",
+          tools: { read: true, write: true }
+        }
       }
     },
     null,
@@ -199,16 +206,15 @@ await fs.writeFile(
 );
 await execFileAsync(
   "node",
-  ["dist/cli.js", "setup", "--scope", "user", "--config", targetedSetupConfigPath, "--all-model", "openai/gpt-5.3-codex"],
+  ["dist/cli.js", "setup", "--scope", "user", "--config", preservedSetupConfigPath, "--all-model", "openai/gpt-5.3-codex"],
   { cwd: repoRoot }
 );
-const targetedSetupConfig = JSON.parse(await fs.readFile(targetedSetupConfigPath, "utf8"));
-assert.equal(targetedSetupConfig.agent.custom.model, "custom/keep-this");
-assert.equal(targetedSetupConfig.agent.custom.notes, "preserve");
-assert.equal(targetedSetupConfig.agent.build.model, "build/keep-this");
-assert.equal(targetedSetupConfig.agent.plan.model, "plan/keep-this");
-assert.equal(targetedSetupConfig.agent.nexus.model, "openai/gpt-5.3-codex");
-assert.equal(targetedSetupConfig.agent.general.model, "openai/gpt-5.3-codex");
+const preservedSetupConfig = JSON.parse(await fs.readFile(preservedSetupConfigPath, "utf8"));
+// model 은 setup 으로 덮어쓰되, tools 같은 다른 필드는 보존되어야 한다.
+assert.equal(preservedSetupConfig.agents.architect.model, "openai/gpt-5.3-codex");
+assert.deepEqual(preservedSetupConfig.agents.architect.tools, { read: true, write: true });
+assert.equal(preservedSetupConfig.agents.nexus.model, "openai/gpt-5.3-codex");
+assert.equal(preservedSetupConfig.agents.general.model, "openai/gpt-5.3-codex");
 
 const interactiveProjectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-interactive-project-"));
 const interactiveInstallResult = await runCliTty(["install"], ["2", interactiveProjectRoot, "1", "7.7.7", "2"]);
@@ -230,10 +236,13 @@ assert.equal(interactiveUpdateConfig.plugin.includes("opencode-nexus@7.7.7"), fa
 const interactiveSetupResult = await runCliTty(["setup", "--scope", "project", "--directory", interactiveProjectRoot], ["2", "", ""]);
 assert.match(interactiveSetupResult.stdout, /Setup complete\./);
 assert.ok(!interactiveSetupResult.stdout.includes('"command": "setup"'));
-const interactiveSetupConfig = JSON.parse(await fs.readFile(path.join(interactiveProjectRoot, "opencode.json"), "utf8"));
-assert.ok(typeof interactiveSetupConfig.agent.nexus.model === "string" && interactiveSetupConfig.agent.nexus.model.length > 0);
-assert.equal(interactiveSetupConfig.agent.nexus.model, interactiveSetupConfig.agent.tester.model);
-assert.equal(interactiveSetupConfig.agent.nexus.model, interactiveSetupConfig.agent.general.model);
+// setup (project scope) 은 ./.opencode/opencode-nexus.jsonc 에 기록한다.
+const interactiveSetupConfig = JSON.parse(
+  await fs.readFile(path.join(interactiveProjectRoot, ".opencode", "opencode-nexus.jsonc"), "utf8")
+);
+assert.ok(typeof interactiveSetupConfig.agents.nexus.model === "string" && interactiveSetupConfig.agents.nexus.model.length > 0);
+assert.equal(interactiveSetupConfig.agents.nexus.model, interactiveSetupConfig.agents.tester.model);
+assert.equal(interactiveSetupConfig.agents.nexus.model, interactiveSetupConfig.agents.general.model);
 
 const nonInteractiveConfigPath = path.join(
   await fs.mkdtemp(path.join(os.tmpdir(), "opencode-nexus-cli-noninteractive-")),

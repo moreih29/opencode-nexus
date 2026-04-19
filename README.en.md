@@ -70,7 +70,7 @@ opencode-nexus update
 opencode-nexus update --scope user
 
 # Pin to a specific version
-opencode-nexus update --scope user --version 0.8.0
+opencode-nexus update --scope user --version 0.9.0
 ```
 
 > **Important**: OpenCode does not automatically refresh cached npm plugin versions on startup. Run the CLI update command above explicitly to apply new versions.
