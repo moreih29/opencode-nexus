@@ -69,7 +69,7 @@ OpenCode 플러그인 SDK(`@opencode-ai/plugin`)는 반드시 `package.json`의 
 
 ```json
 "dependencies": {
-  "@opencode-ai/plugin": "^1.4.7"
+  "@opencode-ai/plugin": "1.4.7"
 }
 ```
 
