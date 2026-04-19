@@ -108,3 +108,26 @@ CI 순서: `bun install --frozen-lockfile` → `bun run check` → `bun run test
 - `nx_setup(profile="auto")`는 self-hosting 저장소를 감지해 package plugin 추가를 건너뛴다.
 - 소스 수정 후 반드시 `bun run build` 실행. 핫 리로드 없음.
 - 게시 전 `bun run check`로 타입 오류 확인.
+
+## 5. 설정 스키마 정책
+
+### 버전 관리
+
+isolated config는 명시적 스키마 버전(`version` 필드)을 사용합니다.
+
+- **v1** (현재): `agents.<id>.{model, tools}` 지원
+- **v2+** (향후): 선택적 필드 추가 가능
+
+### Breaking vs Non-Breaking
+
+| 변경 유형 | 버전 정책 | 예시 |
+|-----------|-----------|------|
+| **Non-breaking** | Minor/Patch bump | v1에 없던 새 필드 추가 (예: `disabled_hooks`, `categories`를 optional top-level로 추가) |
+| **Breaking** | Major bump | 기존 필드 의미 변경, 필수 필드 추가, 기본값 변경 |
+
+### 스키마 확장 규칙
+
+1. **새 필드는 optional**: v1 구현체와의 호환성 유지
+2. **기존 필드는 immutable**: 의미 변경 시 새 필드명 사용
+3. **Unknown 필드 무시**: 파서는 인식하지 못는 필드를 무시하고 로그만 남김
+4. **Migration 가이드 제공**: Major 버전 전환 시 CLI `migrate` 명령 업데이트

@@ -22,9 +22,9 @@ OpenCode gives you agents, tools, and plugins. `opencode-nexus` adds operating d
 
 Use `Entrypoint Commands` to get started, `Canonical Tools` as the stable backend contract, and `Coordination Tags` to control workflow mode.
 
-### 1. Install via CLI
+### 1. Install via CLI and Migrate
 
-Install the `opencode-nexus` package globally and register the plugin in your OpenCode config.
+Install the `opencode-nexus` package globally and register the plugin in your OpenCode config. If you have existing Nexus agent settings in `opencode.json`, consider migrating them to isolated config.
 
 ```bash
 # Install globally
@@ -33,14 +33,21 @@ npm install -g opencode-nexus
 # Show the installed CLI version
 opencode-nexus --version
 
-# Run the interactive installer in a terminal
+# Register the plugin (interactive)
 opencode-nexus install
 
 # Install to user scope (~/.config/opencode/opencode.json)
 opencode-nexus install --scope user
 
-# Or install to project scope (./opencode.json)
-opencode-nexus install --scope project
+# (Optional) Preview migration first
+opencode-nexus migrate --scope user --dry-run
+
+# Run actual migration (auto-creates .bak backup)
+opencode-nexus migrate --scope user
+
+# Or migrate project scope
+opencode-nexus migrate --scope project --dry-run
+opencode-nexus migrate --scope project
 ```
 
 When you run `opencode-nexus install` or `opencode-nexus update` without flags in a terminal, the CLI prompts for scope and pinning choices interactively. For scripts and automation, keep passing explicit flags for deterministic non-interactive behavior.
@@ -67,6 +74,82 @@ opencode-nexus update --scope user --version 0.8.0
 ```
 
 > **Important**: OpenCode does not automatically refresh cached npm plugin versions on startup. Run the CLI update command above explicitly to apply new versions.
+
+## Configuration
+
+Nexus agent settings are managed in separate isolated config files. This is a plugin-specific configuration space separate from OpenCode's `opencode.json`.
+
+### Config File Locations
+
+| Scope | Path | Description |
+|-------|------|-------------|
+| global | `~/.config/opencode/opencode-nexus.jsonc` | Shared across all projects |
+| project | `./.opencode/opencode-nexus.jsonc` | Project-specific |
+
+Both files use JSONC format (comments allowed) and are auto-created if missing.
+
+### Base Schema (v1)
+
+```jsonc
+{
+  "version": 1,
+  "agents": {
+    "architect": {
+      "model": "openai/gpt-5.4",
+      "tools": {
+        "write": true
+      }
+    },
+    "engineer": {
+      "model": "openai/gpt-5.3-codex"
+    }
+  }
+}
+```
+
+### Allowed Fields
+
+- `version`: Config schema version (currently 1)
+- `agents.<id>.model`: Model for the agent (e.g., `openai/gpt-5.4`)
+- `agents.<id>.tools`: Per-tool enablement (`true`/`false`)
+
+### Allowed agentIds
+
+You can configure 12 agents:
+
+- **nexus** — Default primary agent
+- **HOW**: architect, designer, postdoc, strategist
+- **DO**: engineer, researcher, writer
+- **CHECK**: tester, reviewer
+- **Additional**: general, explore
+
+### Restrictions
+
+The following fields cannot be set in isolated config (protected by nexus-core canonical):
+
+- `prompt`, `description` — Agent prompts are managed by nexus-core
+- `mode`, `permission` — Execution mode and permissions cannot be overridden
+
+Additionally, `task` and `nx_task_close` tools can never be enabled by any setting (hard-locked).
+
+## Configuration Priority (Merge Chain)
+
+Final agent settings are determined through a 5-step merge chain:
+
+| Order | Source | Rule | Example |
+|-------|--------|------|---------|
+| 1 | nexus-core canonical defaults | baseline | `engineer.model = "openai/gpt-5.3-codex"` |
+| 2 | isolated config global (`~/.config/opencode/opencode-nexus.jsonc`) | deep merge | Global common baseline |
+| 3 | isolated config project (`./.opencode/opencode-nexus.jsonc`) | deep merge, project-specific override | Stronger model for specific projects |
+| 4 | `opencode.json` user (`agent.<id>.model`, `agent.<id>.tools`) | deep merge, **final priority** | OpenCode native escape hatch |
+| 5 | `TASK_DELEGATION_DISABLED_TOOLS` | forced overwrite | `task`, `nx_task_close` always disabled |
+
+### Key Principles
+
+- **isolated config = plugin baseline**: Safe configuration space managed by the plugin
+- **opencode.json = escape hatch**: Final user control override
+- **Missing isolated file → silent fallback**: Uses canonical defaults when file is absent
+- **Parse error → log + empty fallback**: Plugin continues loading even on parse errors
 
 ### 3. Project Onboarding (nx-init)
 
@@ -107,6 +190,89 @@ Use nx-init to scan this project and create initial Nexus knowledge.
 ```
 
 This entrypoint routes to the canonical `nx_init` tool.
+
+## Model and Tool Customization
+
+You can customize agent models and tool usage.
+
+### Configure via CLI
+
+```bash
+# Batch set by HOW/DO/CHECK categories
+opencode-nexus setup --scope user \
+  --how-model openai/gpt-5.4 \
+  --do-model openai/gpt-5.3-codex \
+  --check-model openai/gpt-5.3-codex
+
+# Set primary / builtin agents individually
+opencode-nexus setup --scope user \
+  --nexus-model openai/gpt-5.4 \
+  --general-model openai/gpt-5.3-codex \
+  --explore-model openai/gpt-5.3-codex
+
+# Set all agents at once
+opencode-nexus setup --scope user --all-model openai/gpt-5.3-codex
+```
+
+> 💡 To adjust a single subagent (e.g. only `architect`) or override tool policies, use [direct file editing](#edit-files-directly) instead. `setup` is designed for category-level batch configuration.
+
+### Edit Files Directly
+
+You can also edit config files directly:
+
+```bash
+# Edit global config
+code ~/.config/opencode/opencode-nexus.jsonc
+
+# Edit project config
+code ./.opencode/opencode-nexus.jsonc
+```
+
+### Tool Override Example
+
+By default, HOW agents (architect, etc.) cannot use file editing tools. You can enable them in isolated config for special cases:
+
+```jsonc
+{
+  "version": 1,
+  "agents": {
+    "architect": {
+      "model": "openai/gpt-5.4",
+      "tools": {
+        "write": true,
+        "edit": true
+      }
+    }
+  }
+}
+```
+
+> ⚠️ Note: Tool overrides bypass the default permission policies of HOW/DO/CHECK categories. Use with caution.
+
+## Migration
+
+If you previously had Nexus agent model/tool settings in `opencode.json`, consider migrating to isolated config.
+
+### Migration Commands
+
+```bash
+# Preview (no file changes)
+opencode-nexus migrate --scope user --dry-run
+
+# Run migration (auto-creates backup: opencode.json.pre-migrate-<timestamp>)
+opencode-nexus migrate --scope user
+
+# Skip backup
+opencode-nexus migrate --scope user --no-backup
+
+# On conflict, opencode.json values overwrite isolated config
+# (default behavior: keep existing values in isolated config)
+opencode-nexus migrate --scope user --overwrite
+```
+
+### Backward Compatibility
+
+Migration is optional. Existing `opencode.json` Nexus agent settings will continue to work (Step 4 escape hatch). However, using isolated config separates plugin settings from OpenCode config for easier management.
 
 ## First Use
 

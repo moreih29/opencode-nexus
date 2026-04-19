@@ -1,8 +1,11 @@
 import path from "node:path";
+import os from "node:os";
 
 export type NexusPaths = ReturnType<typeof createNexusPaths>;
 
 export const HARNESS_ID = "opencode-nexus";
+export const NEXUS_ISOLATED_CONFIG_FILENAME = "opencode-nexus.jsonc";
+export const NEXUS_OPENCODE_GLOBAL_DIR = path.join(os.homedir(), ".config", "opencode");
 
 export function createNexusPaths(projectRoot: string) {
   const NEXUS_ROOT = path.join(projectRoot, ".nexus");
@@ -40,4 +43,12 @@ export function isNexusInternalPath(filePath: string, projectRoot: string): bool
   ];
 
   return allowed.some((base) => normalized === base || normalized.startsWith(`${base}${path.sep}`));
+}
+
+export function getGlobalIsolatedConfigPath(): string {
+  return path.join(NEXUS_OPENCODE_GLOBAL_DIR, NEXUS_ISOLATED_CONFIG_FILENAME);
+}
+
+export function getProjectIsolatedConfigPath(projectRoot: string): string {
+  return path.join(projectRoot, ".opencode", NEXUS_ISOLATED_CONFIG_FILENAME);
 }

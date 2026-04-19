@@ -187,3 +187,45 @@ OpenCodeNexusPlugin(ctx) 호출  [index.ts]
 3. \`system.transform\` 훅이 Nexus 태그를 감지해 모드 결정 → 시스템 프롬프트 주입
 4. \`tool.execute.before\` 훅이 편집 도구에 파이프라인 가드레일 적용
 5. 서브에이전트 호출 시 before/after 훅이 오케스트레이션 코어에 등록·연속성 갱신
+
+---
+
+## 4. 설정 아키텍처
+
+### Config vs State 경계
+
+opencode-nexus는 두 가지 설정/상태 계층을 명확히 분리합니다:
+
+**Config (설정)** — 사용자 환경 설정
+- **isolated config**: `~/.config/opencode/opencode-nexus.jsonc` (global) + `./.opencode/opencode-nexus.jsonc` (project)
+- **opencode.json**: OpenCode native 설정의 `agent.<id>.model`, `agent.<id>.tools`
+- 지속적(persistent), 사용자가 직접 편집 가능
+- 스키마 버전 관리 (현재 v1)
+
+**State (상태)** — 런타임 임시 데이터
+- `.nexus/state/**`: 파일 기반 상태 (plan.json, tasks.json, history.json)
+- `src/plugin-state.ts`: 인메모리 세션 상태 (NexusPluginState)
+- ephemeral(휘발성), 세션/사이클 경계에서 reset
+
+**설계 원칙**: Config와 State는 섞이지 않는다. 사용자 환경설정(Config)은 isolated config에서, 런타임 흐름 제어(State)는 `.nexus/state/`와 인메모리에서 각각 관리한다.
+
+### Merge Chain (5단계 병합)
+
+`createConfigHook`이 구현하는 설정 병합 체인:
+
+| 단계 | 함수 | 설명 |
+|------|------|------|
+| 1 | `buildCanonicalSubagentDefaults()` | nexus-core canonical defaults 생성 |
+| 2 | `applyIsolatedOverride(config, globalPath)` | global isolated config deep merge |
+| 3 | `applyIsolatedOverride(config, projectPath)` | project isolated config deep merge |
+| 4 | `mergeOpencodeJsonUser(config, opencodeJson)` | opencode.json user 설정 최종 우선 |
+| 5 | `applyHardLock(config)` | `TASK_DELEGATION_DISABLED_TOOLS` 강제 적용 |
+
+**경계 보호**:
+- `prompt`, `description` — nexus-core canonical에서 관리, override 불가
+- `mode`, `permission` — isolated config에서 설정 불가
+- `task`, `nx_task_close` — 어떤 source에서도 override 불가 (hard-lock)
+
+**에러 처리**:
+- Missing isolated file → silent fallback (canonical defaults 사용)
+- Parse error → 로그 출력 + empty fallback (플러그인 로드는 계속)

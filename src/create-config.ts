@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NEXUS_PRIMARY_AGENT_ID, NEXUS_PRIMARY_DESCRIPTION, NEXUS_PRIMARY_PROMPT } from "./agents/primary.js";
 import { AGENT_META, AGENT_PROMPTS } from "./agents/prompts.js";
+import type { IsolatedAgentConfig, IsolatedConfig } from "./shared/nexus-config-schema.js";
 
 type ConfigLike = Record<string, unknown>;
 
@@ -13,26 +14,29 @@ const TASK_DELEGATION_DISABLED_TOOLS = {
 } as const;
 
 const RESTRICTED_BUILTIN_AGENT_IDS = ["general", "explore"] as const;
+const EMPTY_ISOLATED_CONFIG: IsolatedConfig = { version: 1, agents: {} };
 
-export function createConfigHook() {
+export function createConfigHook(isolatedConfig: IsolatedConfig = EMPTY_ISOLATED_CONFIG) {
   return async (config: ConfigLike): Promise<void> => {
     const currentAgent = toRecord(config.agent);
     const nextAgent: Record<string, unknown> = { ...currentAgent };
 
-    nextAgent[NEXUS_PRIMARY_AGENT_ID] = mergePrimaryAgentEntry(toRecord(nextAgent[NEXUS_PRIMARY_AGENT_ID]));
+    nextAgent[NEXUS_PRIMARY_AGENT_ID] = mergePrimaryAgentEntry(
+      toRecord(nextAgent[NEXUS_PRIMARY_AGENT_ID]),
+      isolatedConfig.agents[NEXUS_PRIMARY_AGENT_ID]
+    );
 
     for (const meta of Object.values(AGENT_META)) {
-      nextAgent[meta.id] = mergeSubagentAgentEntry(toRecord(nextAgent[meta.id]), {
-        description: meta.description,
-        mode: "subagent",
-        model: meta.model,
-        prompt: AGENT_PROMPTS[meta.id],
-        tools: buildSubagentToolPolicy(meta.disallowedTools as string[])
-      });
+      const canonical = buildCanonicalSubagentDefaults(meta, AGENT_PROMPTS[meta.id]);
+      const withIsolated = applyIsolatedOverride(canonical, isolatedConfig.agents[meta.id]);
+      const withUser = mergeOpencodeJsonUser(withIsolated, toRecord(nextAgent[meta.id]));
+      nextAgent[meta.id] = applyHardLock(withUser);
     }
 
     for (const agentId of RESTRICTED_BUILTIN_AGENT_IDS) {
-      nextAgent[agentId] = mergeAgentToolRestrictions(toRecord(nextAgent[agentId]), TASK_DELEGATION_DISABLED_TOOLS);
+      const withIsolated = applyIsolatedOverride({}, isolatedConfig.agents[agentId]);
+      const withUser = mergeOpencodeJsonUser(withIsolated, toRecord(nextAgent[agentId]));
+      nextAgent[agentId] = applyHardLock(withUser);
     }
 
     config.agent = nextAgent;
@@ -53,7 +57,10 @@ export function createConfigHook() {
   };
 }
 
-function mergePrimaryAgentEntry(existing: Record<string, unknown>): Record<string, unknown> {
+function mergePrimaryAgentEntry(
+  existing: Record<string, unknown>,
+  isolatedAgent: IsolatedAgentConfig | undefined
+): Record<string, unknown> {
   const defaults: Record<string, unknown> = {
     description: NEXUS_PRIMARY_DESCRIPTION,
     mode: "primary",
@@ -66,11 +73,12 @@ function mergePrimaryAgentEntry(existing: Record<string, unknown>): Record<strin
     }
   };
 
+  const withIsolated = applyIsolatedOverride(defaults, isolatedAgent);
+  const merged = mergeOpencodeJsonUser(withIsolated, existing);
   const mergedPermission = mergePrimaryPermission(toRecord(existing.permission));
 
   return {
-    ...defaults,
-    ...existing,
+    ...merged,
     permission: mergedPermission
   };
 }
@@ -92,39 +100,68 @@ function mergePrimaryPermission(existingPermission: Record<string, unknown>): Re
   };
 }
 
-function mergeSubagentAgentEntry(
-  existing: Record<string, unknown>,
-  defaults: {
+function buildCanonicalSubagentDefaults(
+  meta: {
     description: string;
-    mode: string;
     model: string;
-    prompt: string;
-    tools: Record<string, boolean>;
+    disallowedTools: readonly string[];
+  },
+  prompt: string
+): Record<string, unknown> {
+  return {
+    description: meta.description,
+    mode: "subagent",
+    model: meta.model,
+    prompt,
+    tools: buildSubagentToolPolicy([...meta.disallowedTools])
+  };
+}
+
+function applyIsolatedOverride(
+  canonicalDefaults: Record<string, unknown>,
+  isolatedAgent: IsolatedAgentConfig | undefined
+): Record<string, unknown> {
+  const nextDefaults: Record<string, unknown> = { ...canonicalDefaults };
+
+  if (isolatedAgent?.model) {
+    nextDefaults.model = isolatedAgent.model;
   }
+
+  if (isolatedAgent?.tools) {
+    nextDefaults.tools = {
+      ...toRecord(canonicalDefaults.tools),
+      ...isolatedAgent.tools
+    };
+  }
+
+  return nextDefaults;
+}
+
+function mergeOpencodeJsonUser(
+  mergedDefaults: Record<string, unknown>,
+  existing: Record<string, unknown>
 ): Record<string, unknown> {
   const mergedTools = {
-    ...defaults.tools,
+    ...toRecord(mergedDefaults.tools),
     ...toRecord(existing.tools)
   };
-  Object.assign(mergedTools, TASK_DELEGATION_DISABLED_TOOLS);
 
   return {
-    ...defaults,
+    ...mergedDefaults,
     ...existing,
     tools: mergedTools
   };
 }
 
-function mergeAgentToolRestrictions(
-  existing: Record<string, unknown>,
-  restrictions: Record<string, boolean>
-): Record<string, unknown> {
+function applyHardLock(entry: Record<string, unknown>): Record<string, unknown> {
+  const mergedTools = {
+    ...toRecord(entry.tools)
+  };
+  Object.assign(mergedTools, TASK_DELEGATION_DISABLED_TOOLS);
+
   return {
-    ...existing,
-    tools: {
-      ...toRecord(existing.tools),
-      ...restrictions
-    }
+    ...entry,
+    tools: mergedTools
   };
 }
 

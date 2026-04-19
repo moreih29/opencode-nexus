@@ -12,8 +12,11 @@ import { isCancel, outro, select, text, type Option } from "@clack/prompts";
 import { AGENT_META } from "./agents/prompts.js";
 import { NEXUS_PRIMARY_AGENT_ID } from "./agents/primary.js";
 import { readJsonFile, writeJsonFile } from "./shared/json-store.js";
+import { readIsolatedConfig, writeIsolatedConfig } from "./shared/nexus-config.js";
+import { ALLOWED_AGENT_IDS, type IsolatedConfig } from "./shared/nexus-config-schema.js";
+import { getGlobalIsolatedConfigPath, getProjectIsolatedConfigPath } from "./shared/paths.js";
 
-type Command = "install" | "update" | "setup";
+type Command = "install" | "update" | "setup" | "migrate";
 type PluginCommand = "install" | "update";
 type Scope = "project" | "user";
 type OutputMode = "json" | "human";
@@ -38,6 +41,12 @@ interface SetupCliOptions extends BaseCliOptions {
   checkModel?: string;
   generalModel?: string;
   exploreModel?: string;
+}
+
+interface MigrateCliOptions extends BaseCliOptions {
+  dryRun: boolean;
+  backup: boolean;
+  overwrite: boolean;
 }
 
 interface ConfigLike {
@@ -69,6 +78,12 @@ interface SetupExplicitOptions extends CommonExplicitOptions {
   exploreModel: boolean;
 }
 
+interface MigrateExplicitOptions extends CommonExplicitOptions {
+  dryRun: boolean;
+  backup: boolean;
+  overwrite: boolean;
+}
+
 type ParsedArgs =
   | { kind: "help"; command?: Command }
   | { kind: "version" }
@@ -83,13 +98,19 @@ type ParsedArgs =
       command: "setup";
       options: SetupCliOptions;
       explicit: SetupExplicitOptions;
+    }
+  | {
+      kind: "migrate-command";
+      command: "migrate";
+      options: MigrateCliOptions;
+      explicit: MigrateExplicitOptions;
     };
 
 const PACKAGE_NAME = "opencode-nexus";
 const OPENCODE_SCHEMA_URL = "https://opencode.ai/config.json";
 const DEFAULT_SCOPE: Scope = "user";
 const DEFAULT_MODEL = AGENT_META.engineer?.model ?? "openai/gpt-5.3-codex";
-const COMMANDS: Command[] = ["install", "update", "setup"];
+const COMMANDS: Command[] = ["install", "update", "setup", "migrate"];
 const execFileAsync = promisify(execFile);
 const MANUAL_MODEL_ENTRY = "__manual_model_entry__";
 const CHANGE_PROVIDER = "__change_provider__";
@@ -97,6 +118,7 @@ const BUILTIN_AGENT_IDS = {
   general: "general",
   explore: "explore",
 } as const;
+const ALLOWED_AGENT_ID_SET = new Set<string>(ALLOWED_AGENT_IDS);
 
 interface HelpSection {
   title: string;
@@ -130,6 +152,7 @@ function printTopLevelHelp(): void {
           "install   Add opencode-nexus plugin entry to an OpenCode config",
           "update    Update the opencode-nexus plugin version in config",
           "setup     Configure model values under agent.*.model",
+          "migrate   Move nexus agent model/tools into isolated config",
         ],
       },
       {
@@ -144,6 +167,7 @@ function printTopLevelHelp(): void {
         lines: [
           "opencode-nexus install --help",
           "opencode-nexus setup --help",
+          "opencode-nexus migrate --help",
           "opencode-nexus --version",
         ],
       },
@@ -234,6 +258,37 @@ function printSetupHelp(): void {
   );
 }
 
+function printMigrateHelp(): void {
+  console.log(
+    renderHelp("Migrate command", [
+      {
+        title: "Usage",
+        lines: ["opencode-nexus migrate --scope <user|project> [--dry-run] [--no-backup] [--overwrite]"],
+      },
+      {
+        title: "Options",
+        lines: [
+          "--scope <user|project>   Target scope (default: user)",
+          "--directory <path>       Project root for project scope (default: cwd)",
+          "--config <path>          Explicit config file path override",
+          "--dry-run                Show diffs without writing files",
+          "--no-backup              Skip opencode.json backup creation",
+          "--overwrite              opencode.json values overwrite isolated config on conflict",
+          "--help                   Show this help",
+        ],
+      },
+      {
+        title: "Examples",
+        lines: [
+          "opencode-nexus migrate --scope user",
+          "opencode-nexus migrate --scope user --dry-run",
+          "opencode-nexus migrate --scope project --directory /path/to/repo",
+        ],
+      },
+    ])
+  );
+}
+
 function printHelp(command?: Command): void {
   if (!command) {
     printTopLevelHelp();
@@ -241,6 +296,10 @@ function printHelp(command?: Command): void {
   }
   if (command === "setup") {
     printSetupHelp();
+    return;
+  }
+  if (command === "migrate") {
+    printMigrateHelp();
     return;
   }
   printPluginHelp(command);
@@ -382,6 +441,77 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
 
     return { kind: "setup-command", command: "setup", options, explicit };
+  }
+
+  if (commandRaw === "migrate") {
+    const options: MigrateCliOptions = {
+      ...commonOptions,
+      dryRun: false,
+      backup: true,
+      overwrite: false,
+    };
+    const explicit: MigrateExplicitOptions = {
+      ...commonExplicit,
+      dryRun: false,
+      backup: false,
+      overwrite: false,
+    };
+
+    for (let i = 0; i < rest.length; i++) {
+      const token = rest[i];
+      if (token === "--help" || token === "-h") {
+        return { kind: "help", command: "migrate" };
+      }
+
+      const [name, inlineValue] = token.split("=", 2);
+      const readValue = (): string => {
+        if (inlineValue !== undefined) {
+          return inlineValue;
+        }
+        const next = rest[i + 1];
+        if (!next || next.startsWith("-")) {
+          throw new Error(`Missing value for ${name}`);
+        }
+        i += 1;
+        return next;
+      };
+
+      switch (name) {
+        case "--scope": {
+          const value = readValue();
+          if (value !== "user" && value !== "project") {
+            throw new Error(`Invalid --scope value: ${value}`);
+          }
+          options.scope = value;
+          explicit.scope = true;
+          break;
+        }
+        case "--directory":
+          options.directory = path.resolve(readValue());
+          explicit.directory = true;
+          break;
+        case "--config":
+          options.configPath = path.resolve(readValue());
+          explicit.configPath = true;
+          break;
+        case "--dry-run":
+          options.dryRun = true;
+          explicit.dryRun = true;
+          break;
+        case "--no-backup":
+          options.backup = false;
+          explicit.backup = true;
+          break;
+        case "--overwrite":
+          options.overwrite = true;
+          explicit.overwrite = true;
+          break;
+        default:
+          throw new Error(`Unknown option: ${token}`);
+      }
+    }
+
+    return { kind: "migrate-command", command: "migrate", options, explicit };
   }
 
   const options: PluginCliOptions = {
@@ -813,19 +943,43 @@ function firstDefinedModel(agent: Record<string, Record<string, unknown>>, ids: 
   return undefined;
 }
 
-function readDefaultSetupModelsFromConfig(config: unknown): Required<SetupGroupModels> {
+function readModelFromIsolatedConfig(config: IsolatedConfig | undefined, agentId: string): string | undefined {
+  return sanitizeModelInput(config?.agents[agentId]?.model);
+}
+
+function firstDefinedModelFromIsolatedConfig(config: IsolatedConfig | undefined, ids: string[]): string | undefined {
+  for (const id of ids) {
+    const model = readModelFromIsolatedConfig(config, id);
+    if (model) {
+      return model;
+    }
+  }
+  return undefined;
+}
+
+function readDefaultSetupModelsFromConfig(config: unknown, isolated?: IsolatedConfig): Required<SetupGroupModels> {
   const agent = toConfigAgentRecord(config);
   const howIds = getAgentsByCategory("how");
   const doIds = getAgentsByCategory("do");
   const checkIds = getAgentsByCategory("check");
 
   return {
-    nexusModel: readModelFromAgentRecord(agent, NEXUS_PRIMARY_AGENT_ID) ?? DEFAULT_MODEL,
-    howModel: firstDefinedModel(agent, howIds) ?? DEFAULT_MODEL,
-    doModel: firstDefinedModel(agent, doIds) ?? DEFAULT_MODEL,
-    checkModel: firstDefinedModel(agent, checkIds) ?? DEFAULT_MODEL,
-    generalModel: readModelFromAgentRecord(agent, BUILTIN_AGENT_IDS.general) ?? DEFAULT_MODEL,
-    exploreModel: readModelFromAgentRecord(agent, BUILTIN_AGENT_IDS.explore) ?? DEFAULT_MODEL,
+    nexusModel:
+      readModelFromIsolatedConfig(isolated, NEXUS_PRIMARY_AGENT_ID) ??
+      readModelFromAgentRecord(agent, NEXUS_PRIMARY_AGENT_ID) ??
+      DEFAULT_MODEL,
+    howModel: firstDefinedModelFromIsolatedConfig(isolated, howIds) ?? firstDefinedModel(agent, howIds) ?? DEFAULT_MODEL,
+    doModel: firstDefinedModelFromIsolatedConfig(isolated, doIds) ?? firstDefinedModel(agent, doIds) ?? DEFAULT_MODEL,
+    checkModel:
+      firstDefinedModelFromIsolatedConfig(isolated, checkIds) ?? firstDefinedModel(agent, checkIds) ?? DEFAULT_MODEL,
+    generalModel:
+      readModelFromIsolatedConfig(isolated, BUILTIN_AGENT_IDS.general) ??
+      readModelFromAgentRecord(agent, BUILTIN_AGENT_IDS.general) ??
+      DEFAULT_MODEL,
+    exploreModel:
+      readModelFromIsolatedConfig(isolated, BUILTIN_AGENT_IDS.explore) ??
+      readModelFromAgentRecord(agent, BUILTIN_AGENT_IDS.explore) ??
+      DEFAULT_MODEL,
   };
 }
 
@@ -845,19 +999,26 @@ async function runOpencode(args: string[]): Promise<{ ok: boolean; stdout: strin
   }
 }
 
-async function buildSetupDiscoveryContext(): Promise<SetupDiscoveryContext> {
+async function buildSetupDiscoveryContext(options: BaseCliOptions): Promise<SetupDiscoveryContext> {
+  const isolatedConfigPath = resolveIsolatedConfigPath(options);
+  const isolatedResult = await readIsolatedConfig(isolatedConfigPath);
+
+  for (const warning of isolatedResult.warnings) {
+    console.error(`[opencode-nexus] setup warning: ${warning}`);
+  }
+
   const [providersResult, debugResult] = await Promise.all([
     runOpencode(["providers", "list"]),
     runOpencode(["debug", "config"]),
   ]);
 
   const providers = new Set<string>(parseProvidersListOutput(providersResult.stdout));
-  let defaults = readDefaultSetupModelsFromConfig({});
+  let defaults = readDefaultSetupModelsFromConfig({}, isolatedResult.config);
 
   if (debugResult.ok) {
     try {
       const parsed = JSON.parse(debugResult.stdout) as unknown;
-      defaults = readDefaultSetupModelsFromConfig(parsed);
+      defaults = readDefaultSetupModelsFromConfig(parsed, isolatedResult.config);
       const agent = toConfigAgentRecord(parsed);
       for (const value of Object.values(agent)) {
         const model = sanitizeModelInput(typeof value.model === "string" ? (value.model as string) : undefined);
@@ -1075,7 +1236,7 @@ async function resolveInteractiveSetupOptions(
     }
 
     if (needsModelPrompt) {
-      const discovery = await buildSetupDiscoveryContext();
+      const discovery = await buildSetupDiscoveryContext(resolved);
       const setupFlow = await promptSetupChoice(
         promptContext,
         "How should setup configure models?",
@@ -1168,6 +1329,16 @@ function resolveConfigPath(options: BaseCliOptions): string {
     return path.join(os.homedir(), ".config", "opencode", "opencode.json");
   }
   return path.join(options.directory, "opencode.json");
+}
+
+function resolveIsolatedConfigPath(options: BaseCliOptions): string {
+  if (options.configPath) {
+    return options.configPath;
+  }
+  if (options.scope === "user") {
+    return getGlobalIsolatedConfigPath();
+  }
+  return getProjectIsolatedConfigPath(options.directory);
 }
 
 function applyPluginSpec(config: ConfigLike, pluginSpec: string): ConfigLike {
@@ -1279,6 +1450,47 @@ function applySetupModels(config: ConfigLike, models: SetupGroupModels): { next:
   };
 }
 
+function applySetupModelsToIsolated(
+  isolated: IsolatedConfig,
+  models: SetupGroupModels
+): { next: IsolatedConfig; updatedAgents: string[] } {
+  const nextAgents = { ...isolated.agents };
+  const targets = new Map<string, string>();
+  const assign = (ids: string[], model: string | undefined): void => {
+    const normalized = sanitizeModelInput(model);
+    if (!normalized) {
+      return;
+    }
+    for (const id of ids) {
+      targets.set(id, normalized);
+    }
+  };
+
+  assign([NEXUS_PRIMARY_AGENT_ID], models.nexusModel);
+  assign(getAgentsByCategory("how"), models.howModel);
+  assign(getAgentsByCategory("do"), models.doModel);
+  assign(getAgentsByCategory("check"), models.checkModel);
+  assign([BUILTIN_AGENT_IDS.general], models.generalModel);
+  assign([BUILTIN_AGENT_IDS.explore], models.exploreModel);
+
+  for (const [agentId, model] of targets.entries()) {
+    const current = nextAgents[agentId] ?? {};
+    nextAgents[agentId] = {
+      ...current,
+      model,
+    };
+  }
+
+  return {
+    next: {
+      ...isolated,
+      version: 1,
+      agents: nextAgents,
+    },
+    updatedAgents: Array.from(targets.keys()).sort(),
+  };
+}
+
 function printInteractiveSetupSummary(result: {
   scope: Scope;
   configPath: string;
@@ -1307,7 +1519,7 @@ function printInteractiveSetupSummary(result: {
   const summary = [
     "Setup complete.",
     `Scope: ${result.scope}`,
-    `Config: ${result.configPath}`,
+    `Updated isolated config: ${result.configPath}`,
     `Updated agents (${result.updatedAgents.length}): ${result.updatedAgents.join(", ")}`,
     modelSummary.length > 0 ? `Applied model groups:\n${modelSummary.join("\n")}` : undefined,
   ]
@@ -1331,15 +1543,19 @@ async function executeSetupCommand(options: SetupCliOptions, outputMode: OutputM
     );
   }
 
-  const configPath = resolveConfigPath(options);
-  const config = await readJsonFile<ConfigLike>(configPath, { $schema: OPENCODE_SCHEMA_URL });
-  const { next, updatedAgents } = applySetupModels(config, models);
-  await writeJsonFile(configPath, next);
+  const isolatedPath = resolveIsolatedConfigPath(options);
+  const readResult = await readIsolatedConfig(isolatedPath);
+  for (const warning of readResult.warnings) {
+    console.error(`[opencode-nexus] setup warning: ${warning}`);
+  }
+
+  const { next, updatedAgents } = applySetupModelsToIsolated(readResult.config, models);
+  await writeIsolatedConfig(isolatedPath, next);
 
   if (outputMode === "human") {
     printInteractiveSetupSummary({
       scope: options.scope,
-      configPath,
+      configPath: isolatedPath,
       models,
       updatedAgents,
     });
@@ -1352,7 +1568,7 @@ async function executeSetupCommand(options: SetupCliOptions, outputMode: OutputM
         ok: true,
         command: "setup",
         scope: options.scope,
-        configPath,
+        configPath: isolatedPath,
         models,
         updatedAgents,
       },
@@ -1362,10 +1578,249 @@ async function executeSetupCommand(options: SetupCliOptions, outputMode: OutputM
   );
 }
 
+interface Migration {
+  agentId: string;
+  model?: string;
+  tools?: Record<string, boolean>;
+}
+
+function collectMigrations(config: ConfigLike): Migration[] {
+  const agentConfig = toRecord(config.agent);
+  const migrations: Migration[] = [];
+
+  for (const [agentId, rawAgentValue] of Object.entries(agentConfig)) {
+    if (!ALLOWED_AGENT_ID_SET.has(agentId)) {
+      continue;
+    }
+
+    const agentValue = toRecord(rawAgentValue);
+    const model = sanitizeModelInput(typeof agentValue.model === "string" ? (agentValue.model as string) : undefined);
+    const tools = toRecord(agentValue.tools);
+    const normalizedTools: Record<string, boolean> = {};
+    for (const [toolId, value] of Object.entries(tools)) {
+      if (typeof value === "boolean") {
+        normalizedTools[toolId] = value;
+      }
+    }
+
+    if (!model && Object.keys(normalizedTools).length === 0) {
+      continue;
+    }
+
+    migrations.push({
+      agentId,
+      ...(model ? { model } : {}),
+      ...(Object.keys(normalizedTools).length > 0 ? { tools: normalizedTools } : {}),
+    });
+  }
+
+  return migrations;
+}
+
+function mergeMigrationsIntoIsolated(
+  current: IsolatedConfig,
+  migrations: Migration[],
+  overwrite: boolean
+): IsolatedConfig {
+  const nextAgents = { ...current.agents };
+
+  for (const migration of migrations) {
+    const existing = nextAgents[migration.agentId] ?? {};
+    const hasExistingModel = Boolean(sanitizeModelInput(existing.model));
+    const nextModel = overwrite ? migration.model ?? existing.model : hasExistingModel ? existing.model : migration.model;
+
+    const existingTools = existing.tools ?? {};
+    const incomingTools = migration.tools ?? {};
+    const nextTools = overwrite
+      ? { ...existingTools, ...incomingTools }
+      : { ...incomingTools, ...existingTools };
+
+    const mergedAgent = {
+      ...existing,
+      ...(nextModel ? { model: nextModel } : {}),
+      ...(Object.keys(nextTools).length > 0 ? { tools: nextTools } : {}),
+    };
+
+    nextAgents[migration.agentId] = mergedAgent;
+  }
+
+  return {
+    ...current,
+    version: 1,
+    agents: nextAgents,
+  };
+}
+
+function removeNexusAgentFields(config: ConfigLike, migrations: Migration[]): ConfigLike {
+  const currentAgents = toRecord(config.agent);
+  const nextAgents: Record<string, unknown> = { ...currentAgents };
+
+  for (const migration of migrations) {
+    const currentAgentConfig = toRecord(nextAgents[migration.agentId]);
+    const { model: _model, tools: _tools, ...rest } = currentAgentConfig;
+
+    if (Object.keys(rest).length > 0) {
+      nextAgents[migration.agentId] = rest;
+      continue;
+    }
+
+    delete nextAgents[migration.agentId];
+  }
+
+  return {
+    ...config,
+    agent: nextAgents,
+  };
+}
+
+function printDryRunDiff(
+  opencodeJsonPath: string,
+  opencodeBefore: ConfigLike,
+  opencodeAfter: ConfigLike,
+  isolatedPath: string,
+  isolatedBefore: IsolatedConfig,
+  isolatedAfter: IsolatedConfig,
+  outputMode: OutputMode
+): void {
+  if (outputMode === "json") {
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          command: "migrate",
+          dryRun: true,
+          changes: [
+            {
+              path: opencodeJsonPath,
+              before: opencodeBefore,
+              after: opencodeAfter,
+            },
+            {
+              path: isolatedPath,
+              before: isolatedBefore,
+              after: isolatedAfter,
+            },
+          ],
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.log(`Dry run: no files were written.\n`);
+  console.log(`--- ${opencodeJsonPath} (before)`);
+  console.log(JSON.stringify(opencodeBefore, null, 2));
+  console.log(`+++ ${opencodeJsonPath} (after)`);
+  console.log(JSON.stringify(opencodeAfter, null, 2));
+  console.log("");
+  console.log(`--- ${isolatedPath} (before)`);
+  console.log(JSON.stringify(isolatedBefore, null, 2));
+  console.log(`+++ ${isolatedPath} (after)`);
+  console.log(JSON.stringify(isolatedAfter, null, 2));
+}
+
+function printMigrateSummary(args: {
+  migrations: Migration[];
+  opencodeJsonPath: string;
+  isolatedPath: string;
+  backupPath?: string;
+  outputMode: OutputMode;
+}): void {
+  if (args.outputMode === "json") {
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          command: "migrate",
+          migrated: args.migrations.length,
+          migratedAgents: args.migrations.map((entry) => entry.agentId).sort(),
+          opencodeJsonPath: args.opencodeJsonPath,
+          isolatedPath: args.isolatedPath,
+          backupPath: args.backupPath,
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  const lines = [
+    "Migrate complete.",
+    `Migrated agents (${args.migrations.length}): ${args.migrations.map((entry) => entry.agentId).sort().join(", ")}`,
+    `Updated opencode config: ${args.opencodeJsonPath}`,
+    `Updated isolated config: ${args.isolatedPath}`,
+    args.backupPath ? `Backup: ${args.backupPath}` : "Backup: skipped (--no-backup)",
+  ];
+
+  console.log(lines.join("\n"));
+}
+
+async function executeMigrateCommand(options: MigrateCliOptions, outputMode: OutputMode = "human"): Promise<void> {
+  const opencodeJsonPath = resolveConfigPath(options);
+  const isolatedPath = resolveIsolatedConfigPath(options);
+  const opencodeConfig = await readJsonFile<ConfigLike>(opencodeJsonPath, { $schema: OPENCODE_SCHEMA_URL });
+  const migrations = collectMigrations(opencodeConfig);
+
+  if (migrations.length === 0) {
+    if (outputMode === "json") {
+      console.log(
+        JSON.stringify({ ok: true, command: "migrate", migrated: 0, message: "Nothing to migrate." }, null, 2)
+      );
+      return;
+    }
+    console.log("Nothing to migrate — opencode.json has no nexus agent model/tools.");
+    return;
+  }
+
+  const isolatedResult = await readIsolatedConfig(isolatedPath);
+  for (const warning of isolatedResult.warnings) {
+    console.error(`[opencode-nexus] migrate warning: ${warning}`);
+  }
+
+  const currentIsolated = isolatedResult.config;
+  const nextIsolated = mergeMigrationsIntoIsolated(currentIsolated, migrations, options.overwrite);
+  const nextOpencodeConfig = removeNexusAgentFields(opencodeConfig, migrations);
+
+  if (options.dryRun) {
+    printDryRunDiff(
+      opencodeJsonPath,
+      opencodeConfig,
+      nextOpencodeConfig,
+      isolatedPath,
+      currentIsolated,
+      nextIsolated,
+      outputMode
+    );
+    return;
+  }
+
+  let backupPath: string | undefined;
+  if (options.backup) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    backupPath = `${opencodeJsonPath}.pre-migrate-${timestamp}`;
+    await fs.copyFile(opencodeJsonPath, backupPath);
+  }
+
+  await writeIsolatedConfig(isolatedPath, nextIsolated);
+  await writeJsonFile(opencodeJsonPath, nextOpencodeConfig);
+
+  printMigrateSummary({
+    migrations,
+    opencodeJsonPath,
+    isolatedPath,
+    backupPath,
+    outputMode,
+  });
+}
+
 async function main(): Promise<void> {
   const interactive = isInteractiveTerminal();
   const setupOutputMode: OutputMode = interactive ? "human" : "json";
   const pluginOutputMode: OutputMode = interactive ? "human" : "json";
+  const migrateOutputMode: OutputMode = interactive ? "human" : "json";
   const parsed = parseArgs(process.argv.slice(2));
 
   if (parsed.kind === "help") {
@@ -1382,6 +1837,11 @@ async function main(): Promise<void> {
   if (parsed.kind === "setup-command") {
     const resolvedOptions = await resolveInteractiveSetupOptions(parsed.options, parsed.explicit, DEFAULT_MODEL);
     await executeSetupCommand(resolvedOptions, setupOutputMode);
+    return;
+  }
+
+  if (parsed.kind === "migrate-command") {
+    await executeMigrateCommand(parsed.options, migrateOutputMode);
     return;
   }
 

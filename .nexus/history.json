@@ -9489,6 +9489,245 @@
           "실제로 publish 될 tarball을 이번 수정본으로 만들어서, 다른 디렉터리에서 Bun으로 prod install 했을 때 @opencode-ai/plugin이 정상 resolution되고 플러그인이 로드되는지 검증한다."
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-19T09:27:03.120Z",
+      "branch": "nexus-core-hook-gap-remediation",
+      "plan": {
+        "id": 56,
+        "topic": "opencode-nexus isolated config file: OMO 스타일 별도 파일로 플러그인 전용 설정 관리",
+        "issues": [
+          {
+            "id": 1,
+            "title": "파일 경로/내명 규칙 (어디에 어떤 이름으로, 어떤 형식으로)",
+            "status": "decided",
+            "decision": "Option A 채택: 파일 경로는 `~/.config/opencode/opencode-nexus.jsonc` (global) + `./.opencode/opencode-nexus.jsonc` (project). 확장자는 .jsonc (주석 허용). OMO/supermemory/DCP 생태계 convention 직접 추종. opencode의 config resolution이 ~/.config/opencode/와 ./.opencode/를 1st class로 취급하는 점과 일치. Project scope는 global을 deep merge로 override. 여러 파일 분리 필요성은 현 시점 YAGNI — 향후 필요 시 하위 디렉터리로 migration 가능."
+          },
+          {
+            "id": 2,
+            "title": "Schema 범위 (무엇을 새 파일에 담고 무엇을 opencode.json에 남길지)",
+            "status": "decided",
+            "decision": "Option A' 채택 (architect의 A + 사용자 요청 per-agent tools override 추가). \n\nSchema v1:\n- `version: 1`\n- `agents: Record<agentId, { model?: string; tools?: Record<string, boolean> }>`\n- 허용 agentId: nexus primary + 9 subagents (architect, designer, postdoc, strategist, engineer, researcher, writer, reviewer, tester) + 2 builtin (general, explore)\n\n명시적 금지 (v1 범위):\n- agents.<id>.prompt (nexus-core canonical — anti-pattern #5)\n- agents.<id>.description / mode (canonical meta)\n- agents.<id>.permission (plugin invariant)\n- categories, disabled_hooks, mcp_env_allowlist, experimental (요구 검증 없음 — 비파괴 확장으로 향후 추가 가능)\n\n강제 불변:\n- TASK_DELEGATION_DISABLED_TOOLS ({ task: false, nx_task_close: false })는 어느 source에서도 override 불가 — runtime Object.assign으로 강제\n\n근거:\n- architect 권고 A는 model override만 포함했지만, 사용자 제안한 tools override는 현재 opencode.json에서 이미 열려있는 기능과 일관성 유지 측면에서 정당\n- tools는 prompt/permission과 달리 \"role contract 의 operational boundary\" 이므로 사용자 커스터마이즈 공간 허용이 자연스러움\n- nexus-core runtime 공유 배제 원칙 (anti-pattern #5)은 여전히 준수 — 이 원칙은 prompt/meta canonical 보호가 핵심, tools 개별 toggle은 이미 생태계 표준",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "Minimal(A) 권장. prompt/tools/permission override는 nexus-core canonical 경계 침범 위험으로 지적했으나, 사용자 반영 후 tools만 opencode.json에서 이미 열린 일관성 청츍된 것으로 확장. HOW/DO/CHECK 카테고리는 CLI UX로만 유지, 저장 형식은 per-agent flatten 권장. TASK_DELEGATION_DISABLED_TOOLS는 동적 override 불가."
+            }
+          },
+          {
+            "id": 3,
+            "title": "Runtime 주입 메커니즘 및 merge 우선순위",
+            "status": "decided",
+            "decision": "Architect 권장안 전체 채택.\n\n**로딩 & 에러 정책**:\n- plugin init 시 fs 로 1회 로드 후 closure 에 캐시 (createConfigHook 에 주입)\n- Missing file = silent empty fallback (warning 없음)\n- Parse/validation error = 구조화된 로그 + empty fallback (throw/hard-fail 안 함)\n- Hot-reload = 미지원 (재시작 필요 문서화)\n\n**5-step merge chain** (우선순위 낮음→높음):\n1. nexus-core canonical defaults (buildSubagentToolPolicy, AGENT_META.model) — baseline\n2. isolated config global (`~/.config/opencode/opencode-nexus.jsonc`) — deep merge\n3. isolated config project (`./.opencode/opencode-nexus.jsonc`) — deep merge\n4. opencode.json user override (`agent.<id>.model`, `agent.<id>.tools`) — deep merge, 최종 우선 (OpenCode native escape hatch 유지)\n5. TASK_DELEGATION_DISABLED_TOOLS — 강제 overwrite, 어떤 source도 override 불가\n\n**Merge 규칙 상세**:\n- agent id 단위 키 병합 (sparse config 허용 — 누락 agent 는 canonical defaults 그대로)\n- `model`: later source wins (스칼라)\n- `tools`: nested object deep merge (field-level 허용)\n- 마지막에 hard-lock `task: false, nx_task_close: false`\n\n**사용자 인지 방향**: \"isolated config = plugin baseline, opencode.json = final escape hatch\" 원칙 문서화. 기존 create-config.ts 의 \"existing wins\" 패턴과 정합적.\n\n**구현 힌트 (implementation 단계로 미룸)**: createConfigHook 를 \"canonical baseline 생성 단계 + isolated/user override merge 단계\" 두 개 함수로 분리하는 리팩터가 유지보수성에 유리 (architect suggestion).",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "5-step merge chain 확정: canonical → isolated global → isolated project → opencode.json → hard-lock. 로딩은 init 1회 + closure cache. Missing 파일은 silent fallback, parse error 는 로그 + fallback. Hot-reload 미지원. deep merge 구조 (agent id + field + nested tools). 기존 existing wins 패턴과 호환. createConfigHook refactor 제안: canonical baseline 생성 단계와 override merge 단계 분리."
+            }
+          },
+          {
+            "id": 4,
+            "title": "CLI 재설계 범위 (setup 동작 변경, 새 명령 필요 여부)",
+            "status": "decided",
+            "decision": "Option A 채택 — setup 저장 대상만 변경, 기존 CLI UX 유지.\n\n**변경 범위**:\n- `setup` 명령: interactive + 플래그 (`--all-model, --how-model, --do-model, --check-model, --nexus-model, --general-model, --explore-model, --scope, --directory`) 전부 유지. 내부 쓰기 대상만 `opencode.json` → `opencode-nexus.jsonc`.\n- `install` / `update` 명령: 변경 없음 (opencode.json의 `plugin` 배열 관리 책임 유지 — OpenCode가 플러그인 로드에 필요).\n- `setup` 이 저장할 때 isolated config 의 `agents[id].model` 로 flatten 해서 기록 (HOW/DO/CHECK 카테고리는 CLI 입력 UX로만 존재, 저장 포맷은 per-agent).\n- setup 은 `agents[id].tools` 는 v1 CLI 에서 건드리지 않음 — 사용자가 필요하면 jsonc 직접 편집.\n\n**구체 변경 함수 리스트** (implementation 단계 입력):\n- `resolveConfigPath` (cli.ts:1163): 용도별 분기 필요 (install/update = opencode.json, setup = opencode-nexus.jsonc)\n- `readDefaultSetupModelsFromConfig` (cli.ts:816): isolated config + opencode.json 양쪽 읽고 merge chain 반영\n- `applySetupModels` (cli.ts:1243): isolated config 에 `agents.<id>.model` 기록\n- (신설) `readIsolatedConfig`, `writeIsolatedConfig`, schema validate 유틸\n- `firstDefinedModel` 의 카테고리 default 추론 로직은 merge chain 고려해서 재검토\n\n**비포함 (YAGNI)**:\n- `migrate` 명령 (Issue 5 결정에 따라 별도 고려)\n- `config get/set/list` scriptable CLI\n- `validate` / `doctor` 명령\n\n근거: 기존 setup UX는 이미 성숙. install/update와 setup의 책임 분리가 자연스러움. migrate/config/validate는 현 시점 실무 수요 불명이며 비파괴 확장으로 향후 추가 가능."
+          },
+          {
+            "id": 5,
+            "title": "Migration path (기존 사용자의 opencode.json 처리)",
+            "status": "decided",
+            "decision": "Option B 채택 — `opencode-nexus migrate` 명령 제공 (on-demand).\n\n**Migrate 명령 설계**:\n```bash\nopencode-nexus migrate --scope <user|project> [--directory <path>] [--dry-run] [--no-backup] [--overwrite]\n```\n\n**동작**:\n1. 대상 opencode.json 읽기 (user scope = `~/.config/opencode/opencode.json`, project scope = `<directory>/opencode.json`)\n2. nexus agent 정의 스캔: `agent.{nexus, architect, designer, postdoc, strategist, engineer, researcher, writer, reviewer, tester, general, explore}` 중 `model` 또는 `tools` 필드가 있는 항목\n3. 기본 backup 생성: `opencode.json.pre-migrate-<timestamp>` (--no-backup 지정 시 생략)\n4. 대상 isolated config 파일 (opencode-nexus.jsonc) 에 `agents.<id>.{model, tools}` 병합:\n   - 기본: 새 파일에 같은 키 있으면 **새 파일 기존 값 유지** (project precedence 와 일관)\n   - `--overwrite` 시 opencode.json 값이 새 파일 값을 덮어씀\n5. opencode.json 에서 이전된 agent 정의의 `model`/`tools` 필드만 제거. description/mode/prompt/permission 같은 v1 schema 외 필드는 그대로 유지 (escape hatch 로 작동 지속)\n6. empty 된 agent 오브젝트는 키 자체 제거\n7. 결과 요약: 이전된 agent 개수, 기록된 파일 경로, backup 경로\n\n**Dry-run 동작**:\n- 실제 수정 없이 diff 2개 출력 (opencode.json 변경 예정, isolated config 변경 예정)\n\n**Edge cases**:\n- 사용자 custom agent (nexus agent taxonomy 외) → 건드리지 않음\n- v1 schema 외 필드 (description 등) → opencode.json 에 남김\n- 같은 키 충돌 → 기본 새 파일 기존 값 우선, `--overwrite` 로 반전\n\n**Backward compat**:\n- migrate 안 실행해도 기존 설정 escape hatch (merge chain step 4)로 계속 동작 — 완전 비파괴\n- migrate 실행은 사용자가 \"새 플러그인 모델로 이전\" 명시 의도\n\n**Issue 4 결정 보완**:\nIssue 4에서 migrate 명령은 Issue 5 결정에 미뤘으므로, 이번 결정에 따라 CLI 변경 범위에 `migrate` 명령 신설이 추가됨. 구체:\n- `src/cli.ts` 에 `\"migrate\"` command 분기 추가 (Command 타입에 추가)\n- `resolveMigrateOptions`, `executeMigrateCommand` 함수 신설\n- opencode.json 쓰기 유틸과 isolated config 쓰기 유틸 공유 (DRY)\n- `--dry-run`/`--scope`/`--directory`/`--no-backup`/`--overwrite` 플래그 파싱\n\n**비파괴 확장 원칙**:\n- v1 migrate 는 model/tools 만 이전. 향후 schema 확장 시 migrate 도 따라 확장 (non-breaking)\n- migrate 는 idempotent: 두 번 실행해도 같은 결과 (이미 이전된 값이 opencode.json 에 없으므로 무영향)"
+          }
+        ],
+        "research_summary": "## 배경\n현재 opencode-nexus 는 CLI `setup` 명령으로 `opencode.json`의 `agent.<id>.model` 을 직접 수정한다. 이는 생태계에서 unique 한 접근이며, OMO(52k stars, 가장 인기 플러그인)는 별도 파일 `~/.config/opencode/oh-my-openagent.jsonc` 로 자기 설정을 격리함. 사용자 요청: OMO 패턴으로 전환.\n\n## 리서치 결과 (요약)\n\n### OMO 구현 패턴\n- 파일 경로: `~/.config/opencode/oh-my-openagent.jsonc` (global) + `./.opencode/oh-my-openagent.jsonc` (project)\n- 형식: JSONC 권장, JSON 호환\n- 로드 시점: plugin init 시 fs 직접 로드 → `config` hook 으로 opencode runtime 에 주입\n- Schema: version, agents, categories, disabled_hooks, mcp_env_allowlist, experimental\n- Missing → default fallback, parse error → ConfigParseError throw\n- Hot-reload 미지원 (재시작 필요)\n- Project > global deep merge\n- CLI installer: 대화형 생성 + 자동 migration sidecar\n\n### opencode plugin API 공식 지원 여부\n**없음.** OMO도 플러그인 내부에서 fs로 직접 파일 로드. 공식 plugin hook API 는 `config`, `tool.execute.*`, `event.*`, `chat.*`, `experimental.*` 만 제공. 별도 config 파일 convention은 ecosystem-level workaround.\n\n### 현재 opencode-nexus 상태\n- Config 쓰기: `src/cli.ts` applySetupModels(line 1243), readDefaultSetupModelsFromConfig(line 816), resolveConfigPath(line 1163)\n- Config 주입: `src/create-config.ts` createConfigHook()\n- I/O 유틸 완비: json-store.ts (readJsonFile/writeJsonFile/updateJsonFileLocked/runWithFileLock with atomic rename + file lock)\n- Paths util: shared/paths.ts createNexusPaths\n- 영향 파일: paths.ts, cli.ts, create-config.ts, index.ts, hooks.ts, json-store.ts, (신설) schema.ts\n\n### Config vs State 경계 (현재)\n- `.nexus/state/` = runtime state (plan.json, tasks.json, history.json, agent-tracker, tool-log)\n- `opencode.json` = user config (plugin 배열, agent.*.model, permission)\n- agent model 은 config 지만 현재 opencode.json 에 섞여 있음 — 분리 필요성의 논거\n\n## 핵심 판단 지점\n1. 파일 경로/명명 (OMO 직역? 다른 convention?)\n2. Schema 범위 (최소 model만? 확장?)\n3. Runtime merge 우선순위 (새 파일 vs opencode.json vs 플러그인 defaults)\n4. CLI 재설계 (setup 은 새 파일로, install 은 그대로)\n5. Migration path (기존 opencode.json 의 agent.*.model 처리)",
+        "created_at": "2026-04-19T08:05:58.447Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "isolated config schema + I/O 유틸 신설",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 1,
+          "created_at": "2026-04-19T08:37:35.907Z",
+          "context": "Plan #56 Issue 1, 2 결정 반영. 파일 경로는 global `~/.config/opencode/opencode-nexus.jsonc` + project `./.opencode/opencode-nexus.jsonc`. Schema v1: { version: 1, agents: Record<agentId, { model?: string; tools?: Record<string, boolean> }> }. 허용 agentId: nexus, architect, designer, postdoc, strategist, engineer, researcher, writer, reviewer, tester, general, explore. 기존 json-store.ts (readJsonFile/writeJsonFile/runWithFileLock) 재사용. JSONC 파싱 지원 필요 (주석 허용).",
+          "approach": "1. `src/shared/paths.ts` 에 경로 상수 추가:\n   - `NEXUS_ISOLATED_CONFIG_FILENAME = \"opencode-nexus.jsonc\"`\n   - `getGlobalIsolatedConfigPath()`: `~/.config/opencode/opencode-nexus.jsonc`\n   - `getProjectIsolatedConfigPath(projectRoot)`: `<projectRoot>/.opencode/opencode-nexus.jsonc`\n\n2. `src/shared/nexus-config-schema.ts` 신설:\n   - 허용 agentId 상수 (primary + 9 subagents + 2 builtins)\n   - Schema 타입 정의 (TypeScript): `IsolatedConfig`, `IsolatedAgentConfig`\n   - validate 함수 (Zod 사용 — 이미 dependencies 에 있음). Unknown agentId/필드는 parse warn 후 무시 (throw 안 함 — Plan #56 Issue 3 결정)\n\n3. `src/shared/nexus-config.ts` 신설:\n   - `readIsolatedConfig(path): Promise<IsolatedConfig>` — JSONC 파싱, missing 시 empty config 반환, parse error 시 log + empty fallback\n   - `writeIsolatedConfig(path, config): Promise<void>` — atomic write, JSONC 주석 유지는 v1 범위 외 (단순 JSON.stringify 로 재작성)\n   - `mergeIsolatedConfigs(global, project): IsolatedConfig` — deep merge by agent id + field level + nested tools object merge\n\n4. JSONC 파싱: 기존 의존성으로 가능한지 확인 (zod 는 JSONC 직접 파싱 안 함). Node 내장 방식 (주석 제거 후 JSON.parse) 또는 작은 파서 구현. 방식 선택은 engineer 재량.",
+          "acceptance": "- [ ] `src/shared/paths.ts` 에 NEXUS_ISOLATED_CONFIG_FILENAME 과 경로 헬퍼 함수 2개 추가\n- [ ] `src/shared/nexus-config-schema.ts` 에 Schema 타입 + validate 함수 정의, 허용 agentId 상수 export\n- [ ] `src/shared/nexus-config.ts` 에 read/write/merge 함수 3개 정의\n- [ ] JSONC 주석 허용 (최소: `//` 라인 주석, `/* */` 블록 주석)\n- [ ] Missing file → empty config (빈 agents 맵) 반환, 예외 안 발생\n- [ ] Parse error → console warn/log 후 empty fallback, 예외 안 발생\n- [ ] Unknown agentId → 로그 후 drop, valid 항목만 유지\n- [ ] 스칼라 `model` 은 later source wins, `tools` 는 deep merge\n- [ ] `bun run check` + `bun run build` 통과\n- [ ] 단위 테스트 혹은 스크립트로 merge 우선순위 정확성 확인",
+          "risk": "- JSONC 파싱 라이브러리 선택 (내부 구현 vs 의존성 추가). 의존성 추가는 plugin cache 부담 증가. 내부 구현은 edge case 리스크.\n- `mergeIsolatedConfigs` 의 tools deep merge 가 `null`/`undefined`/ missing field 에서 정확히 동작해야 함.\n- Schema 확장 (v2) 대비 version 필드 기반 migration 훅 자리만 남겨둘지 여부 (YAGNI 관점에선 현재 불필요)."
+        },
+        {
+          "id": 2,
+          "title": "create-config.ts 리팩터 — 5-step merge chain 구현",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-19T08:37:56.674Z",
+          "context": "Plan #56 Issue 3 결정. Merge chain: (1) nexus-core canonical defaults → (2) isolated global → (3) isolated project → (4) opencode.json user → (5) hard-lock. isolated config 는 plugin init 시 1회 로드 후 closure 로 주입. 현재 src/create-config.ts 의 mergeSubagentAgentEntry 가 이미 existing wins 패턴 (Step 4 역할) 수행 중이므로 Step 2, 3 삽입이 핵심 변경.",
+          "approach": "1. `createConfigHook` 시그니처 변경: `createConfigHook(isolatedConfig: IsolatedConfig)` — isolated config 를 closure 로 받음 (init 1회 로드 후 주입)\n2. 내부 함수 분리:\n   - `buildCanonicalAgentDefaults(agentId): AgentDefaults` — Step 1 (nexus-core defaults)\n   - `applyIsolatedOverride(defaults, isolatedAgent): AgentDefaults` — Step 2/3 (isolated config deep merge)\n   - `mergeOpencodeJsonUser(merged, existing): AgentEntry` — Step 4 (기존 existing wins 로직)\n   - `applyHardLock(entry): AgentEntry` — Step 5 (TASK_DELEGATION_DISABLED_TOOLS 강제)\n3. 루프에서 각 agentId 순회하며 5-step 적용\n4. Primary agent (nexus) 도 동일 chain 적용. 현재 mergePrimaryAgentEntry 는 defaults 에 model 없음 — isolated config 의 `agents.nexus.model` 이 Step 2 에서 주입되도록 변경\n5. builtin agents (general, explore) 도 isolated config 의 `agents.general.model`, `agents.explore.model` 을 반영하되 TASK_DELEGATION_DISABLED_TOOLS 는 여전히 강제",
+          "acceptance": "- [ ] `createConfigHook(isolatedConfig)` 시그니처로 변경 (기존 callsite 업데이트 포함)\n- [ ] 4개 헬퍼 함수로 분리 (canonical/isolated/opencode-user/hard-lock)\n- [ ] 5-step chain 단위 테스트: 각 source 조합 (canonical only, +isolated, +project, +opencode, 전체) 에서 최종 값 정확 검증\n- [ ] TASK_DELEGATION_DISABLED_TOOLS override 시도 테스트: isolated config 나 opencode.json 에 `tools.task: true` 넣어도 최종 false 유지 (hard-lock)\n- [ ] Primary (nexus) / subagent / builtin 모두 동일 chain 처리\n- [ ] Sparse config: isolated 에 architect 만 있고 나머지 agent 는 canonical defaults 유지됨 확인\n- [ ] `bun run check` + `bun run build` 통과\n- [ ] 기존 e2e (system-transform, subagent-prompts 등) 모두 통과 (regression 없음)",
+          "risk": "- 기존 mergeSubagentAgentEntry / mergePrimaryAgentEntry 를 제거 없이 리팩터해야 regression 최소\n- nexus-core 에서 canonical 값 업데이트 시 isolated config 가 override 하던 값과 diverge — 이번 변경은 runtime merge 순서만 바꾸므로 upstream 업데이트 대응과는 무관하지만, 사용자 관점 혼동 가능 (문서화 task 에서 커버)\n- 모든 agent 순회 시 primary (nexus) 도 포함되는지 놓치면 nexus model 이 isolated config 에서 반영 안 될 수 있음"
+        },
+        {
+          "id": 3,
+          "title": "plugin entry (index.ts) 에서 isolated config 로드 + 주입",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-19T08:38:09.082Z",
+          "context": "Plan #56 Issue 3 결정 — init 1회 로드, closure 캐시. src/index.ts 의 Plugin entry function 에서 ctx.directory 기반 project scope 경로를 결정. Missing file / parse error 시 silent fallback.",
+          "approach": "1. `src/index.ts` OpenCodeNexusPlugin 함수 수정:\n   - `getGlobalIsolatedConfigPath()` / `getProjectIsolatedConfigPath(ctx.directory)` 로 경로 2개 구성\n   - `readIsolatedConfig(globalPath)` + `readIsolatedConfig(projectPath)` 병렬 로드\n   - `mergeIsolatedConfigs(global, project)` 로 최종 하나 생성\n   - `createConfigHook(mergedIsolated)` 에 전달\n2. 로드 과정에서 log:\n   - Silent 원칙: missing 은 로그 안 함\n   - Parse error 는 `ctx.client.app.log` 로 warn 레벨 + 경로/원인 표시 후 empty fallback\n3. worktree 경로 처리: ctx.worktree 있으면 worktree 우선 (이 repo 의 shared/paths.ts 내 convention 재확인 후 반영)",
+          "acceptance": "- [ ] src/index.ts 가 isolated config 2개 파일 로드 + merge\n- [ ] missing file 시 silent (no warn log)\n- [ ] parse error 시 ctx.client.app.log 로 warn 로그 + fallback (플러그인 init 실패 안 함)\n- [ ] createConfigHook 이 merged isolated config 를 closure 로 받음\n- [ ] ctx.worktree 우선 처리 (해당 시)\n- [ ] `bun run check` + `bun run build` 통과\n- [ ] 기존 플러그인 init e2e (loader-smoke 등) 회귀 테스트 통과",
+          "risk": "- plugin init 에서 fs 읽기 타이밍이 opencode 의 다른 내부 init 순서와 race condition 없어야 함 (로드 실패해도 plugin 반환까지 빠르게)\n- ctx.worktree vs ctx.directory 구분 로직이 기존 코드와 일관성 있어야 함"
+        },
+        {
+          "id": 4,
+          "title": "CLI setup 명령을 isolated config 에 쓰도록 변경",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 4,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-19T08:38:27.059Z",
+          "context": "Plan #56 Issue 4 결정. setup 의 UX (`--all-model`, `--how-model`, `--do-model`, `--check-model`, `--nexus-model`, `--general-model`, `--explore-model`, `--scope`, `--directory`) 는 그대로 유지. 내부 쓰기 대상만 isolated config 파일로 변경. install/update 는 계속 opencode.json plugin 배열 책임 — 함께 건드리지 말 것.",
+          "approach": "1. `src/cli.ts` resolveConfigPath (line 1163): command 별 분기\n   - `command === \"install\" | \"update\"` → opencode.json 경로\n   - `command === \"setup\"` → opencode-nexus.jsonc 경로 (global/project scope)\n2. `readDefaultSetupModelsFromConfig` (line 816): \n   - isolated config 우선 로드\n   - opencode.json 의 `agent.<id>.model` 도 보조 로드 (사용자가 이전에 opencode.json 에 설정한 값이 있을 수 있음 → setup 의 default 제안으로 사용)\n   - firstDefinedModel 로직은 merge chain 반영 (project > global > opencode.json > canonical default)\n3. `applySetupModels` (line 1243):\n   - isolated config 로드 → agents[id] 에 model 설정 → writeIsolatedConfig\n   - 기존 agents[id].tools 등 다른 필드는 보존 (merge write)\n4. 카테고리 매핑은 저장 시 flatten: how → [architect, designer, postdoc, strategist] 각각 agents[id].model 로 저장\n5. setup 완료 메시지에 저장 파일 경로 명시",
+          "acceptance": "- [ ] setup 실행 시 opencode.json 은 수정되지 않음 (plugin 배열 외)\n- [ ] opencode-nexus.jsonc 에 `agents.<id>.model` 기록됨\n- [ ] HOW/DO/CHECK 플래그 조합 정확히 flatten 되어 기록\n- [ ] --scope user 와 --scope project 각각 맞는 경로에 저장\n- [ ] 기존 agents[id].tools 필드 보존 (overwrite 금지)\n- [ ] --all-model, --model 플래그 기존 의미 유지 (전체 agent 일괄)\n- [ ] interactive setup 흐름 완주 (대화형 질문 응답 후 저장)\n- [ ] install/update 명령 회귀 테스트 통과 (변경 없어야 함)\n- [ ] `bun run check` + `bun run build` 통과",
+          "risk": "- setup 의 default 제안 로직이 merge chain 을 반영해야 하는데, opencode.json 에 이전 설정이 남아있는 사용자 case 에서 default 가 isolated vs opencode.json 어느 쪽인지 명확해야 함 (UX). 초기 구현은 isolated 우선, 비어있으면 opencode.json 참조 로 제안.\n- writeIsolatedConfig 가 JSONC 주석을 보존하지 않는 점이 사용자 불만 될 수 있음 — v1 외 (향후 개선)"
+        },
+        {
+          "id": 5,
+          "title": "CLI migrate 명령 신설",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 5,
+          "deps": [
+            1,
+            4
+          ],
+          "created_at": "2026-04-19T08:38:48.584Z",
+          "context": "Plan #56 Issue 5 결정. Backward compat 은 merge chain step 4 로 보장되므로 migrate 는 optional/on-demand. 기본 backup 생성, 충돌 시 기본 isolated 값 유지 (project precedence 패턴), `--overwrite` 플래그로 반전. v1 schema 외 필드 (description, prompt 등) 는 건드리지 않고 opencode.json 에 남김.",
+          "approach": "1. `src/cli.ts` Command 타입에 `\"migrate\"` 추가\n2. `resolveMigrateOptions(argv, env)` 함수 신설 — 플래그 파싱:\n   - `--scope user|project`\n   - `--directory <path>` (project scope 시)\n   - `--dry-run`\n   - `--no-backup`\n   - `--overwrite`\n3. `executeMigrateCommand(options)`:\n   - opencode.json 경로 결정 + 읽기\n   - nexus agent taxonomy 필터링 (12 agentId) 중 `model` 또는 `tools` 있는 항목 수집\n   - v1 schema (`model`, `tools`) 에 해당하는 필드만 추출 — description/prompt 등은 opencode.json 에 유지\n   - backup 경로: `opencode.json.pre-migrate-<ISO8601 timestamp>`\n   - isolated config 읽기 → 병합 (기본: 기존 isolated 값 우선, `--overwrite` 시 opencode.json 값 우선)\n   - dry-run: diff 2개 출력 (opencode.json 변경 예정, isolated 변경 예정), 파일 안 건드림\n   - 실제 실행: backup 생성 → isolated config 쓰기 → opencode.json 수정 (nexus agent 의 model/tools 제거, empty 된 agent 오브젝트 키 자체 제거)\n4. 결과 요약 출력: 이전된 agent 개수, 파일 경로들, backup 경로\n5. Idempotency 테스트: 두 번 실행 시 두 번째는 이전할 것 없다고 리포트",
+          "acceptance": "- [ ] `opencode-nexus migrate --help` 가 플래그 문서 출력\n- [ ] `--dry-run` 에서 파일 수정 없이 diff 2개 (opencode.json, isolated) 정확 표시\n- [ ] 실제 실행 시 backup 생성 확인 (경로 + 내용 = 변경 전 opencode.json)\n- [ ] opencode.json 에서 agents[id].{model, tools} 만 제거되고 description/prompt/permission 등은 보존\n- [ ] isolated config 의 기존 값이 기본 우선 (충돌 시), `--overwrite` 에서 opencode.json 값이 우선\n- [ ] 이전 대상 아닌 사용자 custom agent 는 opencode.json 에 그대로 유지\n- [ ] 두 번째 실행 (이미 migrate 됨) 에서 \"이전할 항목 없음\" 리포트, 파일 무변경\n- [ ] `--no-backup` 플래그 동작 (backup 생성 안 함)\n- [ ] `bun run check` + `bun run build` 통과",
+          "risk": "- opencode.json 의 agent 오브젝트에 tools 외 다른 필드가 남는 edge case (예: tools 제거 후 model 만 남음) 에서 일관성 있게 처리해야 함\n- backup 파일이 재실행 시 여러 개 누적 — timestamp 기반이므로 이전 파일 유지 (사용자가 수동 정리). 문서에 명시\n- Idempotency 보장 실패 시 사용자가 의도치 않은 변경을 반복 적용할 수 있음"
+        },
+        {
+          "id": 6,
+          "title": "e2e 통합 검증 (schema, merge chain, setup, migrate)",
+          "status": "completed",
+          "owner": "tester",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "created_at": "2026-04-19T08:39:06.540Z",
+          "context": "T1~T5 의 각 task 는 자체 unit-level 검증 포함하지만, 실제 플러그인 load → setup → migrate → config 로드 → agent runtime 반영까지의 chain 전체를 검증하는 e2e 가 필요. 기존 `scripts/e2e-*.mjs` 패턴을 따르고, test:e2e 에 편입.",
+          "approach": "1. `scripts/e2e-isolated-config.mjs` 신설:\n   - Fixture: 임시 디렉터리에 opencode.json + .opencode/opencode-nexus.jsonc 모의 환경\n   - 시나리오 1: isolated config 만 있을 때 최종 agent.model 이 정확히 반영\n   - 시나리오 2: isolated + opencode.json 모두 있을 때 opencode.json 우선 (Step 4 > Step 2/3)\n   - 시나리오 3: global + project 둘 다 있을 때 project 우선\n   - 시나리오 4: TASK_DELEGATION_DISABLED_TOOLS override 시도 → 여전히 false\n   - 시나리오 5: Missing isolated config → silent fallback, canonical defaults\n   - 시나리오 6: Parse error isolated config → warn 로그 + fallback\n   - 시나리오 7: Sparse config (architect만 정의) → 다른 agent 는 canonical default\n2. `scripts/e2e-migrate.mjs` 신설:\n   - 시나리오 1: opencode.json 에 nexus agent 5개 설정 → migrate → isolated config 에 이전됨, opencode.json 정리됨\n   - 시나리오 2: --dry-run → 파일 무변경, diff 출력\n   - 시나리오 3: idempotency — 두 번 실행 시 두 번째는 no-op\n   - 시나리오 4: 충돌 시 기본 isolated 우선, --overwrite 시 opencode.json 우선\n   - 시나리오 5: description/prompt 같은 v1 외 필드 opencode.json 에 유지\n   - 시나리오 6: backup 파일 생성 확인\n3. `scripts/e2e-cli-setup.mjs` 신설 또는 기존 setup-template 에 확장:\n   - setup 실행 → opencode.json 은 plugin 배열만, isolated config 에 모델 기록됨\n   - --how-model / --do-model 플래그 조합 정확히 flatten\n4. `package.json` 의 test:e2e 에 새 스크립트 추가",
+          "acceptance": "- [ ] 3개 e2e 스크립트 (isolated-config, migrate, cli-setup) 모두 구현 및 PASS\n- [ ] 각 시나리오 PASS/FAIL 명확히 보고\n- [ ] test:e2e 스위트에 추가되고 전체 PASS\n- [ ] 기존 e2e (system-transform, subagent-prompts, loader-smoke 등) 회귀 없음\n- [ ] T1~T5 의 acceptance 중 실제 runtime behavior 관련 criterion 모두 검증 커버\n- [ ] 실패 시나리오 (missing, parse error, invalid agentId) 각 케이스 PASS",
+          "risk": "- e2e 가 fixture 셋업 복잡도 높음 — 임시 디렉터리 + opencode 호출 vs plugin 함수 직접 호출 (unit-level). 후자가 빠르고 안정적\n- opencode binary 실제 invoke 하면 test 가 느려짐 — plugin 함수 직접 테스트 선호"
+        },
+        {
+          "id": 7,
+          "title": "README 및 context 문서 업데이트",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 2,
+          "deps": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "created_at": "2026-04-19T08:39:22.163Z",
+          "context": "Plan #56 전체 결정 반영. README (한국어 주, en 보조) + `.nexus/context/architecture.md` + 필요시 `.nexus/context/build-and-release.md` 업데이트. merge chain 은 표로 제공, migration 흐름은 단계별 예시 포함.",
+          "approach": "1. README.md:\n   - \"설정\" 섹션 신설: 새 파일 위치 (global/project), JSONC 형식, 스키마 예시\n   - \"모델 및 tool 커스터마이즈\" 설명: setup 명령 + 직접 편집 경로\n   - \"기존 사용자 migration\" 섹션: `opencode-nexus migrate` 사용법, backup/dry-run 설명\n   - \"설정 우선순위\" 섹션: 5-step merge chain 표 + 실사용 예시\n   - Quick Start 업데이트 (install 후 setup → migrate 순)\n2. README.en.md 동기화\n3. `.nexus/context/architecture.md`:\n   - config 영역 정리: isolated config (user preference) vs .nexus/state (runtime state) 경계\n   - createConfigHook 의 5-step chain 기술\n4. `.nexus/context/build-and-release.md` 확인:\n   - 필요시 \"schema v2 로 확장 시 버전 bump 정책\" 추가\n5. 가능하면 `docs/` 안에 `config-reference.md` 로 스키마 상세를 따로 두면 깔끔",
+          "acceptance": "- [ ] README.md 에 isolated config 섹션 신설 (한국어, 스키마 예시 포함)\n- [ ] merge chain 표가 README 또는 별도 config-reference 문서에 존재\n- [ ] migrate 명령 사용법 + backup/dry-run 예시 문서화\n- [ ] Quick Start 가 새 플로우 반영 (install → setup → migrate optional)\n- [ ] README.en.md 동기화\n- [ ] `.nexus/context/architecture.md` 에 config/state 경계 기술\n- [ ] 기존 self-hosting 섹션 그대로 유지 (local dist 로드 방식)\n- [ ] 오탈자/링크 확인 (reviewer 가 별도 검증)",
+          "risk": "- README 가 너무 길어지면 discoverability 저하 — 상세는 config-reference.md 에 분리 고려\n- en 동기화 시 누락 섹션 발생 가능 — reviewer 가 체크"
+        },
+        {
+          "id": 8,
+          "title": "README 및 docs 업데이트 리뷰",
+          "status": "completed",
+          "owner": "reviewer",
+          "plan_issue": 2,
+          "deps": [
+            7
+          ],
+          "created_at": "2026-04-19T08:39:32.116Z",
+          "context": "nx-plan skill 의 writer → reviewer 필수 pairing 원칙에 따라 T7 의 CHECK. 검증 범위는 README.md + README.en.md + `.nexus/context/*` 업데이트.",
+          "approach": "1. merge chain 표가 Plan #56 Issue 3 decision 과 정확히 일치하는지 (5 step, 순서, deep merge 규칙, hard-lock)\n2. 스키마 예시가 Plan #56 Issue 2 decision 과 일치 (허용 필드만, 금지 필드 예시 없음)\n3. migrate 명령 설명이 Plan #56 Issue 5 decision 과 일치 (플래그, backup, idempotency)\n4. README 와 README.en 의 대칭성 (섹션 누락, 예시 차이)\n5. 한국어 문장 자연스러움, 오탈자\n6. 링크/경로 유효성 (파일 경로 참조 시 실재 파일 확인)\n7. Quick Start 가 새 플로우로 잘 갱신됐는지\n8. 기존 self-hosting 섹션이 깨지지 않았는지",
+          "acceptance": "- [ ] Plan decision 대비 팩트 체크 8항목 모두 PASS\n- [ ] README/README.en 대칭성 확인\n- [ ] 오탈자/링크 깨짐 없음\n- [ ] 발견된 문제는 severity 별로 보고 (critical/warning/suggestion)\n- [ ] PASS/FAIL + 개선 권고 리스트 형식으로 리포트"
+        },
+        {
+          "id": 9,
+          "title": "Plan56 Task2 create-config 5-step merge chain",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 3,
+          "deps": [],
+          "created_at": "2026-04-19T08:50:32.948Z",
+          "context": "Refactor src/create-config.ts to implement 5-step merge chain with isolated config injection and preserve existing behavior.",
+          "approach": "Change createConfigHook signature to accept IsolatedConfig, split merge logic into helper functions, apply isolated overrides for subagents/primary/builtin, keep hard lock semantics.",
+          "acceptance": "All specified acceptance criteria pass; bun run check and bun run build succeed.",
+          "risk": "Regression in merge precedence or task hard-lock behavior."
+        },
+        {
+          "id": 10,
+          "title": "Task #4 setup isolated config wiring",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 4,
+          "deps": [],
+          "created_at": "2026-04-19T08:51:13.268Z",
+          "context": "Plan #56 Task #4: change setup command read/write target to isolated config opencode-nexus.jsonc while preserving UX/flags; do not modify install/update paths.",
+          "approach": "Add resolveIsolatedConfigPath and applySetupModelsToIsolated; wire setup read defaults and execute flow to isolated config with fallback to merged debug config; print parse warnings to stderr; keep install/update untouched.",
+          "acceptance": "setup uses isolated config path for read/write and output; install/update behavior unchanged; warnings printed; check/build pass",
+          "risk": "Accidentally altering install/update config path logic or setup defaults behavior."
+        },
+        {
+          "id": 11,
+          "title": "Plan56 Task3 index isolated config injection",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2
+          ],
+          "created_at": "2026-04-19T08:56:31.159Z",
+          "context": "Implement user-requested wiring in src/index.ts only: load global/project isolated configs once at plugin init, warn on parse issues, merge, inject into createConfigHook.",
+          "approach": "Follow existing worktree??directory convention, Promise.all read, warn log for parse-error/warnings, keep installSkillFiles/createHooks/createTools flow unchanged, return shape unchanged.",
+          "acceptance": "Meets all acceptance criteria from user prompt; bun run check and bun run build pass.",
+          "risk": "Changing init flow or logging semantics; keep missing silent and parse warnings only."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 11,
+        "decisionCount": 5,
+        "cycleTopics": [
+          "opencode-nexus isolated config file: OMO 스타일 별도 파일로 플러그인 전용 설정 관리",
+          "Wire isolated config loading and injection in plugin entry."
+        ]
+      }
     }
   ],
   "schema_version": "0.5"
