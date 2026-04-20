@@ -1,9 +1,9 @@
-<!-- tags: codebase, agents, skills, orchestration, pipeline -->
+<!-- tags: codebase, agents, skills, orchestration -->
 # 에이전트, 스킬, 오케스트레이션
 
 ## 1. 에이전트 카탈로그
 
-모든 에이전트는 `AGENT_META`(`src/agents/generated/index.ts:27`)로 정의된다. 카테고리는 `how / do / check` 세 가지. 에이전트 수: 9개(HOW 4, DO 3, CHECK 2).
+모든 에이전트는 sync-managed `src/agents/*.ts` 파일로 정의된다. 카테고리는 `how / do / check` 세 가지. 에이전트 수: 9개 subagent + 1 lead primary (총 10개).
 
 ### HOW 에이전트 — 자문 역할, 파일 수정 불가
 
@@ -29,13 +29,15 @@
 | `tester` | Tester | 테스팅, 검증, 보안 리뷰 | write, edit, patch, multiedit, notebookedit, nx_task_add |
 | `reviewer` | Reviewer | 팩트체크 및 콘텐츠 검증 | nx_task_add |
 
-### 프라이머리 에이전트 (Nexus)
+### 프라이머리 에이전트 (lead)
 
-ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 질문이나 단일 파일 소규모 변경은 직접 처리.
+ID `lead` (mode: primary). nexus-core canonical primary 오케스트레이션 리드. 위임을 기본으로 하되, 단순 질문이나 단일 파일 소규모 변경은 직접 처리.
+
+**정체성 변경 (v0.10.0)**: 기존 `nexus` identity가 `lead` (mode: primary)로 통합. nexus-core canonical primary와 동일.
 
 ### 에이전트 프롬프트 구조
 
-에이전트 프롬프트 본체는 `@moreih29/nexus-core`를 canonical source로 하며, 빌드 타임 generator(`scripts/generate-from-nexus-core.mjs`)가 `src/agents/generated/index.ts`를 생성한다. `src/agents/prompts.ts`는 이를 re-export하는 thin barrel이다. `AGENT_META`가 에이전트 메타의 single source of truth이며, `SKILL_META`가 스킬 메타의 single source of truth다(각각 `src/agents/generated/index.ts`, `src/skills/generated/index.ts`).
+에이전트 프롬프트 본체는 `@moreih29/nexus-core`를 canonical source로 하며, sync CLI가 `src/agents/<name>.ts`를 생성한다. 각 파일은 nexus-core canonical body + OpenCode-specific 오버레이(model, disallowedTools)를 포함한다.
 
 공통 구조: `<role>` → `<constraints>` → `<guidelines>`
 
@@ -49,13 +51,16 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 |---|---|---|
 | `nx-plan` | `[plan]` | 구조화된 플래닝 및 결정 기록 |
 | `nx-run` | `[run]` | 실행 파이프라인 (intake → design → execute → verify → complete) |
-| `nx-init` | `skill({ name: "nx-init" })` | 온보딩 — 코어 구조 및 기반 지식 초기화 |
+| `nx-init` | `skill({ name: "nx-init" })` | 온보드 — 코어 구조 및 기반 지식 초기화 |
 | `nx-sync` | `[sync]` | 태스크 사이클 완료 후 코어 지식 동기화 |
-| `nx-setup` | `skill({ name: "nx-setup" })` | 설정 마법사 — 권한 및 오케스트레이션 기본값 구성 |
 
-### 스킬 이중 delivery — Option D (A-leg + B-leg)
+### 스킬 배포 (v0.10.0 단순화)
 
-스킬 본문은 두 경로로 LLM에 도달한다. **A-leg**: 플러그인 초기화 시 `installSkillFiles()`가 `templates/skills/<id>/SKILL.md`를 사용자 프로젝트 `.opencode/skills/<id>/SKILL.md`로 설치한다. OpenCode 런타임이 이 경로를 네이티브 skill 디스커버리로 인식한다. **B-leg**: `experimental.chat.system.transform` 훅이 `[plan]`/`[run]`/`[sync]` 태그 감지 시 해당 스킬 본문을 `<nexus-skill id="...">` 블록으로 시스템 프롬프트에 직접 삽입한다. 양 하네스(opencode-nexus, claude-nexus)가 `@moreih29/nexus-core`에서 동일한 canonical body를 소비하며, delivery mechanism만 다르다. `manual_only`로 표시된 스킬(nx-init, nx-setup 등)은 B-leg 주입 대상에서 제외되고, 대신 모든 모드의 시스템 프롬프트에 수동 실행 안내(manual_only nudge)가 포함된다.
+**A-leg**: `postinstall.mjs`가 consumer 프로젝트의 `.opencode/skills/<id>/SKILL.md`로 스킬 파일을 복사한다.
+
+**B-leg**: nexus-core `prompt-router` hook이 `[plan]`/`[run]`/`[sync]` 태그 감지 시 canonical skill body를 시스템 프롬프트에 주입한다.
+
+**제거된 스킬**: `nx-setup`은 v0.10.0에서 제거됨 (nexus-core로 이전 또는 불필요).
 
 ### nx-plan 절차
 
@@ -64,7 +69,7 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 3. **Session Setup** — 리서치 완료 후 `nx_plan_start(topic, issues, research_summary)` 호출. 이슈 리스트 사용자 확인
 4. **Per-issue Analysis** — 한 번에 하나의 이슈. 현재 상태 요약 → (복잡 이슈는 HOW subagent 병렬 spawn) → 옵션 비교 표 + 권고안 제시 → 사용자 자유 응답 대기 → `[d]` 태그로 `nx_plan_decide` 호출 → 파생 이슈 즉시 점검 후 `nx_plan_update(action='add')`로 제안
 5. **Gap check + Wrap-up** — 모든 이슈 decided 후 원래 topic과 갭 점검. 갭 있으면 이슈 추가 후 Step 4 반복, 없으면 Step 6으로
-6. **Plan Document Generation** — 각 decided 이슈를 task로 분해하여 `nx_task_add(plan_issue, approach, acceptance, risk, owner)`, verification 페어링은 acceptance 기준 조건부 적용(엔지니어 task의 runtime-behavior 검증 항목, writer task의 deliverable 검증 항목) + `vocabulary/task-exceptions.yml` 예외를 반영. `.nexus/context/` 업데이트 task 포함. `[run]` 전환 안내
+6. **Plan Document Generation** — 각 decided 이슈를 task로 분해하여 `nx_task_add(plan_issue, approach, acceptance, risk, owner)`, verification 페어링은 acceptance 기준 조걶적 적용. `.nexus/context/` 업데이트 task 포함. `[run]` 전환 안내
 
 ### nx-run 흐름
 
@@ -82,26 +87,27 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 
 ### 코어 상태
 
-런타임 상태는 인메모리로 관리되며, 지속성이 필요한 데이터는 `.nexus/state/`의 플랜·태스크·히스토리 파일에 기록된다. Task 1 이후 `orchestration.json`과 `audit/` 로그는 더 이상 활성 런타임 표면이 아니다.
+런타임 상태는 nexus-core substrate가 관리하며, 지속성이 필요한 데이터는 `.nexus/state/`의 플랜·태스크·히스토리 파일에 기록된다.
 
 ### 위임 흐름
 
-`buildDelegationTemplate()`이 구조화된 위임 텍스트 생성. 입력: task, currentState, dependencies, priorDecisions, targetFiles, constraints, acceptance.
+nexus-core canonical `buildDelegationTemplate()`이 구조화된 위임 텍스트 생성. 입력: task, currentState, dependencies, priorDecisions, targetFiles, constraints, acceptance.
 
 ### 연속성 관리
 
-- 인보케이션 생애주기는 인메모리에서 관리
+- 인보케이션 생애주기는 nexus-core substrate에서 관리
 - `coordination_label`을 통한 그룹핑 지원 (선택적)
 - 연속성 힌트는 도구 호출 시 명시적으로 전달
 
-### 팀 정책
+### Lead Mediation 모델
 
-- `requiresTeamInRunMode` — Task 1 이후 모든 에이전트에서 `false`로 변경. run 모드에서 team_name은 선택적이다.
-- `canJoinPlanWithoutTeam` — lead는 team_name 없이 plan 참여 가능
+- **HOW agents**: 접근법·설계·전략 조언. 구현 상태 소유하지 않음
+- **DO agents**: 활성 task에 대해 실행. task state에 바인딩
+- **CHECK agents**: PASS/FAIL로 보고. 애플리케이션 코드 조용히 수정하지 않음
 
-## 4. 파이프라인
+## 4. Task Pipeline
 
-### Evaluator
+### Evaluator (nexus-core canonical)
 
 태스크 사이클 상태: `none` → `empty` → `active` → `completed-open`
 
@@ -144,7 +150,6 @@ ID `nexus`. 오케스트레이션 리드. 위임을 기본으로 하되, 단순 
 - `plan.json`은 canonical하고 플랫폼 중립. OpenCode HOW 패널 연속성은 `plan.json`(participants) + `.nexus/state/opencode-nexus/agent-tracker.json`(runtime resume handles/summary) 조합에서 파생된다.
 - `agent-tracker.json`은 durable history가 아니라 세션 범위의 ephemeral runtime continuity/observability state다. 없거나 비어 있어도 OpenCode는 canonical `.nexus` 파일만으로 계속 동작해야 함.
 - **tracker reset 경계는 명시적 primary session lifecycle 훅(`session.created`)으로 단일화**되어 있다. 일반 ensure/setup/init/sync 경로는 tracker를 초기화하지 않는다.
-- `tool-log.jsonl`의 `files_touched`는 세션 스코프에서 추적되며, 자식 세션 연속성이 확정된 후 소급 적용(retroactive attribution)된다.
 - Claude ↔ OpenCode 전환은 canonical-first handoff로 취급. 동시 공동 편집이 아님.
 
 #### HOW 패널 연속성 절차 (HOW-panel Continuity)
