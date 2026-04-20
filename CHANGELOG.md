@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.10.1] — 2026-04-20
+
+### Fixed
+
+- **Published OpenCode consumer config example was invalid** — v0.10.0 문서에 포함된 `agents` 배열 + `module` 필드 예시는 opencode canonical schema에 존재하지 않는 키를 사용해 consumer가 그대로 복사 시 `Unrecognized key: "agents"` 오류로 opencode 기동이 실패했습니다.
+- **Canonical minimal config로 교체**:
+  ```json
+  {
+    "plugin": ["opencode-nexus"],
+    "mcp": { "nx": { "type": "local", "command": ["nexus-mcp"] } },
+    "default_agent": "lead"
+  }
+  ```
+- `plugin: ["opencode-nexus"]` 등록만으로 10 agents가 자동 등록되므로 `agent` 섹션/배열은 불필요합니다(override 용도만).
+- `opencode.json.fragment` 참조 언급 제거 (upstream nexus-core#43에서 deprecate 검토 중).
+
+### Notes
+
+- v0.10.0은 기능적으로 동일하지만 문서 예시가 invalid했으므로 **v0.10.1 적용을 강력히 권장**합니다.
+- v0.11.0에서 CLI (install/uninstall/doctor)로 이 설정을 자동화할 예정입니다.
+
+---
+
 ## [0.10.0] — 2026-04-20
 
 ### BREAKING CHANGE — nexus-core 0.15.1 shared runtime substrate 전면 수용
@@ -23,23 +46,12 @@ opencode-nexus는 자체 Nexus 오케스트레이션 런타임에서 @moreih29/n
      "mcp": {
        "nx": { "type": "local", "command": ["nexus-mcp"] }
      },
-     "agents": [
-       { "id": "lead", "module": "./node_modules/opencode-nexus/src/agents/lead.ts" },
-       { "id": "architect", "module": "./node_modules/opencode-nexus/src/agents/architect.ts" },
-       { "id": "designer", "module": "./node_modules/opencode-nexus/src/agents/designer.ts" },
-       { "id": "engineer", "module": "./node_modules/opencode-nexus/src/agents/engineer.ts" },
-       { "id": "postdoc", "module": "./node_modules/opencode-nexus/src/agents/postdoc.ts" },
-       { "id": "strategist", "module": "./node_modules/opencode-nexus/src/agents/strategist.ts" },
-       { "id": "researcher", "module": "./node_modules/opencode-nexus/src/agents/researcher.ts" },
-       { "id": "reviewer", "module": "./node_modules/opencode-nexus/src/agents/reviewer.ts" },
-       { "id": "tester", "module": "./node_modules/opencode-nexus/src/agents/tester.ts" },
-       { "id": "writer", "module": "./node_modules/opencode-nexus/src/agents/writer.ts" }
-     ]
+     "default_agent": "lead"
    }
    ```
    - **MCP 키는 `mcp` (not `mcp_servers`)** — opencode config validator 요구사항
-   - **`agents` 배열은 필수** — `plugin` 등록만으로는 에이전트 자동 활성화 안 됨. `node_modules/opencode-nexus/opencode.json.fragment`가 참조 가능
-   - 이전 isolated config (`.opencode/nexus/config.json`)는 제거됨 — agent별 model override는 각 agent 항목의 `model` 필드로 직접 지정
+   - **`plugin` 등록만으로 10 agents 자동 활성화** — `agent`/`agents` 섹션 불필요 (v0.10.0 초기 문서의 `agents` 배열 예시는 invalid였으며 v0.10.1에서 수정됨)
+   - 이전 isolated config (`.opencode/nexus/config.json`)는 제거됨 — agent별 model override는 `agent.<name>.model`로 직접 지정
 
 3. **Node 런타임 업그레이드**: Node.js >= 22 필요 (`import ... with { type: "json" }` 구문 요구). 이전에 Node 20을 사용 중이면 업그레이드 필수.
 

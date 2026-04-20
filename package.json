@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": false,
   "type": "module",
   "description": "OpenCode plugin wrapper delivering nexus-core shared runtime substrate",

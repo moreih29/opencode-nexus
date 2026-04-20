@@ -30,7 +30,7 @@ bun pm trust opencode-nexus
 
 ## Consumer opencode.json 설정
 
-프로젝트 루트의 `.opencode/opencode.json` (또는 `opencode.json`)에 다음 전체를 추가:
+프로젝트 루트의 `opencode.json`(또는 `.opencode/opencode.json`)에 아래 minimal config를 추가합니다:
 
 ```json
 {
@@ -38,27 +38,20 @@ bun pm trust opencode-nexus
   "mcp": {
     "nx": { "type": "local", "command": ["nexus-mcp"] }
   },
-  "agents": [
-    { "id": "lead", "module": "./node_modules/opencode-nexus/src/agents/lead.ts" },
-    { "id": "architect", "module": "./node_modules/opencode-nexus/src/agents/architect.ts" },
-    { "id": "designer", "module": "./node_modules/opencode-nexus/src/agents/designer.ts" },
-    { "id": "engineer", "module": "./node_modules/opencode-nexus/src/agents/engineer.ts" },
-    { "id": "postdoc", "module": "./node_modules/opencode-nexus/src/agents/postdoc.ts" },
-    { "id": "strategist", "module": "./node_modules/opencode-nexus/src/agents/strategist.ts" },
-    { "id": "researcher", "module": "./node_modules/opencode-nexus/src/agents/researcher.ts" },
-    { "id": "reviewer", "module": "./node_modules/opencode-nexus/src/agents/reviewer.ts" },
-    { "id": "tester", "module": "./node_modules/opencode-nexus/src/agents/tester.ts" },
-    { "id": "writer", "module": "./node_modules/opencode-nexus/src/agents/writer.ts" }
-  ]
+  "default_agent": "lead"
 }
 ```
 
 ### 설정 포인트
 
 - **`mcp` 키** (not `mcp_servers`) — opencode config schema 요구사항. `type: "local"` + `command` 배열 형태.
-- **`agents` 배열은 필수** — `plugin: ["opencode-nexus"]` 등록만으로는 Nexus 에이전트가 opencode에 자동 등록되지 않습니다. 10개 에이전트를 명시적으로 지정해야 `opencode agent list`에 표시됩니다.
-- **Module 경로**: `node_modules/opencode-nexus/src/agents/<name>.ts` — opencode가 TypeScript를 직접 로드합니다.
-- **참고용 fragment**: `node_modules/opencode-nexus/opencode.json.fragment`에 agent 배열 ref 버전이 있습니다. 위 구성은 consumer 기준 경로로 교정됐으므로 그대로 복붙 가능합니다.
+- **`plugin: ["opencode-nexus"]`만으로 10 agents 자동 등록됩니다** — `agent` 섹션을 명시할 필요 없음. 필요 시 모델/권한 override 용도로만 선언.
+- **`default_agent: "lead"`** — Nexus orchestration의 primary agent 지정.
+- user-scope(`~/.config/opencode/opencode.json`)와 project-scope(`./opencode.json`) 양쪽에 설정 가능하며 opencode가 자동 merge합니다.
+
+### v0.11.0 예고
+
+v0.11.0에서는 `bunx opencode-nexus install --scope=project|user|both` CLI로 이 설정을 자동화합니다. 현재는 수동 편집이 필요합니다.
 
 ## Entrypoints
 
