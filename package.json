@@ -31,7 +31,8 @@
   },
   "files": [
     "src",
-    ".opencode/skills/deploy"
+    ".opencode/skills",
+    "scripts/postinstall.mjs"
   ],
   "publishConfig": {
     "access": "public"
@@ -44,7 +45,8 @@
     "build": "bun run sync && tsc --noEmit",
     "check": "bun run sync:dry && tsc --noEmit",
     "test:e2e": "bun scripts/e2e-nexus-integration.mjs",
-    "prepack": "bun run sync:strict"
+    "prepack": "bun run sync:strict",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "@moreih29/nexus-core": "^0.15.1",
