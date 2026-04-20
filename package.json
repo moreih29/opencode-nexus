@@ -47,7 +47,7 @@
     "prepack": "bun run sync:strict"
   },
   "dependencies": {
-    "@moreih29/nexus-core": "^0.15.0",
+    "@moreih29/nexus-core": "^0.15.1",
     "@opencode-ai/plugin": "1.4.7"
   },
   "devDependencies": {
