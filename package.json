@@ -1,9 +1,9 @@
 {
   "name": "opencode-nexus",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "private": false,
   "type": "module",
-  "description": "Nexus orchestration plugin for OpenCode",
+  "description": "OpenCode plugin wrapper delivering nexus-core shared runtime substrate",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,45 +17,41 @@
     "opencode",
     "plugin",
     "nexus",
+    "nexus-core",
     "agents",
     "orchestration"
   ],
   "packageManager": "bun@1.3.9",
-  "main": "dist/index.js",
-  "bin": {
-    "opencode-nexus": "./dist/cli.js"
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./src/plugin.ts",
+  "exports": {
+    ".": "./src/plugin.ts"
   },
   "files": [
-    "dist",
-    "templates"
+    "src",
+    ".opencode/skills/deploy"
   ],
-  "exports": {
-    ".": {
-      "import": "./dist/index.js"
-    }
-  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "generate:prompts": "node scripts/generate-from-nexus-core.mjs",
-    "build": "rm -rf dist && bun run generate:prompts && tsc -p tsconfig.json",
-    "check": "bun run generate:prompts && tsc -p tsconfig.json --noEmit",
-    "generate:template": "bun run build && bun scripts/generate-template.mjs",
-    "validate:conformance": "node scripts/validate-conformance.mjs",
-    "test:e2e": "bun run build && bun run validate:conformance && bun scripts/e2e-smoke.mjs && bun scripts/e2e-guardrails.mjs && bun scripts/e2e-system-transform.mjs && bun scripts/e2e-hook-notices.mjs && bun scripts/e2e-context.mjs && bun scripts/e2e-init-sync.mjs && bun scripts/e2e-setup-template.mjs && bun scripts/e2e-lifecycle.mjs && bun scripts/e2e-memory-access-observation.mjs && bun scripts/e2e-session-cleanup.mjs && bun scripts/e2e-qa-trigger.mjs && bun scripts/e2e-pipeline-evaluator.mjs && bun scripts/e2e-stop-guard.mjs && bun scripts/e2e-team-policy.mjs && bun scripts/e2e-task-after-owner-warning.mjs && bun scripts/e2e-tool-log-attribution.mjs && bun scripts/e2e-agent-tracker-reset.mjs && bun scripts/e2e-delegation.mjs && bun scripts/e2e-agent-tracker-core.mjs && bun scripts/e2e-orchestration-core-persistence.mjs && bun scripts/e2e-run-continuity-core.mjs && bun scripts/e2e-run-continuity-persistence.mjs && bun scripts/e2e-plan-continuity-core.mjs && bun scripts/e2e-plan-start-defaults.mjs && bun scripts/e2e-code-intel.mjs && bun scripts/e2e-prompts-generated.mjs && bun scripts/e2e-capability-coverage.mjs && bun scripts/e2e-conformance.mjs && bun scripts/e2e-loader-smoke.mjs && bun scripts/e2e-system-transform-plan-skill.mjs && bun scripts/e2e-entrypoint-skills.mjs && bun scripts/e2e-subagent-prompts.mjs && bun scripts/e2e-tag-handlers.mjs && bun scripts/e2e-plan-resume-inject.mjs && bun scripts/e2e-isolated-config.mjs && bun scripts/e2e-migrate.mjs && bun scripts/e2e-cli-setup.mjs",
-    "prepack": "bun run generate:template"
+    "sync": "bunx @moreih29/nexus-core sync --harness=opencode --target=./",
+    "sync:dry": "bunx @moreih29/nexus-core sync --harness=opencode --target=./ --dry-run",
+    "sync:strict": "bunx @moreih29/nexus-core sync --harness=opencode --target=./ --strict",
+    "validate": "bunx @moreih29/nexus-core validate",
+    "build": "bun run sync && tsc --noEmit",
+    "check": "bun run sync:dry && tsc --noEmit",
+    "test:e2e": "bun scripts/e2e-nexus-integration.mjs",
+    "prepack": "bun run sync:strict"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0",
-    "@ast-grep/napi": "^0.42.0",
-    "@opencode-ai/plugin": "1.4.7",
-    "zod": "^3.23.8"
+    "@moreih29/nexus-core": "^0.15.0",
+    "@opencode-ai/plugin": "1.4.7"
   },
   "devDependencies": {
-    "@moreih29/nexus-core": "^0.12.0",
     "@types/node": "^22.10.1",
-    "typescript": "^5.6.3",
-    "yaml": "^2.7.0"
+    "typescript": "^5.6.3"
   }
 }
