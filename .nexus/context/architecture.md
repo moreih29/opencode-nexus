@@ -206,3 +206,32 @@ nexus-mcp는 14+ 개의 canonical 도구를 제공한다:
 - 워크플로우: `nx_init`, `nx_sync`
 
 **Upstream reference**: `docs/contract/harness-io.md §4-2` (nexus-core 0.15.1)
+
+---
+
+## 6. Consumer surface (v0.11.0+)
+
+### CLI binary
+
+`opencode-nexus` binary (`bin/opencode-nexus.mjs`)는 consumer의 **canonical installer/mutator**입니다.
+
+| 역할 | 구성 요소 |
+|---|---|
+| Mechanical installer | CLI (bin/opencode-nexus.mjs) — file mutation, atomic writes, backups, doctor |
+| Cognitive wizard | nx-setup skill — model/provider recommendation, post-install refinement |
+
+두 표면은 역할이 다륩니다:
+- **CLI**: 파일시스템 변경, config 병합, skills 복사, 진단 (opencode 없이도 동작)
+- **nx-setup skill**: OpenCode 세션 낮부에서 model/provider 설정 등 refinement 수행
+
+CLI 엔진 구성:
+- `lib/install-spec.mjs` — wrapper-local canonical 상수 (plugin name, mcp config, default_agent, skills list). 향후 nexus-core 공식 export로 교체 가능한 얇은 경계.
+- `lib/config-merge.mjs` — path-scoped patch engine (preserve-first, patch-empty idempotency, sibling backups, atomic write)
+- `lib/skills-copy.mjs` — preserve-first skill manager (scope-aware, --purge gate)
+- `lib/doctor.mjs` — state diagnostics (fresh/complete/partial/orphan classification, --fix non-destructive)
+- `bin/opencode-nexus.mjs` — argv dispatch, TTY interactive, exit codes 0/1/2/3
+
+### Bootstrap journey
+
+1. **CLI 설치** (`bunx opencode-nexus install`) — opencode 실행 없이 mechanical setup 완료
+2. **(선택) nx-setup refinement** — OpenCode 실행 후 `skill({ name: "nx-setup" })`로 cognitive refinement

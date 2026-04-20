@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "private": false,
   "type": "module",
   "description": "OpenCode plugin wrapper delivering nexus-core shared runtime substrate",
@@ -19,7 +19,8 @@
     "nexus",
     "nexus-core",
     "agents",
-    "orchestration"
+    "orchestration",
+    "cli"
   ],
   "packageManager": "bun@1.3.9",
   "engines": {
@@ -29,8 +30,13 @@
   "exports": {
     ".": "./src/plugin.ts"
   },
+  "bin": {
+    "opencode-nexus": "./bin/opencode-nexus.mjs"
+  },
   "files": [
     "src",
+    "lib",
+    "bin",
     ".opencode/skills",
     "scripts/postinstall.mjs"
   ],
@@ -45,6 +51,7 @@
     "build": "bun run sync && tsc --noEmit",
     "check": "bun run sync:dry && tsc --noEmit",
     "test:e2e": "bun scripts/e2e-nexus-integration.mjs",
+    "test:cli": "bun scripts/e2e-cli.mjs",
     "prepack": "bun run sync:strict",
     "postinstall": "node scripts/postinstall.mjs"
   },

@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.11.0] — 2026-04-20
+
+### Added
+
+- **`opencode-nexus` CLI binary** — canonical installer/mutator for OpenCode config and skills:
+  - `install [--scope=user|project|both] [--yes] [--dry-run] [--force] [--skills=...] [--normalize]`
+  - `uninstall [--scope=user|project|both] [--yes] [--purge]`
+  - `doctor [--scope=user|project|both] [--json] [--fix]`
+- **Scope model**: `user` (~/.config/opencode), `project` (./opencode.json), `both` (ownership split — user owns plugin+mcp, project owns default_agent+skills)
+- **Intelligent merge engine** (lib/config-merge.mjs):
+  - Path-scoped patching — only managed keys (`plugin`, `mcp.nx`, `default_agent`, `$schema`) touched; consumer-owned fields (`agent`, `instructions`, `permission`, other `mcp.*`, other `plugin` entries) preserved
+  - Preserve-first plugin handling — bare/pinned duplicates warned, auto-collapse only with `--normalize`
+  - Patch-empty ⇒ no-op (no backup, no write)
+  - Sibling timestamped backups (`.backup-YYYYMMDD-HHMMSS`), keep last 5
+  - Atomic temp+rename writes
+  - JSON strict only, JSONC detection with fail-safe error (no silent comment stripping)
+  - Formatting preserve (indent 2/4 detection, trailing newline)
+- **Doctor diagnostics** (lib/doctor.mjs):
+  - State classification: fresh / complete / partial_config / partial_skills / orphan_* / jsonc_error
+  - Per-scope checks: plugin entry, mcp.nx canonical, default_agent, skills installed, modified detection, backup accumulation, agent.lead declaration advisory
+  - `--fix`: non-destructive normalize (plugin dedup collapse, empty container cleanup)
+  - `--json`: machine-readable output
+- **Skills management** (lib/skills-copy.mjs):
+  - Preserve-first install (existing files skipped, `--force` to overwrite)
+  - `--purge` opt-in on uninstall (default: preserve)
+  - SKILLS_TO_COPY whitelist ensures user-authored skills never deleted
+- **E2E regression suite** (scripts/e2e-cli.mjs): 15 blocks covering install/uninstall/doctor × scope × edge cases (preserve-first, duplicate plugin, dry-run, backup rotation, atomic write, JSONC, postinstall silence)
+- `bin` field in package.json
+- `test:cli` script
+
+### Changed
+
+- **postinstall role minimized** — no filesystem mutation. Prints hint message pointing to `bunx opencode-nexus install`. Self-install guard preserved.
+- **README restructured** — CLI-first Quick Install as primary path; scope ownership table; package-manager matrix (bun/npm/pnpm/yarn)
+- **Bun trust reframed** — no longer a prerequisite for setup; CLI works without trust. trust only affects whether postinstall hint runs.
+- **nx-setup role redefined** — CLI handles bootstrap (mechanical install); nx-setup remains as post-install configuration wizard (cognitive refinement)
+
+### Removed
+
+- **`opencode.json.fragment` dependency** — CLI does not read the fragment; install spec is wrapper-local hardcoded (future migration to nexus-core official export when available). Aligns with upstream nexus-core#43 (fragment deprecate discussion).
+- Previous postinstall-driven skills copy flow (superseded by CLI)
+
+### BREAKING (v0.11.0, pre-1.0 minor)
+
+Pre-1.0 semver permits breaking changes in minor bumps, but consumers should be aware:
+
+- **Postinstall no longer copies skills automatically** — even with Bun `pm trust`. Run `bunx opencode-nexus install --scope=project` after package install.
+- **Manual opencode.json edit no longer needed** — CLI handles it. If you previously edited manually, existing keys are preserved; re-run `install` to add any missing Nexus-managed keys.
+- **CLI is the canonical mutator** — direct file edits or scripted patches should be replaced with `install` / `uninstall` to maintain idempotency and backup guarantees.
+
+See [MIGRATION.md](./MIGRATION.md) for step-by-step guidance across 4 common scenarios.
+
+### Upstream
+
+- nexus-core#43 (opencode.json.fragment deprecate) — CLI design intentionally fragment-independent to support Option A.
+
+---
+
 ## [0.10.1] — 2026-04-20
 
 ### Fixed
