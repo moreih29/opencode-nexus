@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+// opencode-nexus postinstall — minimal hint role.
+// Design: plan #58 Issue #3 decision.
+//
+// This script does NOT mutate the consumer filesystem. The CLI
+// (`bunx opencode-nexus install`) is the canonical install authority.
+// Package-manager policies (Bun trust, pnpm/yarn berry script settings)
+// make postinstall an unreliable mutation vehicle, so we print setup
+// guidance here and defer all file changes to the explicit CLI command.
+//
+// Self-install guard is preserved so running `bun install` inside this
+// repo during development does not emit the consumer hint.
 
-const SKILLS_TO_COPY = ["nx-init", "nx-plan", "nx-run", "nx-sync"];
-
-function log(level, message) {
-  console.log(`[opencode-nexus postinstall] ${level}: ${message}`);
-}
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const consumerCwd = process.env.INIT_CWD;
 
 if (!consumerCwd) {
-  log("skip", "INIT_CWD not set (direct invocation), skipping");
+  // Direct invocation (not via package-manager lifecycle) — stay silent.
   process.exit(0);
 }
 
@@ -22,52 +27,29 @@ try {
   if (existsSync(consumerPkgPath)) {
     const consumerPkg = JSON.parse(readFileSync(consumerPkgPath, "utf-8"));
     if (consumerPkg.name === "opencode-nexus") {
-      log("skip", "self-install detected (consumer package name is opencode-nexus), skipping");
+      // Self-install detected (developing in opencode-nexus repo).
       process.exit(0);
     }
   }
-} catch (error) {
-  log("warn", `failed to evaluate self-install guard: ${error instanceof Error ? error.message : String(error)}`);
+} catch {
+  // If package.json is unreadable, fall through to guidance — never fail install.
 }
 
-const opencodeDir = join(consumerCwd, ".opencode");
-if (!existsSync(opencodeDir)) {
-  log("warn", `consumer is missing .opencode directory (${consumerCwd}); skipping skill copy`);
-  process.exit(0);
-}
+console.log(`
+[opencode-nexus] Package installed. Setup is NOT automatic.
 
-const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skillSrcBase = join(pluginRoot, ".opencode", "skills");
-const skillDstBase = join(opencodeDir, "skills");
+Complete setup with the canonical CLI:
 
-let copied = 0;
-let skippedExisting = 0;
-let skippedMissingSource = 0;
+  bunx opencode-nexus install --scope=project
+  # or --scope=user  (machine-global)
+  # or --scope=both  (split: user gets plugin+mcp, project gets default_agent+skills)
 
-for (const skillName of SKILLS_TO_COPY) {
-  const srcFile = join(skillSrcBase, skillName, "SKILL.md");
-  const dstDir = join(skillDstBase, skillName);
-  const dstFile = join(dstDir, "SKILL.md");
+Other entrypoints:
+  opencode-nexus doctor     # diagnose install state
+  opencode-nexus uninstall  # remove managed config/skills
+  opencode-nexus --help     # full CLI reference
 
-  if (!existsSync(srcFile)) {
-    skippedMissingSource += 1;
-    log("warn", `source missing for ${skillName}: ${srcFile}`);
-    continue;
-  }
+See README for details. This script never writes to your filesystem.
+`);
 
-  if (existsSync(dstFile)) {
-    skippedExisting += 1;
-    log("skip", `destination exists for ${skillName}, preserving user file`);
-    continue;
-  }
-
-  mkdirSync(dstDir, { recursive: true });
-  copyFileSync(srcFile, dstFile);
-  copied += 1;
-  log("copy", `${skillName} -> ${dstFile}`);
-}
-
-log(
-  "done",
-  `copied=${copied}, skipped_existing=${skippedExisting}, skipped_missing_source=${skippedMissingSource}, target=${skillDstBase}`,
-);
+process.exit(0);
