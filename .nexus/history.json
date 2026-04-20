@@ -9728,6 +9728,342 @@
           "Wire isolated config loading and injection in plugin entry."
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-20T08:56:11.872Z",
+      "branch": "main",
+      "plan": {
+        "id": 58,
+        "topic": "opencode-nexus CLI (v0.11.0): project/user scope installer",
+        "issues": [
+          {
+            "id": 1,
+            "title": "CLI command surface & scope model (user/project/both 의미, install/uninstall/doctor/status/migrate 범위)",
+            "status": "decided",
+            "decision": "Option C (install/uninstall/doctor) 채택. Scope = user|project|both. Non-interactive 기본 scope = project (글로벌 side effect 최소화). `both` = ownership split (user: plugin+mcp.nx 공통, project: default_agent+skills 로컬; 중복 쓰기 금지). Skills 기본 위치 (both 모드) = project. user-scope default_agent = opt-in/confirm 필요. status/migrate는 v0.12+ 연기 (doctor --json으로 임시 대체). update/sync는 CLI scope에서 제외. Primary happy path = `bun add -d opencode-nexus && bunx opencode-nexus install` (2-step). `bunx` 단독 실행은 bin resolution 검증 전까지 2순위 경로로 문서화.",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "Option C 권장 (approved with conditions). 2 conditions: both=ownership split not duplicate write / bunx standalone not primary happy path. Defer status/migrate to v0.12+. status는 doctor --json으로 초기 대체 가능. user/project scope ownership 분담으로 중복 방지. Warnings: package.json bin 부재, README schema mismatch, postinstall opacity. Unresolved risks: ephemeral install durability, nexus-mcp path resolution, user-scope default_agent policy."
+            }
+          },
+          {
+            "id": 2,
+            "title": "opencode.json merge algorithm (deep merge 규칙, dedup, backup, dry-run, idempotency)",
+            "status": "decided",
+            "decision": "Option A 전면 수용. 원칙: (1) Path-scoped patching — generic deep merge 금지, nexus-managed path(`plugin`, `mcp.nx`, project-scope `default_agent`, `$schema`)만 조작. (2) Idempotency = patch-empty ⇒ no-op (option γ, 별도 marker 파일 없음). (3) Plugin dedup = preserve-first, 중복(bare+pinned) 발견 시 warn only, auto-collapse는 `--normalize` 또는 `doctor --fix`에서만. (4) Install 시 pinned 버전 preserve (unpin 금지). (5) Backup = sibling timestamp `.backup-YYYYMMDD-HHMMSS`, 최근 5개 유지. Uninstall은 auto-restore 안함. (6) Atomicity = temp 파일 + atomic rename, per-file 트랜잭션 (both 모드도 독립). (7) JSON strict only, JSONC 감지 시 fail-safe. (8) Formatting preserve (indent/newline/top-level key order). (9) Consumer-owned 필드(agent, instructions, permission, mcp.* except nx, 다른 plugin entries) 절대 touch 금지. Uninstall: Nexus-managed 키만 제거, 제거 후 empty container(`mcp`, `plugin`)는 삭제. Skills는 preserve, `--purge`로만 제거. default_agent 제거는 current value가 \"lead\"이고 project scope 대상일 때만. Unresolved answers: Q1=plugin user-scope only in both mode (Issue #1 일치), Q2=doctor warn (agent.lead 미존재시), Q3=JSONC fail-safe, Q4=sibling backup.",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "Option A (path-scoped patching + preserve-first + patch-empty idempotency) approved with 3 conditions: (1) path-scoped patching not generic merge, (2) preserve-first plugin handling, (3) no unsupported JSONC rewriting. Risks mitigated: generic merge overwrite / auto-dedup destruction / uninstall user intent violation / formatting churn / write interruption / backup clobber / JSONC coercion / both-mode partial failure. 8 design items analyzed, 27+ edge cases cataloged, 8 data-loss scenarios with mitigations. Warnings: harness-io.md OpenCode fragment 계약 stale vs measured schema; destructive auto-normalize discouraged by default."
+            }
+          },
+          {
+            "id": 3,
+            "title": "postinstall.mjs ↔ CLI 책임 분담 (Bun trust 정책 고려, consumer UX 모델)",
+            "status": "decided",
+            "decision": "postinstall = **minimal role**. 역할 정의: (a) consumer filesystem mutation 금지 (skills copy, config merge 모두 CLI로 이동). (b) 안내 메시지 출력만: \"Setup requires explicit CLI: `bunx opencode-nexus install --scope=project|user|both`\". (c) self-install guard는 유지. 근거: Bun trust 정책 + npm/pnpm/yarn 차이 때문에 postinstall 기반 setup은 비결정적. CLI가 유일한 mutation authority여야 일관된 UX 보장. Bun trust는 optional convenience path로만 취급 (setup prerequisite 아님). Idempotency: postinstall 무상태 → CLI 내부 idempotency(patch-empty rule + skill preserve-first)만 책임. Uninstall 비대칭 해결: npm/bun 등 package manager uninstall은 lifecycle 보장 없으므로 authoritative cleanup은 `opencode-nexus uninstall`, package만 제거된 경우는 `doctor`가 orphan/partial state 탐지. Release 전 검증 조건: (1) README/doctor/help가 explicit install을 1급 경로로 안내, (2) CLI가 trust 없이도 실행 가능한지 확인, (3) doctor에 orphan/partial-state 탐지 포함.",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "postinstall=minimal 권장 (approved with conditions). 4옵션 비교 (zero/minimal/convenience/full)에서 convenience는 PM 정책 차이로 비일관, full은 hidden mutation으로 위험. Bun trust는 'postinstall 허용만' 바꾸는 옵션, '설치 완료 조건'이 되면 안됨. 3 UX 시나리오에서 explicit CLI install이 항상 primary path여야 함. Warnings: postinstall과 CLI ownership 겹치는 conflict, PM 정책 차이로 설치 비일관, npm uninstall lifecycle 부재로 orphan cleanup 자동화 불가."
+            }
+          },
+          {
+            "id": 4,
+            "title": "nx-setup skill과의 관계 (중복, 보완, 통합 방향)",
+            "status": "decided",
+            "decision": "**Target model = Option W (책임 분리), Migration path = Option Y (skill → CLI wrapper).** 역할 정의: (a) **CLI = mechanical installer/mutator/doctor/uninstall/bootstrap** — canonical file mutation authority, OpenCode 비의존 실행 가능. (b) **nx-setup skill = cognitive configuration wizard** — provider-aware 모델 추천, 대화형 UX, post-install tuning, project knowledge orchestration. Skill이 직접 파일 mutate 금지, 필요 시 내부적으로 CLI 엔진 호출. Bootstrap journey: 1) outside OpenCode → `bunx opencode-nexus install --scope=...`, 2) inside OpenCode → nx-setup skill (optional refinement). `nx_setup` MCP tool은 nexus-core가 아니라 **opencode-nexus 영역**으로 책임 배치 (파일 mutation은 harness-specific). 필요 시 CLI 로직을 내부 라이브러리로 추출해 skill adapter와 공유. 승인 조건: (1) skill은 독립 mutator contract 포기, (2) nx_setup 구현 시 opencode-nexus thin adapter only, (3) bootstrap 문서에서 CLI-first/skill-second 명확화, (4) stale 문서(orchestration.md nx-setup 제거 서술, aspirational nx_setup backend) 정리. v0.11.0 scope 내 액션: CLI 구현 + nx-setup skill 문구 조정(독립 mutation 주장 제거), 실제 skill 내부 CLI 호출 구현은 v0.12+ 연기 가능.",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "Option W target + Option Y migration path 권장 (approved with conditions). 4 options 중 X=이중 drift 위험, Z=사용자 workflow 파소, Y=transitional, W=장기 최적. nx_setup backend는 nexus-core에 부재 (aspirational) → opencode-nexus 영역으로 배치 권장 (mutation authority + harness-specific). Bootstrap chicken-and-egg는 CLI-first로 해결. 4 conditions 부합: skill mutator 포기, nx_setup opencode-nexus thin adapter, CLI-first 문서, stale doc 정리. Stale doc: .nexus/context/orchestration.md:63 nx-setup 제거 서술."
+            }
+          },
+          {
+            "id": 5,
+            "title": "Distribution, release scope & #43 decoupling (bin entry, v0.10.1 doc patch 흡수, fragment 의존성)",
+            "status": "decided",
+            "decision": "**Distribution**: bin entry = **β (`bin/opencode-nexus.mjs`)** — Node shebang ESM, 현재 `\"type\": \"module\"`과 정합, build pipeline 불필요, bunx/pnpm dlx/yarn dlx 모두 bin 필드로 동작. 내부 로직은 `lib/*.mjs` helper로 분리. plugin runtime은 현재처럼 TS (`src/plugin.ts`), CLI runtime은 JS ESM, `dist/` 없음. **Package manager matrix**: npm/bun/pnpm/yarn classic/yarn berry 모두 지원, primary docs는 repo-local (`npx|bunx|pnpm dlx|yarn dlx opencode-nexus install`), global -g는 보조 경로. **Doc patch 전략 = P3**: v0.10.1(doc-only)로 README/CHANGELOG의 agents/module 잘못된 예시 즉시 수정 후, v0.11.0에서 CLI 중심으로 재작성. **#43 decoupling**: CLI는 fragment를 절대 읽지 않음. 입력=consumer existing config + package-bundled skills + wrapper-local install spec. #43 Option A/B/C 어느 결과든 CLI 영향 최소. **Canonical spec source = I (wrapper-local hardcode)**: package name `opencode-nexus`, `default_agent: \"lead\"`, `mcp.nx: {type: \"local\", command: [\"nexus-mcp\"]}`만 CLI 내부에 hardcode. agent 목록/module 경로/fragment 구조는 hardcode 비대상. 향후 nexus-core가 공식 export 제공 시 I→II 교체 가능하도록 install-spec 상수를 얇은 경계로 분리. **Release cadence**: v0.10.1 (doc patch only) → v0.11.0 (CLI MVP). **v0.11.0 MVP 포함**: install/uninstall/doctor, --scope=user|project|both, path-scoped patching, preserve-first, patch-empty idempotency, sibling backups, atomic write, minimal postinstall. **v0.11.0 제외**: fragment merge, agent/module-path generation, nexus-core dynamic spec ingestion, nx-setup 통합. **Versioning**: v0.11.0 = breaking-in-practice minor (0.x 허용). CHANGELOG BREAKING 섹션 필수 (postinstall 축소, CLI canonical mutator, migration guide 포함). **Migration guide** 필요 (0.10.x → 0.11.0): fresh install / already manually configured / Bun postinstall trust 의존 / 잘못된 agent array 제거.",
+            "how_agents": [
+              "architect"
+            ],
+            "how_summary": {
+              "architect": "bin=β, dist=plain ESM JS, doc patch=P3, #43 decoupling=fragment-independent, spec=I hardcode, v0.10.1→v0.11.0, breaking-in-practice 만ifest. approved with conditions. 기존 published 문서 오류 경고(README.md:31-61, CHANGELOG.md:19-42), fragment-based design 아키텍처 stale(harness-io.md:143-159). v0.10.1 doc-only 즉시 필요 (현재 사용자 피해 진행 중). v0.11.0 exclude: fragment merge / agent-module generation / core dynamic ingestion / nx-setup integration. Migration guide: fresh · manual · trust-dependent · broken-array cases."
+            }
+          }
+        ],
+        "research_summary": "\nGoal: v0.10.0 dogfood 실패(agents 배열 오타 UX)를 근본 해결하기 위해 `opencode-nexus` CLI 도입. 사용자가 scope(user/project) 선택해 opencode.json + .opencode/skills/ 자동 세팅.\n\nContext scan:\n- harness-io.md §4-2: OpenCode wrapper 책임 4가지 = src/plugin.ts, opencode.json.fragment merge, postinstall skill copy, npm publish. 현재 3/4 미이행(postinstall은 skill copy만, fragment merge·명시적 install UX 없음).\n- 현 postinstall.mjs: INIT_CWD 기반 project scope만 지원. self-install guard 있음. Bun 1.3+ trust 정책으로 consumer 명시적 `bun pm trust opencode-nexus` 필요.\n- ~/.config/opencode/opencode.json 실존(user scope). `plugin: [\"opencode-nexus@0.8.0\"]` 이미 작동 증명됨 — opencode는 user+project scope config merge를 네이티브 지원.\n- nx-setup skill 존재(/Users/kih/.config/opencode/skills/nx-setup/SKILL.md): LLM-driven interactive wizard. `nx_setup` MCP tool을 언급하지만 nexus-core MCP tools 디렉토리에는 setup.ts 없음(aspirational/미구현 가능성).\n- Minimal 작동 config (실측): `{\"plugin\": [\"opencode-nexus\"], \"mcp\": {\"nx\": {\"type\": \"local\", \"command\": [\"nexus-mcp\"]}}, \"default_agent\": \"lead\"}`. agents 배열은 override 전용.\n- README/CHANGELOG v0.10.0: agents 배열 예시가 잘못됨. CLI로 자동화되면 문서 오류 영향 최소화.\n- upstream #43 opencode.json.fragment 이슈 제기됨: 스키마 불일치+tarball 미포함. Option A(deprecate) 권장. CLI가 fragment 없이 동작 가능함을 증명하면 Option A 실증.\n- Bun 1.3+ trust 정책으로 postinstall은 \"동의 후\"만 실행됨 → 명시적 `opencode-nexus install` 커맨드가 UX 투명성에서 유리.\n",
+        "created_at": "2026-04-20T07:19:37.148Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "v0.10.1 doc patch: fix README/CHANGELOG canonical config",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 5,
+          "created_at": "2026-04-20T07:41:37.382Z",
+          "context": "현재 npm에 v0.10.0이 published된 상태인데 README.md:31-61과 CHANGELOG.md:19-42에 잘못된 consumer config 예시(agents 배열 + module 경로)가 포함되어 있음. 이는 opencode canonical schema와 불일치(mcp not mcp_servers, agent 단수+객체, no module 필드)하며 실제로 consumer가 따라하면 `Unrecognized key: \"agents\"` 오류로 opencode 기동 실패. 현재도 피해 발생 중이라 v0.11.0 CLI release 전 doc-only patch로 긴급 교정 필요.",
+          "approach": "README.md와 CHANGELOG.md의 \"Consumer opencode.json 설정\" / v0.10.0 Consumer Action 섹션에서 agents 배열 예시를 제거하고 minimal canonical config(`{\"plugin\": [\"opencode-nexus\"], \"mcp\": {\"nx\": {\"type\": \"local\", \"command\": [\"nexus-mcp\"]}}, \"default_agent\": \"lead\"}`)로 교체. `node_modules/opencode-nexus/opencode.json.fragment` 참고 언급 제거(#43 맥락). \"v0.11.0부터 CLI 자동화 예정\" 브리지 문구 추가. 버전 bump 0.10.0 → 0.10.1, package.json + CHANGELOG 기록.",
+          "acceptance": "README.md에서 agents 배열과 module 경로 예시 완전 제거; minimal canonical config 예시 정확히 반영; CHANGELOG.md v0.10.1 entry 추가 (Fix published OpenCode config examples); package.json version 0.10.1; fragment 참조 언급 제거.",
+          "risk": "Doc-only이므로 기능 회귀 없음. 단, CHANGELOG에서 과거 잘못된 예시가 왜 invalid였는지 명확히 쓰지 않으면 유저 혼란. \"agents 키는 opencode canonical schema에 존재하지 않음\" 명시 필요."
+        },
+        {
+          "id": 2,
+          "title": "Reviewer check: v0.10.1 doc patch accuracy",
+          "status": "completed",
+          "owner": "reviewer",
+          "plan_issue": 5,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-20T07:41:46.988Z",
+          "context": "v0.10.1 doc patch는 published npm에 긴급 배포되므로 canonical config 정확성이 매우 중요. Writer task(T1) 완료 후 reviewer가 factual accuracy + grammar/format 검증.",
+          "approach": "T1 결과 diff 검토. canonical config JSON이 실측된 opencode schema와 일치하는지(mcp/agent/plugin 키, no module), CHANGELOG entry가 breaking nature를 명확히 전달하는지, fragment 언급이 잔존하지 않는지 확인. PASS/FAIL 보고.",
+          "acceptance": "Canonical config에 agents/module 불용어 부재 확인; mcp.nx.command: [\"nexus-mcp\"] 형태 정확; CHANGELOG v0.10.1 entry가 Fix 성격 명시; README bridge 문구 존재; grammar/format PASS."
+        },
+        {
+          "id": 3,
+          "title": "Deploy v0.10.1 to npm (doc patch release)",
+          "status": "completed",
+          "owner": "lead",
+          "plan_issue": 5,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-20T07:41:55.833Z",
+          "context": "Doc patch verified 후 npm publish. Deploy skill 사용. T2 PASS 전제.",
+          "approach": "deploy skill 로드 → version 확인(0.10.1) → release readiness 검증 → commit+tag push → GitHub Actions publish workflow 모니터링 → npm verify. skill에 기록된 §1-11 step 따르기. 자율 실행 (major/breaking 아니면 사용자 확인 불필요).",
+          "acceptance": "npm view opencode-nexus@0.10.1 published 확인; git tag v0.10.1 pushed; GitHub Actions publish workflow GREEN; CHANGELOG published 상태 확인."
+        },
+        {
+          "id": 4,
+          "title": "Create lib/install-spec.mjs: wrapper-local canonical install constants",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 5,
+          "deps": [
+            3
+          ],
+          "created_at": "2026-04-20T07:42:09.446Z",
+          "context": "v0.11.0 CLI는 opencode-nexus-specific canonical spec을 wrapper-local hardcode로 보유 (Issue #5 decision, Option I). 향후 nexus-core가 공식 export 제공 시 I→II 교체 가능하도록 얇은 경계로 분리. 이 파일은 T5/T6/T7의 dependency.",
+          "approach": "새 파일 `lib/install-spec.mjs` 생성. ESM named exports: `PACKAGE_NAME = \"opencode-nexus\"`, `MCP_SERVER_NAME = \"nx\"`, `MCP_SERVER_CONFIG = {type: \"local\", command: [\"nexus-mcp\"]}`, `DEFAULT_AGENT = \"lead\"`, `SCHEMA_URL = \"https://opencode.ai/config.json\"`, `SKILLS_TO_COPY = [\"nx-init\", \"nx-plan\", \"nx-run\", \"nx-sync\"]`, `USER_CONFIG_PATH = \"~/.config/opencode/opencode.json\"`, `PROJECT_CONFIG_PATH = \"./opencode.json\"`, `USER_SKILLS_DIR = \"~/.config/opencode/skills\"`, `PROJECT_SKILLS_DIR = \"./.opencode/skills\"`. 파일 최상단 comment로 \"Wrapper-local install spec. Future: migrate to @moreih29/nexus-core export.\" 명시.",
+          "acceptance": "lib/install-spec.mjs 존재; 위 named export 전부 포함; hardcode scope 제한 (agent 목록/module 경로/fragment 구조 hardcode 하지 않음); 파일 상단 migration intent comment 존재."
+        },
+        {
+          "id": 5,
+          "title": "Create lib/config-merge.mjs: path-scoped opencode.json patch engine",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 2,
+          "deps": [
+            4
+          ],
+          "created_at": "2026-04-20T07:42:26.571Z",
+          "context": "Issue #2 decision: path-scoped patching + preserve-first + patch-empty idempotency. Consumer-owned 필드 절대 touch 금지. Generic deep merge 금지. install/uninstall 공통 엔진.",
+          "approach": "lib/config-merge.mjs에 다음 함수 구현: (a) `readConfig(path)` - strict JSON parse, JSONC 감지 시 throw with actionable message. (b) `computePatch(current, scope, spec, mode)` - install/uninstall에 따라 path-scoped patch 계산. plugin 배열은 preserve-first(logical name match `opencode-nexus` or `opencode-nexus@*`), dedup 경고만, auto-collapse 금지. mcp.nx는 create/update. default_agent는 project scope + absent/lead일 때만 set/remove. $schema absent면 set. agent/instructions/permission/기타 mcp.*/기타 plugin entries 절대 touch 금지. (c) `applyPatch(path, patch)` - 비어있으면 no-op, 비어있지 않으면 sibling backup (.backup-YYYYMMDD-HHMMSS, keep 5) → temp write → atomic rename. formatting preserve (indent/newline/top-level key order 감지). (d) `dryRunDiff(current, patch)` - human summary + semantic JSON diff. both 모드는 caller가 user/project 각각 separate transaction 호출.",
+          "acceptance": "strict JSON parse + JSONC fail-safe 검증; plugin preserve-first (bare/@pinned/duplicate 4가지 edge case 처리); mcp.nx install/uninstall 정확; default_agent scope-aware 처리; consumer-owned 필드 보존 검증; sibling backup 생성 + keep 5 rotation; atomic temp+rename; empty patch = no-op; formatting preserve (indent detection)."
+        },
+        {
+          "id": 6,
+          "title": "Create lib/skills-copy.mjs: preserve-first skill file manager",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 1,
+          "deps": [
+            4
+          ],
+          "created_at": "2026-04-20T07:42:39.491Z",
+          "context": "Issue #1 decision: skills 위치는 scope별 분리 (user=~/.config/opencode/skills, project=./.opencode/skills). both 모드 기본 대상은 project. Issue #3 decision: postinstall은 skills copy 하지 않음, CLI가 canonical.",
+          "approach": "lib/skills-copy.mjs 구현: (a) `resolveSkillSource()` - 패키지 내부 `.opencode/skills/{nx-init,nx-plan,nx-run,nx-sync}/SKILL.md` 경로. import.meta.url 기반. (b) `installSkills(scope, opts)` - user/project/both 분기. project면 `./.opencode/skills/{name}/SKILL.md` 복사, user면 `~/.config/opencode/skills/{name}/SKILL.md`. 대상 디렉토리 없으면 mkdir recursive. 기존 파일 존재 시 preserve-first (skip + log), `--force` 시만 overwrite. (c) `uninstallSkills(scope, opts)` - nexus-managed skill 파일만 제거 (SKILLS_TO_COPY 리스트 기반). `--purge` 없으면 preserve (유저가 편집했을 수 있음), `--purge` 시 삭제. (d) `listInstalledSkills(scope)` - doctor에서 사용, 각 skill의 존재/변경 상태 report. (e) 리턴 타입: `{copied: [...], skipped: [...], removed: [...]}`.",
+          "acceptance": "scope별 올바른 경로 사용; preserve-first 검증 (기존 파일 보존); --force overwrite 동작; --purge flag 동작; uninstall이 SKILLS_TO_COPY만 제거하고 유저 skill 보존; listInstalledSkills 정확한 상태 report."
+        },
+        {
+          "id": 7,
+          "title": "Create lib/doctor.mjs: install state diagnostics",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 1,
+          "deps": [
+            5,
+            6
+          ],
+          "created_at": "2026-04-20T07:42:52.572Z",
+          "context": "Issue #1 decision: doctor 커맨드. Issue #3 decision: orphan/partial-state 탐지 release 전 필수. Issue #2: agent.lead 미존재시 warn.",
+          "approach": "lib/doctor.mjs: (a) `diagnose(scope, opts)` - user/project/both scope 각각에 대해 checks 수행: plugin entry 존재, mcp.nx 정확, default_agent value (project만), skills 파일 존재/stale 감지, agent.lead 선언 없이 default_agent=\"lead\"인 경우 warn, opencode 미설치 환경 감지 (warning), backup 파일 누적(5개 초과) 감지. (b) `--json` flag 지원 → machine-readable. (c) `--fix` flag 지원 → auto-normalize dedup plugin entries, empty container cleanup. (d) Severity: ok / warning / error. 각 check는 {name, severity, message, suggestion}. (e) Orphan detection: skills 파일 존재하지만 config에 plugin 없음 등 partial state.",
+          "acceptance": "scope별 정확한 file/config 확인; plugin+mcp.nx+default_agent 상태 분류 정확; orphan/partial-state 케이스 분류 (skills-only, config-only, both, neither); --json 출력이 유효한 JSON; --fix가 destructive 작업은 하지 않음 (preserve user intent); backup rotation warning."
+        },
+        {
+          "id": 8,
+          "title": "Create bin/opencode-nexus.mjs: CLI argv dispatch + user interaction",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 5,
+          "deps": [
+            5,
+            6,
+            7
+          ],
+          "created_at": "2026-04-20T07:43:09.193Z",
+          "context": "Issue #5 decision: bin=β (bin/opencode-nexus.mjs), plain ESM JS shebang, Node runnable. Issue #1 decision: commands install/uninstall/doctor + scope=user|project|both. Issue #1: TTY interactive 질문, non-interactive --yes flag.",
+          "approach": "bin/opencode-nexus.mjs: (a) shebang `#!/usr/bin/env node`. (b) argv parsing - 경량 직접 구현 (no 외부 deps; Node 22+ 내장 util.parseArgs 사용). (c) commands: `install [--scope=user|project|both] [--yes] [--dry-run] [--force] [--skills=user|project|both]`, `uninstall [--scope=...] [--yes] [--purge]`, `doctor [--scope=...] [--json] [--fix]`. (d) TTY 감지: `process.stdin.isTTY` true + `--yes` 없으면 interactive prompt (readline). non-interactive + no --scope = project 기본. (e) install flow: computePatch → dry-run diff 표시 → confirm(interactive) or --yes → applyPatch → installSkills → 결과 summary 출력. (f) uninstall flow: 대칭 연산, default_agent=lead인지 컨펌 후 제거. (g) doctor flow: diagnose 호출, human/json 출력. (h) error handling: opencode 미설치 warn-only, invalid JSON fail-safe, backup 실패 graceful exit with rollback. (i) help text: 각 command 사용법, examples. (j) exit codes: 0 success / 1 user-error / 2 internal-error / 3 partial-failure(both mode).",
+          "acceptance": "`bunx opencode-nexus --help` 동작; `install --scope=project` minimal path 정상 (dry-run + real); `install --scope=user` 정상; `install --scope=both` ownership split 준수 (user=plugin+mcp, project=default_agent+skills); uninstall 대칭; doctor --json 유효 JSON; TTY interactive vs non-interactive 분기; 중복 실행 idempotent (patch-empty = no-op); exit codes 정확."
+        },
+        {
+          "id": 9,
+          "title": "Shrink scripts/postinstall.mjs to minimal hint role",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 3,
+          "deps": [
+            8
+          ],
+          "created_at": "2026-04-20T07:43:19.052Z",
+          "context": "Issue #3 decision: postinstall = minimal. Skills copy 제거, filesystem mutation 금지, 안내 메시지만 출력. self-install guard 유지.",
+          "approach": "scripts/postinstall.mjs 축소: (a) self-install guard 유지 (INIT_CWD 없거나 package name === opencode-nexus면 silent exit). (b) 기존 skill copy 로직 전부 제거. (c) 안내 메시지 출력: \"opencode-nexus installed. Complete setup with: `bunx opencode-nexus install --scope=project` (or --scope=user/both). See README for details.\" (d) mutation 없음을 coment로 명시.",
+          "acceptance": "파일 mutation 코드 완전 제거; self-install guard 동작; 안내 메시지 문구 정확; Bun trust 환경에서 실행해도 consumer filesystem 변경 없음."
+        },
+        {
+          "id": 10,
+          "title": "Update package.json: bin field + files + version 0.11.0",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 5,
+          "deps": [
+            8,
+            9
+          ],
+          "created_at": "2026-04-20T07:43:27.635Z",
+          "context": "Issue #5 decision: bin=opencode-nexus. files 필드에 bin/ lib/ 추가. v0.11.0으로 version bump.",
+          "approach": "package.json 수정: (a) `\"bin\": {\"opencode-nexus\": \"./bin/opencode-nexus.mjs\"}` 추가. (b) `\"files\"` 배열에 `\"bin\"`, `\"lib\"` 추가. (c) `\"version\": \"0.11.0\"`. (d) scripts에 `\"test:cli\": \"bun scripts/e2e-cli.mjs\"` 추가. (e) 기존 postinstall script는 유지 (축소된 파일 호출).",
+          "acceptance": "bin 필드 정확; files 배열에 bin/lib 포함; version 0.11.0; bunx/npx 실행 경로 보장 (bin 필드가 올바른 파일 가리킴); prepack 동안 bin/lib가 tarball에 포함되는지 검증."
+        },
+        {
+          "id": 11,
+          "title": "Create scripts/e2e-cli.mjs: regression test for all CLI flows",
+          "status": "completed",
+          "owner": "engineer",
+          "plan_issue": 1,
+          "deps": [
+            10
+          ],
+          "created_at": "2026-04-20T07:43:44.143Z",
+          "context": "Tester verification. Issue #1 critical scope validation + Issue #2 merge algorithm correctness + Issue #3 postinstall minimal. Runtime-behavior criteria 다수라 CHECK task 필요.",
+          "approach": "scripts/e2e-cli.mjs: isolated temp dir 기반 regression. Blocks: (B1) install --scope=project fresh: opencode.json이 부재하거나 빈 상태에서 minimal config 생성, skills 복사. (B2) install --scope=project idempotent: 같은 명령 재실행 → patch-empty, no backup, no changes. (B3) install --scope=user fresh + idempotent. (B4) install --scope=both: user=plugin+mcp.nx, project=default_agent+skills, 중복 쓰기 없음. (B5) Preserve-first: 기존 context7 MCP server + custom agent + 다른 plugin 엔트리 → Nexus 엔트리만 추가되고 나머지 보존. (B6) plugin 중복(bare+pinned) 감지 시 warn only, auto-collapse 하지 않음. (B7) Dry-run: 변경 없음 + 정확한 diff 출력. (B8) Uninstall 대칭: plugin/mcp.nx/default_agent 제거, consumer-owned 보존. (B9) Uninstall 후 empty mcp/plugin container 제거. (B10) Backup rotation: 6번 install 시 가장 오래된 백업 삭제. (B11) Atomic write: 임의 실패 시 temp 파일 정리. (B12) Doctor: fresh/installed/partial/orphan 상태 분류 정확. (B13) Doctor --json: 유효 JSON. (B14) JSONC 파일 입력 시 fail-safe error. (B15) Postinstall silent: fixture에서 실행해도 filesystem 변경 없음. Pass/fail aggregate report.",
+          "acceptance": "15 block 모두 PASS; temp dir isolation (실제 ~/.config/opencode 등 건드리지 않음, env var 주입); 실패 시 명확한 진단 메시지; 수행 시간 <60s."
+        },
+        {
+          "id": 12,
+          "title": "Tester: verify CLI acceptance criteria + runtime behavior",
+          "status": "completed",
+          "owner": "tester",
+          "plan_issue": 1,
+          "deps": [
+            11
+          ],
+          "created_at": "2026-04-20T07:43:55.482Z",
+          "context": "T11 e2e suite 실행 + T4-T10 acceptance criteria 수동 verification. Issue #3 release 조건(trust 없이 실행 가능, doctor orphan 탐지) 확인.",
+          "approach": "Tester는 다음 단계를 수행: (a) `bun scripts/e2e-cli.mjs` 실행 → 15 block 결과 확인. (b) 수동 smoke: 실제 임시 디렉토리에서 bunx 실행 (trust 없이 실행 가능 조건 검증). (c) Issue #2 acceptance 검증: path-scoped, preserve-first, patch-empty, backup rotation. (d) Issue #3 acceptance 검증: postinstall 실행해도 consumer 파일 mutation 없음. (e) Doctor orphan detection 정확성. (f) package.json bin 경로가 실제 tarball에 포함되는지 (`npm pack --dry-run`). (g) Severity별 findings 분류 (critical/warning/suggestion/note) + PASS/FAIL 판정.",
+          "acceptance": "e2e 15/15 PASS; trust 없이 CLI 실행 가능 검증 완료; bin 경로 tarball 포함 검증; 0 critical findings; warning 이하만 허용."
+        },
+        {
+          "id": 13,
+          "title": "Rewrite README for v0.11.0: CLI-first bootstrap journey",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 5,
+          "deps": [
+            12
+          ],
+          "created_at": "2026-04-20T07:44:08.649Z",
+          "context": "Issue #5 decision: README v0.11.0 재작성. CLI-first bootstrap, scope 설명, migration from v0.10.x.",
+          "approach": "README.md 전면 재작성: (a) Quick Install 섹션에 `bun add -d opencode-nexus && bunx opencode-nexus install --scope=project` primary path로 제시. npm/pnpm/yarn 등가 문구. (b) Scope 설명: user vs project vs both ownership split 표. (c) Commands: install/uninstall/doctor 사용법 + flags. (d) \"After install: nx-setup skill for post-install refinement\" 섹션 (Issue #4 Option W 반영). (e) Bootstrap journey: outside OpenCode CLI → inside OpenCode nx-setup. (f) Migration from v0.10.x 섹션 링크. (g) Bun trust는 optional convenience로 재정의 (setup prerequisite 아님). (h) Fragment 관련 언급 완전 제거. (i) Development 섹션 유지.",
+          "acceptance": "CLI-first Quick Install 1급 경로; 3 scope 의미 정확 문서화; commands 전체 help 문구 제공; Bun trust 재정의 반영; fragment 참조 0; bootstrap journey 설명 (CLI→skill); migration link."
+        },
+        {
+          "id": 14,
+          "title": "Write CHANGELOG v0.11.0 + MIGRATION.md (0.10.x → 0.11.0)",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 5,
+          "deps": [
+            13
+          ],
+          "created_at": "2026-04-20T07:44:23.363Z",
+          "context": "Issue #5 decision: v0.11.0은 breaking-in-practice minor. CHANGELOG에 BREAKING 섹션 + Migration guide 명시. 4가지 케이스 대응.",
+          "approach": "(a) CHANGELOG.md에 v0.11.0 entry 추가: Added(CLI: install/uninstall/doctor, --scope=user|project|both, path-scoped patching, preserve-first plugin dedup, sibling backups, atomic write, dry-run). Changed(postinstall minimal role, README CLI-first, nx-setup role redefined as post-install wizard). Removed(fragment dependency). BREAKING(postinstall no longer copies skills automatically; CLI is canonical mutator; manual opencode.json edit no longer needed). Migration summary + MIGRATION.md 링크. (b) MIGRATION.md 신규 파일: 4 케이스 (fresh install / previously manual config / Bun postinstall trust 의존 / broken agent-array config). 각 케이스별 step-by-step.",
+          "acceptance": "CHANGELOG v0.11.0 entry 4 sections(Added/Changed/Removed/BREAKING) 완성; MIGRATION.md 4 케이스 커버; CLI 커맨드 예시 정확; 기존 v0.10.1 entry 위에 배치; 파일 header 일관."
+        },
+        {
+          "id": 15,
+          "title": "Update .nexus/context/ for v0.11.0 CLI reality",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 4,
+          "deps": [
+            14
+          ],
+          "created_at": "2026-04-20T07:44:41.817Z",
+          "context": "architect warning: orchestration.md:63 nx-setup 제거 서술이 stale. Issue #4 decision 반영 필요. build-and-release.md에 CLI 추가, architecture.md에 CLI vs skill 분담 추가.",
+          "approach": "(a) .nexus/context/architecture.md: \"Consumer surface\"에 CLI binary (`opencode-nexus install/uninstall/doctor`) 섹션 추가, CLI=mechanical/skill=cognitive 분업 설명. (b) .nexus/context/orchestration.md: nx-setup 제거 서술 수정 → \"nx-setup은 post-install refinement wizard, CLI가 canonical mutator\" 재정의. (c) .nexus/context/build-and-release.md: v0.11.0 release process + CLI e2e test + migration guide 언급. (d) .nexus/context/tools.md: cut 목록 유지(변경 없음), CLI는 nexus-mcp tool과 별개 surface임 명시. (e) .nexus/context/principles.md: 변경 없음.",
+          "acceptance": "architecture.md에 CLI surface 반영; orchestration.md stale nx-setup 서술 제거/수정; build-and-release.md에 v0.11.0 release + e2e CLI test 언급; tools.md CLI vs MCP 구분 명확."
+        },
+        {
+          "id": 16,
+          "title": "Update .nexus/memory/anti-patterns.md: CLI-first, fragment-independent",
+          "status": "completed",
+          "owner": "writer",
+          "plan_issue": 5,
+          "deps": [
+            15
+          ],
+          "created_at": "2026-04-20T07:45:02.293Z",
+          "context": "Issue #5 decision: fragment-independent design. 새 anti-pattern §9.4 \"postinstall로 mutation 금지\" + §9.5 \"fragment를 source of truth로 사용 금지\" 필요.",
+          "approach": ".nexus/memory/anti-patterns.md에 신규 섹션 추가: (a) §9.4 \"postinstall은 mutation authority가 아니다\" — 근거: package manager 정책 차이(Bun trust/pnpm/yarn berry), 비결정성. CLI가 canonical mutator. (b) §9.5 \"opencode.json.fragment를 consumer install source of truth로 사용하지 않는다\" — 근거: #43 문제, canonical schema 불일치, tarball 미포함. Wrapper는 자체 install-spec hardcode 또는 future core official export 사용. (c) §9.3 기존 내용(opencode-specific push 금지)과 정합성 유지.",
+          "acceptance": "§9.4, §9.5 신규 섹션 존재; 각 섹션 \"incorrect/correct 패턴\" + 근거(증거 인용) 포함; 기존 §9.2/9.3과 충돌 없음."
+        },
+        {
+          "id": 17,
+          "title": "Reviewer: verify README/CHANGELOG/MIGRATION/context/anti-patterns v0.11.0",
+          "status": "completed",
+          "owner": "reviewer",
+          "plan_issue": 5,
+          "deps": [
+            16
+          ],
+          "created_at": "2026-04-20T07:45:12.172Z",
+          "context": "T13-T16 writer deliverables 검증. Issue #5 CLI-first 문서, migration guide 정확성. Writer→Reviewer mandatory pairing.",
+          "approach": "각 writer output의 factual accuracy + format/grammar + 기존 문서와의 정합성 검증. (a) README CLI 커맨드가 실제 bin/opencode-nexus.mjs 구현과 일치. (b) CHANGELOG 4 sections 형식, semver 정확. (c) MIGRATION 4 cases 각 step 실행 가능. (d) context/anti-patterns 갱신이 decision과 일치. (e) cross-doc 일관성(README<->CHANGELOG<->MIGRATION). PASS/FAIL 보고.",
+          "acceptance": "0 critical findings; 모든 writer output PASS; cross-doc 일관성 확인; migration guide가 재현 가능한 step 제공."
+        },
+        {
+          "id": 18,
+          "title": "Deploy v0.11.0 to npm (CLI MVP release)",
+          "status": "completed",
+          "owner": "lead",
+          "plan_issue": 5,
+          "deps": [
+            17
+          ],
+          "created_at": "2026-04-20T07:45:22.120Z",
+          "context": "모든 구현/테스트/문서 완료 후 npm publish. Deploy skill로 자율 실행.",
+          "approach": "deploy skill 로드 → version 0.11.0 확인 → release readiness(e2e PASS, reviewer PASS, package pack --dry-run) 검증 → commit + tag v0.11.0 push → GitHub Actions workflow 모니터링 → npm verify → fresh-install smoke(tarball 설치 후 bunx 실행 가능 확인). v0.11.0은 breaking-in-practice이지만 pre-1.0이므로 minor bump 유효, major confirm 불필요.",
+          "acceptance": "npm view opencode-nexus@0.11.0 published; git tag v0.11.0 pushed; GitHub Actions GREEN; fresh-install smoke PASS (bin resolution 검증 포함); CHANGELOG published 확인."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 18,
+        "decisionCount": 5,
+        "cycleTopics": [
+          "opencode-nexus CLI (v0.11.0): project/user scope installer"
+        ]
+      }
     }
   ],
   "schema_version": "0.5"
