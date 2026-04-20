@@ -5,3 +5,4 @@ dist/
 .npmrc
 
 .DS_Store
+opencode-nexus-*.tgz

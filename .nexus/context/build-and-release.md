@@ -9,91 +9,71 @@
 
 ```bash
 bun install
-bun run build       # tsc -p tsconfig.json → dist/
-bun run check       # 타입 검사만, 출력 없음
+bun run sync        # nexus-core sync CLI 실행 (managed paths 생성)
+bun run check       # tsc --noEmit (타입 검사만, 출력 없음)
 ```
 
-TypeScript 소스는 `src/`에 있으며 `dist/`로 컴파일됩니다. 컴파일 대상은 ES2022이고 모듈 형식은 ESNext입니다.
+TypeScript 소스는 `src/`에 있으며 **dist 없이 TS를 직접 로드**한다. 컴파일 대상은 ES2022이고 모듈 형식은 ESNext입니다.
 
 ### Self-hosting 절차
 
-이 저장소 자체를 개발 환경으로 사용할 때, npm 패키지 대신 `.opencode/plugins/opencode-nexus.js`를 통해 로컬 빌드 결과물을 로드합니다. 로컬 플러그인 shim은 `../../dist/index.js`를 참조합니다.
+이 저장소 자체를 개발 환경으로 사용할 때, npm 패키지 대신 로컬 소스를 직접 로드합니다.
 
 ```text
 1. bun install
-2. bun run build
-3. 이 저장소 루트에서 OpenCode 실행
-4. 세션에서 nx_context 또는 nx_setup 같은 Nexus 도구가 보이는지 확인
+2. bun run sync     # managed paths (src/agents/*.ts) 생성
+3. bun run check    # 타입 검사
+4. 이 저장소 루트에서 OpenCode 실행
+5. 세션에서 nx_context 또는 nx_init 같은 Nexus 도구가 보이는지 확인
 ```
 
-소스를 수정할 때마다 OpenCode에서 새 동작을 확인하려면 `bun run build`를 다시 실행해야 합니다.
+소스를 수정할 때마다 `bun run sync`로 managed paths를 재생성해야 한다.
 
 ## 2. 테스트 전략
 
-### E2E 테스트 구조
+### E2E 테스트
 
-모든 테스트는 `scripts/` 디렉토리의 `.mjs` 파일로 구성되며, Node.js 내장 `assert/strict` 모듈을 사용합니다. 각 테스트는 `os.tmpdir()`에 임시 디렉토리와 `.git/HEAD`를 생성해 독립적인 프로젝트 환경을 시뮬레이션합니다. 이후 `dist/`에서 직접 모듈을 임포트해 도구 함수를 호출하고 결과를 단언합니다.
+모든 테스트는 `scripts/` 디렉토리의 `e2e-nexus-integration.mjs` 단일 파일로 구성된다.
+
+| 블록 | 검증 대상 |
+|------|-----------|
+| Block 1 | plan → task → close 전체 흐름 |
+| Block 2 | edit 가드레일 차단 |
+| Block 3 | hook 알림 및 상태 스냅샷 |
+| Block 4 | task cycle 완료 및 nx_sync |
 
 ### 전체 테스트 실행
 
 ```bash
-bun run test:e2e
+bun run test:e2e    # scripts/e2e-nexus-integration.mjs 실행
 ```
 
-이 명령은 먼저 `bun run build`, `bun run validate:conformance`를 실행한 뒤 29개 E2E 스크립트를 순서대로 실행합니다.
-
-| 스크립트 | 검증 대상 |
-|---|---|
-| `e2e-smoke.mjs` | plan → task → close 전체 흐름 |
-| `e2e-guardrails.mjs` | edit 가드레일 차단 |
-| `e2e-system-transform.mjs` | 시스템 프롬프트 변환 |
-| `e2e-hook-notices.mjs` | hook 알림 |
-| `e2e-context.mjs` | nx_context 도구 |
-| `e2e-init-sync.mjs` | init/sync 흐름 |
-| `e2e-setup-template.mjs` | setup 템플릿 |
-| `e2e-lifecycle.mjs` | 전체 라이프사이클 |
-| `e2e-qa-trigger.mjs` | Tester 자동 트리거 |
-| `e2e-pipeline-evaluator.mjs` | 파이프라인 평가 |
-| `e2e-stop-guard.mjs` | stop 가드 |
-| `e2e-team-policy.mjs` | 팀 정책 |
-| `e2e-delegation.mjs` | 위임 흐름 |
-| `e2e-agent-tracker-core.mjs` | 에이전트 트래커 코어 |
-| `e2e-orchestration-core-persistence.mjs` | 오케스트레이션 지속성 |
-| `e2e-run-continuity-core.mjs` | run 연속성 핵심 |
-| `e2e-run-continuity-persistence.mjs` | run 연속성 지속성 |
-| `e2e-plan-continuity-core.mjs` | plan 연속성 핵심 |
-| `e2e-plan-start-defaults.mjs` | plan start 기본값 |
-| `e2e-code-intel.mjs` | code intelligence |
-| `e2e-prompts-generated.mjs` | 프롬프트 parity |
-| `e2e-capability-coverage.mjs` | capability-map 커버리지 |
-| `e2e-conformance.mjs` | 명세 적합성 |
-| `e2e-loader-smoke.mjs` | 로더 스모크 |
-| `e2e-system-transform-plan-skill.mjs` | plan skill 시스템 변환 |
-| `e2e-entrypoint-skills.mjs` | 스킬 엔트리포인트 |
-| `e2e-subagent-prompts.mjs` | 서브에이전트 프롬프트 |
-| `e2e-tag-handlers.mjs` | 태그 핸들러 |
-| `e2e-plan-resume-inject.mjs` | plan resume 주입 |
+**이전 테스트 파일들 제거됨**: v0.10.0에서 29개 개별 E2E 스크립트가 단일 통합 테스트로 대첵되었다.
 
 ## 3. 릴리스 프로세스
 
-### 템플릿 생성
+### 배포 스킬
 
-`generate:template` 스크립트는 `dist/`에서 에이전트 카탈로그, 스킬 카탈로그, 태그 목록을 임포트해 `templates/nexus-section.md`를 생성합니다.
-
-```bash
-bun run generate:template   # bun run build → bun scripts/generate-template.mjs
-```
+`deploy` skill은 opencode-nexus 고유로 유지된다. 자율 릴리스 오케스트레이터가 다음을 수행한다:
+- 다음 안전 버전 결정
+- 릴리스 준비 상태 검증
+- 릴리스 커밋 및 태그 생성
+- GitHub 푸시 및 publish workflow 모니터링
+- npm 게시 확인
 
 ### 패키지 게시 준비
 
 `prepack` 스크립트가 `npm publish` 이전에 자동으로 실행됩니다.
 
 ```bash
-bun run prepack   # generate:template 실행 → dist/ + templates/ 패키지에 포함
+bun run prepack     # sync:strict → deploy skill 실행
 npm publish
 ```
 
-`package.json`의 `files` 필드는 `dist`와 `templates`만 포함합니다.
+`package.json`의 `files` 필드:
+- `src/` — TypeScript 소스 (TS 직접 로드)
+- `scripts/` — postinstall.mjs 등
+- `.opencode/skills/` — nx-* skill 파일들
 
 ### CI/CD (GitHub Actions)
 
@@ -101,33 +81,50 @@ npm publish
 
 CI 순서: `bun install --frozen-lockfile` → `bun run check` → `bun run test:e2e` → `npm pack --dry-run` → `npm publish --provenance --access public`
 
-## 4. 개발 시 주의사항
+## 4. Consumer 설치 흐름
 
-- **이 저장소**: `.opencode/plugins/opencode-nexus.js` (로컬 shim) 사용. `opencode.json`에 `"plugin": ["opencode-nexus"]`를 넣지 않는다.
-- **다른 프로젝트**: `opencode.json`에 `"plugin": ["opencode-nexus"]` 추가.
-- `nx_setup(profile="auto")`는 self-hosting 저장소를 감지해 package plugin 추가를 건너뛴다.
-- 소스 수정 후 반드시 `bun run build` 실행. 핫 리로드 없음.
-- 게시 전 `bun run check`로 타입 오류 확인.
+### 설치
 
-## 5. 설정 스키마 정책
+```bash
+bun add opencode-nexus
+bun pm trust opencode-nexus    # postinstall 스크립트 허용
+```
 
-### 버전 관리
+### opencode.json 수동 구성
+
+```json
+{
+  "plugin": ["opencode-nexus"],
+  "mcp": {
+    "nx": {
+      "type": "local",
+      "command": ["nexus-mcp"]
+    }
+  },
+  "agents": {
+    "lead": {
+      "model": "openai/gpt-5.3-codex"
+    }
+  }
+}
+```
+
+자세한 설치 가이드는 README.md를 참조한다.
+
+## 5. 버전 정책
+
+### 0.x Breaking Change 허용
+
+opencode-nexus는 0.x 버전에서 minor bump로 breaking change를 허용한다.
+
+| 변경 유형 | 버전 정책 | CHANGELOG 요구사항 |
+|-----------|-----------|-------------------|
+| Non-breaking | Patch bump | 변경 내용 기술 |
+| Breaking | Minor bump | **Consumer Action Required** 섹션 필수 |
+
+### 스키마 버전 관리
 
 isolated config는 명시적 스키마 버전(`version` 필드)을 사용합니다.
 
-- **v1** (현재): `agents.<id>.{model, tools}` 지원
+- **v1** (현재): 기본 에이전트/스킬 설정 지원
 - **v2+** (향후): 선택적 필드 추가 가능
-
-### Breaking vs Non-Breaking
-
-| 변경 유형 | 버전 정책 | 예시 |
-|-----------|-----------|------|
-| **Non-breaking** | Minor/Patch bump | v1에 없던 새 필드 추가 (예: `disabled_hooks`, `categories`를 optional top-level로 추가) |
-| **Breaking** | Major bump | 기존 필드 의미 변경, 필수 필드 추가, 기본값 변경 |
-
-### 스키마 확장 규칙
-
-1. **새 필드는 optional**: v1 구현체와의 호환성 유지
-2. **기존 필드는 immutable**: 의미 변경 시 새 필드명 사용
-3. **Unknown 필드 무시**: 파서는 인식하지 못는 필드를 무시하고 로그만 남김
-4. **Migration 가이드 제공**: Major 버전 전환 시 CLI `migrate` 명령 업데이트

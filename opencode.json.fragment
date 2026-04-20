@@ -1,0 +1,44 @@
+{
+  "agents": [
+    {
+      "id": "architect",
+      "module": "./src/agents/architect.js"
+    },
+    {
+      "id": "designer",
+      "module": "./src/agents/designer.js"
+    },
+    {
+      "id": "engineer",
+      "module": "./src/agents/engineer.js"
+    },
+    {
+      "id": "lead",
+      "module": "./src/agents/lead.js"
+    },
+    {
+      "id": "postdoc",
+      "module": "./src/agents/postdoc.js"
+    },
+    {
+      "id": "researcher",
+      "module": "./src/agents/researcher.js"
+    },
+    {
+      "id": "reviewer",
+      "module": "./src/agents/reviewer.js"
+    },
+    {
+      "id": "strategist",
+      "module": "./src/agents/strategist.js"
+    },
+    {
+      "id": "tester",
+      "module": "./src/agents/tester.js"
+    },
+    {
+      "id": "writer",
+      "module": "./src/agents/writer.js"
+    }
+  ]
+}
