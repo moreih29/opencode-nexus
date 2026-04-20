@@ -75,6 +75,38 @@ Phase 1이 2026-04-11에 완료되었다. opencode-nexus는 `@moreih29/nexus-cor
 
 claude-nexus는 Phase 2에서 동일 패키지를 consume하는 방향으로 전환한다. 두 프로젝트는 여전히 sibling 관계이며, `@moreih29/nexus-core`가 canonical source다.
 
+#### v0.15.1 Upgrade + Phase 2 Transition (2026-04-20, `feat/nexus-core-0.13-a1-adoption`)
+
+nexus-core v0.13.0 이후 3 하네스 shared runtime substrate로 스스로를 재정의했고 (MCP server bin, opencode hook mount adapter, nexus-core sync CLI, lead primary agent 도입), v0.15.1에서 모든 published-package 패키징 결함을 해결했다. opencode-nexus는 이 시점에 Phase 2로 전환 — build-time consumer가 아닌 **runtime substrate consumer**로 승격.
+
+주요 변경:
+
+- **dependencies 승격**: devDependencies → dependencies (@moreih29/nexus-core@^0.15.1)
+- **engines.node**: >=20 → >=22 (`import ... with { type: "json" }` 요구)
+- **대규모 로컬 코드 삭제**: 19,755 LOC 제거 (src/tools, src/plugin, src/orchestration, src/pipeline, src/shared 대부분, scripts/e2e-*, scripts/generate-*, capability-map.yml, invocation-map.yml, dist/)
+- **Plugin 진입점 변경**: main: dist/index.js → src/plugin.ts (TS 직접 로드), bin 제거
+- **Sync 파이프라인 도입**: scripts/generate-from-nexus-core.mjs 폐기, bunx @moreih29/nexus-core sync로 교체
+- **Primary agent 교체**: src/agents/primary.ts의 nexus → nexus-core lead (mode: primary)
+- **Postinstall 신설**: scripts/postinstall.mjs — consumer .opencode/skills/에 nx-* 4 skill 복사 (deploy는 opencode-nexus 고유 유지)
+- **CI 신설**: scripts/e2e-nexus-integration.mjs (4 block regression)
+- **Anti-pattern §9.2 교체**: runtime import 금지 → runtime substrate 수용 (`.nexus/memory/anti-patterns.md` 참조)
+
+Phase 모델:
+- Phase 1 (2026-04-11 ~ v0.12.0): 빌드 타임 read-only consumer — prompt/vocabulary 파일 읽기
+- Phase 1.5 (v0.10.0 ~ v0.12.0): harness_mapping/capability 매핑 consumer
+- **Phase 2 (v0.13.0 업스트림 시점부터 opencode-nexus v0.10.0): runtime substrate consumer** — nexus-mcp 별도 프로세스 + mountHooks runtime import + sync-managed paths
+
+### Sibling parity asymmetry
+
+2026-04-20 기준 claude-nexus는 ^0.12.0 잔류 + 자체 pipeline 유지 중. opencode-nexus가 nexus-core 0.13+ **first runtime substrate consumer**로서 Phase 2에 단독 진입. 이는 의도된 비대칭이며 bidirectional flip 모델상 허용 범위. claude-nexus가 후속 시점에 Phase 2 채택 여부는 별도 결정.
+
+### 90-day re-evaluation 갱신
+
+기존 90-day 룰은 "누적 변경량 / 소유권" 기준. Phase 2 이후부터는 추가로:
+- nexus-core upstream 파손 이슈 발생 빈도 — 우리가 first adopter로서 impact 경험
+- claude-nexus Phase 2 채택 여부 관측
+- nexus-code 등 3번째 consumer 참여 여부
+
 ---
 
 ## Bidirectional Flow Policy

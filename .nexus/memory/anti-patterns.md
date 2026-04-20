@@ -28,16 +28,26 @@ Agent Client Protocol(ACP) 관련 vocabulary, 태그, 또는 에이전트 정의
 
 ---
 
-## 5. bridge §9.2 runtime 공유 배제 원칙 위반 금지
+## §9.2 nexus-core runtime substrate 수용 (2026-04-20 revoke prior rule)
 
-opencode-nexus와 `@moreih29/nexus-core` 사이의 관계는 **빌드 타임 소비**(prompt 파일, vocabulary 파일 읽기)에 한정된다. 다음 패턴은 §9.2를 위반하므로 금지:
+opencode-nexus는 nexus-core 0.15.1+ 이상이 canonical하게 정의한 runtime substrate surfaces를 수용한다:
 
-- 런타임에 nexus-core를 동적으로 import (`require('@moreih29/nexus-core')`)
-- nexus-core 인스턴스를 opencode-nexus 런타임에 공유
-- 두 패키지가 런타임 상태를 공유하는 구현
-- nexus-core를 `dependency`로 승격 (devDependency 유지가 §8.3 canonical)
+1. **nexus-mcp stdio server** — 별도 프로세스 MCP 서버로 등록. opencode.json의 `mcp.nx = { type: "local", command: ["nexus-mcp"] }` canonical (opencode config schema의 `mcp` 키 사용, `mcp_servers` 아님).
+2. **@moreih29/nexus-core/hooks/opencode-mount** — mountHooks(pluginCtx, manifest) 런타임 import 허용. opencode plugin 번들이 이 모듈을 직접 import.
+3. **@moreih29/nexus-core/mcp** — MCP bin direct spawn 허용.
+4. **nexus-core sync --harness=opencode** — managed paths 수용 (src/agents/*.ts, src/index.ts, .opencode/skills/**, opencode.json.fragment).
 
-**검증**: `scripts/e2e-loader-smoke.mjs`가 컴파일된 `dist/` 번들에서 `@moreih29/nexus-core` 문자열이 비주석 라인에 등장하지 않음을 매 release마다 확인한다.
+**의존성 승격**: @moreih29/nexus-core는 devDependencies에서 dependencies로 승격.
+
+**검증 교체**: scripts/e2e-loader-smoke.mjs 폐기. scripts/e2e-nexus-integration.mjs가 nexus-core runtime integration 검증 (MCP handshake, mountHooks dispatch, sync idempotency, plugin module load).
+
+**원 규칙 (archived)**: 2026-04-11 Phase 1 adoption 시점 "nexus-core = authoring only" 전제에서 작성. nexus-core 0.13.0부터 스스로 shared runtime substrate로 역할을 재정의함에 따라 무효.
+
+---
+
+## §9.3 opencode-specific 로직을 nexus-core에 push 금지 (2026-04-20 추가)
+
+nexus-core는 cross-harness canonical만 담는다. OpenCode 고유 hook, tool, 또는 정책을 nexus-core에 추가하려는 시도는 금지된다. 이러한 로직은 opencode-nexus consumer 레벨에서만 구현하거나, 동일 기능이 2개 이상 harness에서 필요한 경우에만 nexus-core로 추상화를 제안할 수 있다.
 
 ---
 
