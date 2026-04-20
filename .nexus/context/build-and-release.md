@@ -52,6 +52,10 @@ bun run test:e2e    # scripts/e2e-nexus-integration.mjs 실행
 
 ## 3. 릴리스 프로세스
 
+### v0.12.0 타겟: nexus-core v0.16.2 채택
+
+plan #59 결정에 따라 릴리스 타겟 v0.12.0은 `@moreih29/nexus-core ^0.16.2`를 채택한다. 주요 변경: OpenCode fragment 제거, plugin 자동 등록 canonical화, manifest resolves + prompt-router self-contained 검증 추가. Tier A/B 감사 및 e2e 회귀 테스트 PASS.
+
 ### 배포 스킬
 
 `deploy` skill은 opencode-nexus 고유로 유지된다. 자율 릴리스 오케스트레이터가 다음을 수행한다:

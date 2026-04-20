@@ -6,3 +6,6 @@ dist/
 
 .DS_Store
 opencode-nexus-*.tgz
+
+# legacy — removed in v0.16 (plan #59)
+/opencode.json.fragment

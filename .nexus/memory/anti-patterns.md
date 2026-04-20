@@ -35,7 +35,7 @@ opencode-nexus는 nexus-core 0.15.1+ 이상이 canonical하게 정의한 runtime
 1. **nexus-mcp stdio server** — 별도 프로세스 MCP 서버로 등록. opencode.json의 `mcp.nx = { type: "local", command: ["nexus-mcp"] }` canonical (opencode config schema의 `mcp` 키 사용, `mcp_servers` 아님).
 2. **@moreih29/nexus-core/hooks/opencode-mount** — mountHooks(pluginCtx, manifest) 런타임 import 허용. opencode plugin 번들이 이 모듈을 직접 import.
 3. **@moreih29/nexus-core/mcp** — MCP bin direct spawn 허용.
-4. **nexus-core sync --harness=opencode** — managed paths 수용 (src/agents/*.ts, src/index.ts, .opencode/skills/**, opencode.json.fragment).
+4. **nexus-core sync --harness=opencode** — managed paths 수용 (src/agents/*.ts, src/index.ts, .opencode/skills/**).
 
 **의존성 승격**: @moreih29/nexus-core는 devDependencies에서 dependencies로 승격.
 
@@ -126,9 +126,11 @@ console.log("Run: bunx opencode-nexus install --scope=project");
 
 ---
 
-## §9.5 — opencode.json.fragment를 consumer install source of truth로 쓰지 않는다 (v0.11.0 추가)
+## §9.5 — legacy opencode.json.fragment를 consumer install source of truth로 쓰지 않는다 (v0.11.0 추가, v0.16.0 legacy 재맥락화)
 
-**Incorrect pattern**:
+> **Note**: 현재는 이 파일이 nexus-core v0.16.0+ 에서 더 이상 생성되지 않는다. 아래 원칙은 v0.15.x 이전 버전 호환성 관점에서 유지된다.
+
+**Incorrect pattern** (v0.15.x 이전에서만 존재했던 경로 예시):
 ```javascript
 // CLI or postinstall
 const fragment = JSON.parse(readFileSync(

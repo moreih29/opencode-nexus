@@ -1,55 +1,73 @@
 <!-- NEXUS:START -->
 ## Nexus Agent Orchestration
 
-**OpenCode model** — lead-mediated orchestration with task state, hook guardrails, and coordination labels.
+**Default: DELEGATE** - route code work, analysis, and multi-file changes to agents.
+**OpenCode model** - lead-mediated orchestration with task state, hook guardrails, and coordination labels instead of Claude team objects.
 
-### Lead Agent
+### Agent Routing
 
-OpenCode에서 기본 동작하는 `lead` 에이전트가 Nexus 워크플로를 중재합니다. Lead는 task state, delegation, 최종 보고를 담당합니다.
+Use agents when parallel work or a second specialized perspective is helpful.
 
-### Agent Catalog
+| Name | Category | Task | Agent |
+|---|---|---|---|
+| architect | HOW | Technical design — evaluates How, reviews architecture, advises on implementation approach | architect |
+| designer | HOW | UX/UI design — evaluates user experience, interaction patterns, and how users will experience the product | designer |
+| engineer | DO | Implementation — writes code, debugs issues, follows specifications from Lead and architect | engineer |
+| postdoc | HOW | Research methodology and synthesis — designs investigation approach, evaluates evidence quality, writes synthesis documents | postdoc |
+| researcher | DO | Independent investigation — conducts web searches, gathers evidence, and reports findings with citations | researcher |
+| reviewer | CHECK | Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables | reviewer |
+| strategist | HOW | Business strategy — evaluates market positioning, competitive landscape, and business viability of decisions | strategist |
+| tester | CHECK | Testing and verification — tests, verifies, validates stability and security of implementations | tester |
+| writer | DO | Technical writing — transforms research findings, code, and analysis into clear documents and presentations for the intended audience | writer |
 
-Canonical agent 정의는 `@moreih29/nexus-core`에서 관리됩니다:
-
-- **HOW agents**: architect, designer, postdoc, strategist — 접근법과 설계를 조언
-- **DO agents**: engineer, researcher, writer — 활성 task에 대해 실행
-- **CHECK agents**: tester, reviewer — 검증하고 PASS/FAIL로 보고
-
-상세 역할 및 모델 매핑은 nexus-core 문서를 참조하세요.
+Small single-file tasks can stay with the lead agent.
+Use optional coordination labels when grouping related subagent work.
 
 ### Skills
 
 | Skill | Trigger | Purpose |
-|-------|---------|---------|
-| nx-init | `skill({ name: "nx-init" })` | 프로젝트 온볼딩 — scan, mission, essentials, context generation |
-| nx-plan | `[plan]` | 구조화된 논의와 결정 |
-| nx-run | `[run]` | 태스크 기반 실행 |
-| nx-sync | `[sync]` | 컨텍스트 동기화 |
-| deploy | `skill({ name: "deploy" })` | 릴리즈 오케스트레이션 (opencode-nexus 고유) |
+|---|---|---|
+| nx-init | skill({ name: "nx-init" }) | Project onboarding — scan, mission, essentials, context generation |
+| nx-plan | [plan] | Structured planning — subagent-based analysis, deliberate decisions, produce execution plan |
+| nx-run | [run] | Execution — user-directed agent composition |
+| nx-sync | [sync] | Context knowledge synchronization |
 
-### Coordination Tags
+### Tags
 
 | Tag | Purpose |
-|-----|---------|
-| `[plan]` | 리서치, 다관점 분석, 결정, 계획서 생성 |
-| `[d]` | 결정 기록 (`nx_plan_decide`) |
-| `[run]` | 실행 태스크 파이프라인 |
-| `[rule]` | 지속 규칙 저장 |
+|---|---|
+| [plan] | 리서치, 다관점 분석, 결정, 계획서 생성 |
+| [d] | Record a plan decision with nx_plan_decide |
+| [run] | Execute the task pipeline |
+| [rule] | Persist a stable team convention |
 
-### Core Guidelines
+### Operational Rules
 
-- `[plan]`은 주요 구현 결정 전에 사용
-- `[d]`는 활성 plan 낶부에서만, 지지 논의 기록 후 사용
-- `[run]`은 태스크 파이프라인이 필요할 때 사용
-- 파일 편집 전 `nx_task_add`로 태스크 등록
-- `main`/`master`에서의 substantial 작업 전 Branch Guard 적용
+- Use `[plan]` before major implementation decisions.
+- In planning sessions, research first and discuss one issue at a time.
+- Use `[d]` only inside an active plan and only after supporting discussion is recorded.
+- Use `[run]` when execution should follow the task pipeline.
+- Register each execution unit with `nx_task_add` before file edits.
+- Keep edits scoped to active tasks and update status with `nx_task_update`.
+- Verify before closure; run `nx_sync` when useful, then archive with `nx_task_close`.
+- Apply Branch Guard on `main` or `master` before substantial execution.
+
+### Coordination Model
+
+- Lead owns task state, delegation, and final reporting.
+- HOW agents advise on approach and do not own implementation state.
+- DO agents execute scoped work against active tasks only.
+- CHECK agents report PASS/FAIL plus findings by severity.
+- Coordination labels are optional metadata used to group related subagent work.
+- All grouped execution is lead-mediated; subagents do not directly coordinate each other.
 
 ### Platform Mapping
 
-- Primary instruction: `AGENTS.md` + `opencode.json.instructions`
-- `CLAUDE.md`는 legacy 마이그레이션 입력 전용
-- Claude slash skill → `nx_*` 도구 + 태그
-- Claude team API → lead-mediated delegation + coordination labels
+- Primary instruction path: `AGENTS.md` plus `opencode.json.instructions`.
+- `CLAUDE.md` is legacy migration input only.
+- Claude slash skills map to `nx_*` tools plus tags and hook injection.
+- Claude team APIs map to lead-coordinated OpenCode delegation with optional coordination labels.
+- Exit/edit guardrails replace Claude nonstop behavior.
 <!-- NEXUS:END -->
 
 ---
