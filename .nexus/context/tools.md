@@ -3,132 +3,128 @@
 
 ## 런타임 환경
 
-- **패키지 매니저**: Bun 1.3.9
-- **언어**: TypeScript 5.6
+- **패키지 매니저**: Bun ≥ 1.3.9
+- **언어**: TypeScript ^5.6
 - **모듈 형식**: ESM (`"type": "module"`)
-- **빌드**: `bun run sync && tsc --noEmit` — dist 없음, TS 직접 로드
-- **런타임 의존성**: 
-  - `@moreih29/nexus-core ^0.15.1` (runtime substrate)
+- **Node 엔진**: ≥ 22 (`import ... with { type: "json" }` 구문 요구)
+- **빌드**: `bun run sync && tsc --noEmit` — dist 없음, OpenCode가 TS 직접 로드 (`main: ./src/plugin.ts`)
+- **런타임 의존성 (npm `dependencies`)**:
+  - `@moreih29/nexus-core ^0.15.1` (shared runtime substrate)
   - `@opencode-ai/plugin ^1.4.7` (OpenCode plugin interface)
-- **개발 의존성**: `typescript ^5.6.3` (타입 검사만)
-- **MCP 서버**: `nexus-mcp` — 별도 프로세스로 모든 `nx_*` 도구 제공
+- **개발 의존성 (`devDependencies`)**: `@types/node ^22.10.1`, `typescript ^5.6.3`
+- **MCP 서버**: `nexus-mcp` stdio 서버 — 별도 프로세스로 `nx_*` 도구 canonical 제공
 
 ## MCP Integration
 
-### nexus-mcp 서버 접근
+### Consumer opencode.json 설정 (SSOT)
 
-모든 `nx_*` 도구는 **nexus-mcp** stdio server를 통해 제공된다. Consumer는 `opencode.json`에 MCP 설정을 추가해야 한다.
-
-**Consumer opencode.json 설정:**
 ```json
 {
+  "plugin": ["opencode-nexus"],
   "mcp": {
-    "nx": {
-      "type": "local",
-      "command": ["nexus-mcp"]
-    }
-  }
+    "nx": { "type": "local", "command": ["nexus-mcp"] }
+  },
+  "agents": [ /* 10개 nexus agent 배열 — README 참고 */ ]
 }
 ```
 
-### nexus-mcp 제공 도구 (14+ 개)
+- **`mcp` 키** (not `mcp_servers`) — opencode config schema 요구사항
+- `type: "local"` — stdio 서버 local spawn
+- `command` 배열 — `nexus-mcp` bin은 @moreih29/nexus-core dependency로 `node_modules/.bin/`에 자동 resolve
+
+### nexus-mcp 제공 도구 (v0.15.1 기준 18개)
+
+**Plan 도구 (6)**:
 
 | 도구 | 역할 |
 |------|------|
-| `nx_plan_start` | Plan 세션 시작. 주제, research_summary, 이슈 목록 초기화 |
+| `nx_plan_start` | Plan 세션 시작. topic, research_summary, issues 초기화 |
 | `nx_plan_status` | 현재 Plan 상태 조회 |
-| `nx_plan_resume` | HOW 역할 참여자의 재개 라우팅 정보 조회 |
-| `nx_plan_followup` | 참여자에 대한 위임 준비 팔로업 안내 생성 |
-| `nx_plan_update` | Plan 이슈 추가·제거·수정·재오픈 |
-| `nx_plan_decide` | Plan 이슈에 결정 사항 기록. 결정 요청 전 pros/cons/trade-offs 비교 표와 권고안 제시 필요 |
-| `nx_task_add` | 태스크 사이클에 태스크 추가 |
-| `nx_task_list` | 태스크 목록 및 상태 요약 조회 |
-| `nx_task_update` | 태스크 상태 변경 |
-| `nx_task_close` | 태스크 사이클 종료 및 히스토리 아카이브 |
-| `nx_history_search` | 과거 plan·태스크 히스토리 조회 |
-| `nx_init` | 저장소 스캔 후 core 지식 초기화 |
-| `nx_sync` | 태스크 사이클 완료 후 코어 지식 동기화 |
-| `nx_context` | 현재 Nexus 상태 요약 조회 |
-| `nx_artifact_write` | 아티팩트 파일 저장 |
+| `nx_plan_resume` | HOW 참여자의 재개 라우팅 정보 조회 |
+| `nx_plan_update` | Plan 이슈 add/remove/edit/reopen |
+| `nx_plan_decide` | Plan 이슈 결정 기록 (`[d]` 태그 핸들러) |
+| `nx_plan_analysis_add` | HOW 분석 엔트리 추가 |
 
-### LSP 도구 (nexus-mcp canonical)
+**Task 도구 (5)**:
 
 | 도구 | 역할 |
 |------|------|
-| `nx_lsp_document_symbols` | 파일 내 심볼 정의 목록 |
-| `nx_lsp_workspace_symbols` | 워크스페이스 전체 심볼 검색 |
-| `nx_lsp_hover` | 특정 위치의 심볼 정보 조회 |
-| `nx_lsp_goto_definition` | 심볼의 정의 위치 조회 |
-| `nx_lsp_find_references` | 워크스페이스 심볼 참조 탐색 |
+| `nx_task_add` | 태스크 사이클에 태스크 추가 |
+| `nx_task_list` | 태스크 목록 및 상태 요약 |
+| `nx_task_update` | 태스크 상태 변경 (`pending`/`in_progress`/`completed`) |
+| `nx_task_close` | 태스크 사이클 종료 및 히스토리 아카이브 |
+| `nx_task_resume` | 태스크 실행 재개 |
 
-**제거된 LSP 도구**: `nx_lsp_diagnostics`, `nx_lsp_code_actions`, `nx_lsp_rename` — nexus-mcp v0.15.1에서 제거됨 (#8 T3).
+**History 도구 (1)**: `nx_history_search` — 과거 plan/task 히스토리 조회
 
-## 삭제된 로컬 도구 (v0.10.0)
+**Artifact 도구 (1)**: `nx_artifact_write` — `.nexus/state/artifacts/` 파일 저장
 
-| 디렉토리/파일 | 삭제 이유 | 대체 |
-|---------------|-----------|------|
-| `src/tools/plan.ts` | nexus-mcp로 이전 | `nx_plan_*` via nexus-mcp |
-| `src/tools/task.ts` | nexus-mcp로 이전 | `nx_task_*` via nexus-mcp |
-| `src/tools/workflow.ts` | nexus-mcp로 이전 | `nx_init`, `nx_sync` via nexus-mcp |
-| `src/tools/context.ts` | nexus-mcp로 이전 | `nx_context` via nexus-mcp |
-| `src/tools/artifact.ts` | nexus-mcp로 이전 | `nx_artifact_write` via nexus-mcp |
-| `src/tools/lsp.ts` | nexus-mcp로 이전 | `nx_lsp_*` via nexus-mcp |
-| `src/tools/ast.ts` | nexus-mcp로 이전 | `nx_ast_*` via nexus-mcp |
-| `src/tools/setup.ts` | 제거 |不再 필요 |
+**LSP 도구 (5)**:
 
-**총 19,755 LOC 삭제** (orchestration/, pipeline/, shared/, tools/, plugin/ 포함)
+| 도구 | 역할 |
+|------|------|
+| `nx_lsp_hover` | 특정 위치 심볼 정보 |
+| `nx_lsp_diagnostics` | 경량 진단 및 리팩터 힌트 |
+| `nx_lsp_find_references` | 심볼 참조 워크스페이스 탐색 |
+| `nx_lsp_rename` | 단어 경계 매칭 이름 변경 (프리뷰/적용) |
+| `nx_lsp_code_actions` | 경량 code action 제안 |
 
-## Hook Events (Plugin Level)
+### v0.10.0에서 완전 제거된 도구 (nexus-mcp에도 존재하지 않음)
 
-opencode-nexus plugin은 다음 hook events를 구독한다:
+이전 opencode-nexus 버전에서 로컬 구현했으나 **nexus-mcp canonical에도 없는** 도구 — cut 확정 (Issue #8):
 
-| 이벤트 | 처리기 | 역할 |
-|--------|--------|------|
-| `event(session.created)` | session-init | .nexus/ 구조 초기화, tracker 리셋 |
-| `chat.message` | prompt-router | 태그 감지, skill body 주입 |
-| `tool.execute.before` | agent-bootstrap | 편집 가드레일, KNOWLEDGE_INDEX 주입 |
-| `tool.execute.after` | agent-finalize | 미완료 태스크 경고, 캐시 무효화 |
-| `experimental.chat.system.transform` | prompt-router | 동적 상태 알림 생성 |
+| 이전 도구 | 처분 |
+|-----------|------|
+| `nx_context` | **CUT** — 이전 로컬 상태 요약 도구, nexus-mcp 미포함 |
+| `nx_init` / `nx_sync` (workflow wrappers) | **CUT** — skill 트리거(`skill({ name: "nx-init" })`, `[sync]` 태그)로 대체 |
+| `nx_ast_search` / `nx_ast_replace` | **CUT** — 구조적 리팩터링 도구 제거. grep/regex 또는 외부 도구 |
+| `nx_lsp_document_symbols` | **CUT** — nexus-mcp는 이 도구 미제공 |
+| `nx_lsp_workspace_symbols` | **CUT** — 동일 |
+| `nx_lsp_goto_definition` | **CUT** — 동일 |
+| `nx_plan_followup` | **CUT** — nexus-mcp의 `nx_plan_analysis_add`가 유사 역할 |
 
-## 도구 실행 훅 동작 (nexus-core canonical)
+> **주의**: 위 도구들은 **nexus-mcp로 이전된 것이 아니라 ecosystem에서 완전히 제거됐다**. 과거 workflow를 이 도구에 의존했다면 nexus-core canonical 대체를 사용하거나 해당 기능을 포기해야 한다 (Plan #57 Issue #8 "functional regression acceptance" 결정).
 
-### `tool.execute.before` — 편집 가드레일 및 KNOWLEDGE_INDEX 주입
+### 삭제된 로컬 구현 디렉토리 (v0.10.0)
 
-편집류 도구(edit, write, patch, multiedit 등)에 대해 태스크 사이클 상태를 평가하여 차등 가드레일을 적용한다:
+| 디렉토리/파일 | 비고 |
+|---------------|------|
+| `src/tools/` | 전체 삭제 — MCP 대체 가능분은 nexus-mcp로, 나머지는 cut |
+| `src/plugin/hooks.ts` (1,224줄) | 삭제 — canonical handler로 대체 (아래 Hook 섹션 참고) |
+| `src/plugin/system-prompt.ts` (219줄) | 삭제 — nexus-core `prompt-router` hook이 대체 |
+| `src/orchestration/` | 전체 삭제 (team-policy, delegation, continuity adapters 등) |
+| `src/pipeline/` | 전체 삭제 (evaluator, qa-trigger) |
+| `src/shared/` 대부분 | agent-tracker, knowledge-index, plan-how-panel, memory-access, tag-parser 등 삭제 |
 
-| 태스크 사이클 상태 | 동작 |
-|-------------------|------|
-| `idle` / `none` | 편집 허용 (태스크 없는 자유 편집) |
-| `empty` | 편집 허용 |
-| `active` | 편집 허용 |
-| `completed-open` | 보호(block/warning) — 태스크 사이클 종료 권장 |
+**총 19,755 LOC 삭제** (Plan #57 T2 구조 마이그레이션).
 
-추가로 `task` 도구 호출 시 `.nexus/{context,memory,rules}`의 파일 목록을 `KNOWLEDGE_INDEX:` 블록으로 주입하여 subagent_spawn continuity를 지원한다.
+## Plugin Hook Dispatch (nexus-core canonical)
 
-### `tool.execute.after` — 미완료 태스크 경고 및 knowledge-index 캐시 무효화
+opencode-nexus plugin entry(`src/plugin.ts`)는 `mountHooks(ctx, manifest)` 호출로 nexus-core canonical handler를 OpenCode plugin API에 wiring한다. 플러그인 자체는 hook 로직을 구현하지 않는다.
 
-도구 실행 완료 후, 다음 조건을 확인하여 경고 메시지를 추가한다:
+### OpenCode 이벤트 ↔ canonical handler 매핑
 
-1. 실행된 도구의 `owner` 필드와 일치하는 태스크를 조회
-2. 해당 태스크가 `pending` 또는 `in_progress` 상태인 경우
-3. "다음 태스크가 아직 완료되지 않았습니다" 경고와 함께 태스크 목록 표시
+| OpenCode hook key | nexus-core handler | 역할 |
+|-------------------|--------------------|------|
+| `event` (session.created) | `session-init` | `.nexus/` 구조 초기화, runtime.json, initial state |
+| `chat.message` | `prompt-router` | 사용자 프롬프트 태그 감지 |
+| `experimental.chat.system.transform` | `prompt-router` | system 프롬프트에 skill/state 주입 (additional_context flush) |
+| `tool.execute.before` + `.after` (input.tool === "task") | `agent-bootstrap` / `agent-finalize` | subagent 생명주기, agent-tracker |
+| `tool.execute.after` (other tools) | `post-tool-telemetry` | tool 실행 텔레메트리 (opencode 런타임에서 적용 가능한 capability subset) |
 
-추가로 편집 대상 경로가 `.nexus/{context,memory,rules}` 하위일 경우 knowledge-index 캐시를 무효화한다.
+### Hook manifest
 
-### 세션 컴팩팅 스냅샷 (`experimental.session.compacting`)
+`@moreih29/nexus-core/hooks/opencode-manifest` JSON을 `with { type: "json" }` import attribute로 로딩. nexus-core publish 시 pre-bundled된 `dist/assets/hooks/<name>/handler.js`를 `handlerPath`로 참조. Consumer 측 추가 빌드 불필요.
 
-세션 컴팩팅 시 `[nexus-state-snapshot]` prefix의 multi-line 구조 스냅샷을 생성한다:
+## 배포 도구
 
-- `active mode`: `plan` | `run` | `idle`
-- `plan`: topic 및 issues(제목+status, 최대 20개)
-- `tasks`: 태스크(제목+status, 최대 30개) 및 ready-task set
-- `knowledge_index`: context/memory/rules 파일명(각 최대 50개)
-- `active agents`: 활성 에이전트 목록(coordination_label 포함, 최대 30개)
-
-### 동적 상태 알림 (Dynamic Stateful Notices)
-
-`experimental.chat.system.transform` 훅이 현재 모드와 태스크 사이클 상태를 기반으로 동적 알림을 생성하여 시스템 프롬프트에 주입한다:
-
-- **Step 7 완료 핸드오프**: 모든 태스크가 `completed` 상태가 되면, `nx_task_add` 호출을 통한 새 태스크 생성 안내 메시지가 자동으로 포함된다.
-- **모드별 스킬 주입**: `[plan]`/`[run]`/`[sync]` 태그 감지 시 해당 스킬 본문이 `<nexus-skill id="...">` 블록으로 삽입된다.
-- **manual_only nudge**: 수동 실행 스킬(nx-init, nx-setup)은 B-leg 주입 대상에서 제외되고, 대신 실행 안내 메시지가 표시된다.
+- **nexus-core CLI**: `nexus-core` bin (`@moreih29/nexus-core` dependency로 `node_modules/.bin/`에 설치)
+  - `sync` — managed paths 생성
+  - `init` — 신규 plugin repo 스캐폴드
+  - `list` — 에이전트/스킬/훅 목록
+  - `validate` — assets frontmatter 검증
+  - `mcp` — stdio MCP 서버 직접 실행 (nexus-mcp와 동일)
+- **opencode-nexus 고유 script**:
+  - `scripts/postinstall.mjs` — consumer `.opencode/skills/` 복사
+  - `scripts/e2e-nexus-integration.mjs` — 통합 회귀 (MCP handshake + mountHooks + sync idempotency + plugin load)
+- **deploy skill**: `.opencode/skills/deploy/SKILL.md` — npm publish 오케스트레이션 (opencode-nexus 고유 유지)
