@@ -10064,6 +10064,307 @@
           "opencode-nexus CLI (v0.11.0): project/user scope installer"
         ]
       }
+    },
+    {
+      "schema_version": "0.5",
+      "completed_at": "2026-04-20T13:20:15.921Z",
+      "branch": "adopt-nexus-core-0_16",
+      "plan": {
+        "id": 59,
+        "topic": "opencode-nexus: adopt nexus-core v0.16.x (I/O 계약 재정렬 + OpenCode fragment 제거 + smoke gate 정합)",
+        "issues": [
+          {
+            "id": 1,
+            "title": "nexus-core v0.16.x 채택 버전·semver 전략 (caret vs exact, 릴리즈 타겟)",
+            "status": "decided",
+            "decision": "`@moreih29/nexus-core` dependency를 `^0.16.2` (caret) 로 bump한다. 0.x caret은 실질적으로 `>=0.16.2 <0.17.0` 로 해석되므로 0.16.x 내부 patch fix 는 자동 수용하면서 0.17 의 추가 breaking 은 막는다. lockfile (`bun.lock`) commit 관례가 이미 있어 설치 재현성은 lockfile 기준으로 확보되므로 exact pin 의 추가 이득은 없다. 과거 `@opencode-ai/plugin ^1.4.0 → 1.14.x` 사고는 1.x 범위에서 caret 이 major까지 풀린 특수 케이스이지 0.x 해석 문제가 아니므로 이번 결정과 분리한다. 채택 자체는 feature branch 에서 실행하고, 릴리즈 타겟은 `v0.12.0` 로 잡는다 (과거 `v0.10.0 = adopt nexus-core 0.15.1` 와 대칭). patch 릴리즈가 아닌 이유: v0.16.0 은 \"3-harness consumer plugin I/O 계약 재정렬 + OpenCode fragment 제거\" 로 consumer-facing AGENTS.md/skills/opencode.json 산출물 구조 변경을 수반할 가능성이 높아 minor bump 가 정직한 표기."
+          },
+          {
+            "id": 2,
+            "title": "0.15.1 → 0.16.2 재sync 산출물 diff 검증 범위와 방법 결정",
+            "status": "decided",
+            "decision": "0.15.1 → 0.16.2 재sync 산출물 diff 검증은 **B안 (표준 = diff + validate + check/e2e + cli smoke)** 으로 확정. 수행 순서는 feature branch (예: `feat/adopt-nexus-core-0_16`) 위에서: (1) working tree 기존 sync 변경/plugin bump 정리, (2) `@moreih29/nexus-core` → `^0.16.2` bump + `bun install`, (3) `bun run validate`, (4) `bun run sync:dry` 로 예상 변경 수집, (5) `bun run sync` 실제 적용하여 git diff 를 남김 — 이 diff 가 Issue #3/#4 감사의 입력이 됨, (6) `bun run check` (sync:dry + tsc) → `bun run test:e2e` → `bun run test:cli`. 모두 PASS 시 재sync 검증 완료. 담당은 engineer 가 실행 오너로 가되, v0.16.0 \"OpenCode fragment 제거\" 의 harness contract 해석 부분은 architect 자문을 곁들여 diff 의 의미를 검토한다. A안(최소)을 기각한 이유: v0.16.0 계약 재정렬 성격상 shape 만으로는 TypeScript/test 계층 파손을 못 잡음. C안(최대, install smoke 포함)을 기각한 이유: plan #57 에서 설치/interactive hang 경로는 이미 안정화됐고, 설치 경로 regression 은 별도 deploy skill/릴리즈 직전 smoke 로 떨어뜨리는 게 분업상 깔끔."
+          },
+          {
+            "id": 3,
+            "title": "v0.16.0 'OpenCode fragment 제거' 가 우리 코드·hook·plugin 부트스트랩에 미치는 영향 감사 범위",
+            "status": "decided",
+            "decision": "OpenCode fragment 제거 영향 감사 범위는 **B안 (Tier A + targeted Tier B)** 으로 확정. Issue #3 은 감사 scope 를 commit 할 뿐 실제 fix 는 수행하지 않으며, 각 항목은 run 단계에서 task 로 1:1 매핑된다.\n\nCommitted 감사 항목 (9):\n1. `@moreih29/nexus-core@0.16.2` `package.json exports` 에서 `./hooks/opencode-mount`, `./hooks/opencode-manifest`, `./types` subpath 존재 확인.\n2. `dist/manifests/opencode-manifest.json` 검사 + 모든 `handlerPath` 가 실제 패키지 파일로 resolve (특히 `prompt-router.js`). v0.15.2 의 `../assets/hooks/.../handler.js` 에서 v0.16.x 의 `../hooks/*.js` 로 contract 이동된 부분 재확인 필수.\n3. `src/plugin.ts` 런타임 import 가 v0.16.2 하에서 tsc/e2e PASS 하는지.\n4. `opencode.json.fragment` (현재 git-tracked 44 lines) 삭제 대상 확정 + `.gitignore` 처리.\n5. `.opencode/plugins/opencode-nexus.js` 가 OpenCode loader 에 실제 로드되는지 판정 → 로드되면 entry 를 `src/plugin.ts` 로 수정, 로드 안 되면 삭제.\n6. `.nexus/memory/anti-patterns.md §9.2, §9.5` 의 fragment 경로/목록 wording 갱신 (원칙은 유지, stale 경로 예시만 제거·치환).\n7. 재sync 후 `src/index.ts`, `src/agents/*.ts`, `.opencode/skills/*` diff 를 `docs/contract/harness-io.md` SSOT 기준으로 리뷰.\n8. `scripts/e2e-nexus-integration.mjs:222` \"template-skipped\" assertion 을 bump 후 실행으로 재확인 (포함 체크라 PASS 예상이나 count 감소 영향 확정).\n9. upstream nexus-core 내부 docs 불일치 (`docs/contract/` vs `docs/plugin-guide.md` vs `docs/plugin-template/opencode/README.md`) 는 **우리 수정 대상이 아니라 warning 기록 + upstream issue 후보**로 분리.\n\nA안(Tier A only) 기각 사유: `opencode.json.fragment` tracked 파일과 legacy `.opencode/plugins/opencode-nexus.js` 가 bump 후 stale 해지므로 Tier A 범위에 누락 시 다음 사이클에서 기술부채로 재등장. C안(+ upstream docs) 기각 사유: upstream docs 드리프트는 nexus-core 측 책임 영역이라 우리 감사 주체가 아님, warning + 이슈 제출로 분리하는 것이 분업 정합.\n\n근거: explore 가 `opencode.json.fragment` git-tracked 존재, legacy plugin shim, anti-patterns.md stale 경로를 구체 line 단위로 식별. architect 가 handler path contract 이동 (0.15.2→0.16.x) 을 runtime-risk 축으로 승급, `docs/contract/harness-io.md` 를 SSOT 로 지정. 우리 wrapper 는 CLI/postinstall 측에서 이미 fragment 비의존으로 구조 정렬돼 있어 bootstrap 무결성 확인 중심 감사로 충분하다는 점을 확인.",
+            "how_agents": [
+              "architect",
+              "explore"
+            ],
+            "how_summary": {
+              "architect": "Tier A (블로커): runtime subpath · hook manifest/bundle · OpenCode bootstrap semantics · consumer config contract. Tier B (targeted): sync output drift + contract docs. Handler path 규약이 0.15.2 `../assets/hooks/.../handler.js` → 0.16.x `../hooks/*.js` 로 실제 이동. nexus-core 내부 docs 자체 불일치 경고 → `docs/contract/harness-io.md` 를 SSOT 로. 우리 wrapper 는 이미 fragment 비의존 구조로 정렬돼 있어 부트스트랩 verification 중심 감사로 충분.",
+              "explore": "구체 touch point 20건 분류. HIGH: `opencode.json.fragment` (git-tracked, 44 lines), `.opencode/plugins/opencode-nexus.js` (legacy shim dist/index.js 참조), `scripts/e2e-nexus-integration.mjs:222` template-skipped assertion. MEDIUM: `.nexus/memory/anti-patterns.md §9.2·§9.5` stale fragment 경로. LOW: `src/plugin.ts` hook subpath imports (v0.16.2 에서도 exports map 상 유지 기대), AGENTS.md NEXUS block + skills/* 재sync. postinstall/CLI/lib/doctor 는 fragment 비의존 확인."
+            }
+          },
+          {
+            "id": 4,
+            "title": "v0.16.1 smoke-consumer gate 와 우리 e2e 스크립트(`scripts/e2e-nexus-integration.mjs`, `scripts/e2e-cli.mjs`)의 정합 방침",
+            "status": "decided",
+            "decision": "smoke-consumer gate 와 우리 e2e 스크립트의 정합 방침은 **B안 (우리 e2e 에 manifest path resolution + prompt-router self-contained load block 추가)** 으로 확정. 기존 e2e 를 유지하면서 Issue #3 의 감사 항목 2 (manifest/handler bundle) 를 회귀 테스트로 승격시켜 다음 bump 에서도 자동 감시되게 한다.\n\nCommitted 정합 항목:\n1. bump 후 기존 `bun run test:e2e` + `bun run test:cli` 그대로 실행해 PASS 확인. 이 시점에 기존 C block 의 `template-skipped` assertion 포함 체크도 최종 확정.\n2. `scripts/e2e-nexus-integration.mjs` 에 신규 block 추가:\n   - **E. hook manifest resolves** — `@moreih29/nexus-core/hooks/opencode-manifest` JSON 을 `with { type: \"json\" }` 로 import 후, 각 entry 의 `handlerPath` 가 실제 파일로 resolve 되는지 `node:fs` 로 검증. prompt-router 엔트리는 포함 대상.\n   - **F. prompt-router self-contained load** — prompt-router handler 를 `import()` 로 동적 로드해 최소 export (function 또는 default) 의 sanity 검증. v0.16.1 의 \"prompt-router 번들 self-contained화\" fix 가 실제로 fix 됐는지 우리 측에서 증명한다.\n3. C block 에 fragment-absence assertion 한 줄 추가: sync dry-run 출력에 `opencode.json.fragment` 문자열이 **나오지 않아야** 함 → v0.16.0 fragment 제거 정합의 회귀 방지.\n4. upstream v0.16.1 smoke-consumer gate 의 실제 shape 는 bump 직후 재확인. 우리 B 블록과 어긋나는 지점이 있으면 이번 cycle 에서 fix 하지 않고 **별도 follow-up 이슈** 로 등록 (구조적 통합은 upstream smoke shape 를 실제로 확인한 뒤 별도 plan 에서 다룬다).\n\nA안 (기존 e2e 유지만) 기각 사유: v0.16.1 prompt-router 번들 self-contained fix 가 실제 fix 됐는지 우리 측에서 검증할 수단이 없어 \"upstream PASS → 우리도 PASS\" 라는 암묵적 신뢰에 의존하게 됨. C안 (upstream smoke 와 구조 통합) 기각 사유: upstream smoke 의 실제 shape 를 아직 보지 못했고 (0.16.2 설치 필요), 정보 부족 상태에서 구조 결합을 고착하는 건 제어권 관점에서 성급. 필요시 B 위에 얹는 follow-up plan 으로 분리.\n\n근거: 현재 설치된 0.15.1 의 `docs/contract/harness-io.md §4-2` 는 fragment 를 정식 Managed 로 선언하고 있어 우리는 문서상 아직 fragment 책임자. v0.16.0 에서 이 섹션이 어떻게 재작성됐는지는 bump 후 재확인해야 하므로 \"fragment 사라짐\" 을 e2e 회귀로 못박는 것이 정합. 우리 현 e2e 는 mountHooks 반환값이 function 인지까지만 보고, 그 function 이 참조하는 handler 번들의 실제 존재·로드 가능성은 검증하지 않는 빈 구멍이 있음. 이 구멍을 E/F block 이 막는다."
+          }
+        ],
+        "research_summary": "## 사실 기반 현황\n\n### 우리 리포 상태\n- 현재 default branch: `main` (최근 commits: v0.11.0 CLI installer 릴리즈 및 plan #58 archive).\n- `package.json`: `@moreih29/nexus-core`: `^0.15.1`, `@opencode-ai/plugin`: (working tree) `1.4.9` — main 커밋 기준은 `1.4.7`.\n- `node_modules/@moreih29/nexus-core/package.json` → 실제 설치된 버전: `0.15.1`.\n- Working tree에 커밋되지 않은 변경:\n  - `package.json` / `bun.lock`: `@opencode-ai/plugin` 1.4.7 → 1.4.9 bump.\n  - `AGENTS.md` + `.opencode/skills/nx-init/SKILL.md`, `nx-plan/SKILL.md`, `nx-run/SKILL.md`, `nx-sync/SKILL.md`: `bun run sync` 재실행 결과물 (AGENTS.md는 \"Default: DELEGATE\" wording, Agent Routing 표, 영어화 등 포함). 이 sync는 0.15.1 기준.\n- `bun run sync` = `bunx @moreih29/nexus-core sync --harness=opencode --target=./` → harness 산출물(에이전트 정의, 스킬, AGENTS.md 섹션)을 opencode 형태로 주입하는 경로.\n- `scripts/postinstall.mjs`, `scripts/e2e-nexus-integration.mjs`, `scripts/e2e-cli.mjs` 가 존재하며 check/test 파이프라인에 연결됨 (`bun run check` → sync:dry + tsc; `bun run test:e2e` → e2e-nexus-integration; `bun run test:cli` → e2e-cli).\n\n### nexus-core 최신 상태 (npm / github commits 기반)\n- 최신 published: `0.16.2` (3시간 전).\n- 0.15.1 이후 공개된 주요 변경:\n  1. **v0.15.2 (fix, hooks)**: `dist/hooks/*.js`에 CLI bootstrap 주입으로 3-harness 공통 hook no-op 복구. 소비자가 hook을 실행하지 못하는 silent regression 를 잡음.\n  2. **v0.16.0 (feat, contract)**: \"3-harness consumer plugin I/O 계약 재정렬 + Codex standalone TOML + OpenCode fragment 제거 + smoke gate\". OpenCode consumer의 sync 산출물 구조에 실질적 변화 가능성 높음. 과거 OpenCode fragment로 주입되던 것이 제거되거나 다른 형태로 전달됨.\n  3. **v0.16.1 (fix, hooks)**: prompt-router 번들 self-contained화 + smoke-consumer gate 추가. consumer 측에서 smoke를 돌리는 계약이 명시됨.\n  4. **v0.16.2 (fix, codex)**: Codex `disabled_tools`를 `[mcp_servers.nx]` 블록으로 이동. **OpenCode harness에는 직접 영향 없음**(Codex 전용).\n- 참고: v0.15.1 자체가 \"consumer sync에서 hook 재컴파일 제거 + AgentConfig export + CI gate\" 항목이었음. 우리 리포는 이 fix가 반영된 첫 공식 adoption.\n\n### 반드시 함께 고려해야 하는 제약\n- v0.16.0 은 \"계약 재정렬\" 성격이라 사실상 consumer breaking (어디까지가 breaking 인지 실제 sync 산출물 diff로 확인해야 함).\n- 우리 `scripts/postinstall.mjs` / `src/plugin.ts` / `bin/opencode-nexus.mjs` 가 0.15.x 이전 구조(특히 OpenCode fragment 경로)를 가정한 참조를 하고 있으면 소리 없이 깨질 수 있음.\n- 사용자 설치 hang / interactive setup hang 이슈 (plan #57) 는 v0.11.0 에서 정리됐으나, 0.16.x sync 가 setup 관련 instructions/skill 내용을 덮어쓸 수 있어 regression 확인 필요.\n- Branch Guard: 현재 main 위에서 실행 중이므로 실제 실행 단계에서는 feature branch로 분기해야 함.\n\n### 미확인 사실 (plan 진행 중 확인 필요)\n- 0.16.2 설치 후 `bun run sync` 의 실제 diff 규모 (agents/, skills/, AGENTS.md, opencode.json instructions 중 어디가 바뀌는가).\n- v0.16.0 \"OpenCode fragment 제거\" 가 우리 리포에서 어떤 파일/코드 경로를 영향시키는가.\n- v0.16.1 smoke-consumer gate 와 우리의 `scripts/e2e-*.mjs` 가 어떤 shape를 서로 기대하는가.",
+        "created_at": "2026-04-20T12:21:23.474Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "setup interactive prompt backend hardening",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [],
+          "created_at": "2026-04-19T14:22:26.479Z",
+          "context": "Plan #57 Issue 1/3 결정 반영. `opencode-nexus setup --scope user` bare interactive flow가 hang. Root cause는 `src/cli.ts`에서 TTY면 무조건 Clack을 먼저 선택하는 backend selection (`promptChoice`, `promptText`) 때문에 setup/handoff interactive path가 raw/readline fallback에 도달하지 못하는 구조로 판단됨. `opencode providers list`, `opencode debug config`, `opencode models <provider>` 직접 호출은 PASS. noninteractive setup (`--all-model`, `--model`)도 PASS. 따라서 setup/handoff 전용 backend 분리 + discovery timeout/diagnostic 추가가 핵심.",
+          "approach": "`src/cli.ts` 수정 중심. (1) setup/handoff용 prompt backend selector를 별도 분리해 Clack을 사용하지 않고 raw single-select / readline fallback을 강제한다. install/update 기존 human UX는 가능하면 유지. (2) `buildSetupDiscoveryContext()` 와 `promptModelWithDiscovery()` 내부 `runOpencode(...)` 호출에 timeout wrapper/diagnostic 추가. discovery 실패 시 hang 대신 manual-entry fallback으로 degrade. (3) 기존 `promptChoiceRaw` dead-path 문제를 해결하는 방향으로 최소 변경. (4) bare interactive setup 과 install->setup handoff 경로를 커버하는 PTY 기반 e2e 보강 (`scripts/e2e-setup-template.mjs` 또는 새 script).",
+          "acceptance": "- `opencode-nexus setup --scope user` 가 bare interactive 경로에서 응답 없이 멈추지 않는다\n- setup/handoff interactive flow는 Clack 없이 raw/readline fallback으로 동작\n- discovery subprocess timeout/diagnostic이 추가되어 `opencode` 하위 명령 미응답 시 manual-entry 또는 명시적 안내로 진행 가능\n- noninteractive setup/install/update regression 없음\n- `bun run check` PASS\n- `bun run test:e2e` PASS\n- PTY 기반 재현 테스트가 hang regression을 잡을 수 있다",
+          "risk": "CLI interactive path라 실제 TTY/PTY 차이가 있을 수 있음. raw mode와 readline 정리(cleanup) regression 주의. install/update UX에 unintended 영향 없게 scope를 setup/handoff로 제한."
+        },
+        {
+          "id": 2,
+          "title": "setup hang regression verification",
+          "status": "completed",
+          "owner": "tester",
+          "owner_agent_id": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            12
+          ],
+          "created_at": "2026-04-19T14:22:26.676Z",
+          "context": "Engineer가 interactive setup/handoff 경로를 수정한 뒤 verifier가 실제로 hang regression이 해결됐는지 확인해야 함. 현재 known good는 noninteractive setup, known bad는 bare interactive setup. verify는 PTY 기반 자동화와 실제 global binary smoke를 포함.",
+          "approach": "(1) `bun run check` / `bun run test:e2e` 실행. (2) bare interactive setup을 PTY/timeout으로 검증해서 프롬프트가 출력되고 완료되는지 확인. (3) install 후 setup handoff prompt 경로도 최소 1회 검증. (4) noninteractive setup, install/update regression 확인. (5) 가능하면 외부 temp dir + `~/.bun/bin/opencode-nexus` global binary smoke 실행 포함.",
+          "acceptance": "- bare interactive setup hang 재현이 사라졌음 (PASS)\n- install 후 setup handoff prompt path PASS\n- noninteractive setup PASS\n- install/update regression 없음\n- `bun run check` PASS\n- `bun run test:e2e` PASS\n- findings severity report 제공",
+          "risk": "PTY 재현이 CI/로컬에서 완전히 동일하지 않을 수 있음. timeout 기준과 완료 기준을 명확히 잡아야 함."
+        },
+        {
+          "id": 3,
+          "title": "troubleshooting docs for setup and install reliability",
+          "status": "completed",
+          "owner": "writer",
+          "owner_agent_id": "writer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            12
+          ],
+          "created_at": "2026-04-19T14:22:26.744Z",
+          "context": "Issue 2는 deterministic code bug로 확정되지 않았으므로 docs는 과도한 단정 대신 troubleshooting 중심이어야 함. 또한 setup interactive path가 고쳐진 뒤에도 사용자에게 fallback/install guidance가 명확해야 함.",
+          "approach": "README.md / README.en.md 에 짧은 troubleshooting 섹션 추가: (1) `setup --scope user` interactive flow와 비대화형 예시, (2) install reliability note — `npm install -g opencode-nexus` fallback, exact version pin examples, retry guidance, (3) bun global install hang은 upstream/package-manager 영역 가능성이 있어 deterministic package bug로 단정하지 않는 wording. 문서 길이는 최소화.",
+          "acceptance": "- README.md / README.en.md 에 troubleshooting 또는 install/setup reliability note 추가\n- 비대화형 setup fallback 예시 포함\n- bun global install hang에 대해 단정적 표현 없음\n- `npm install -g opencode-nexus` fallback 경로 명시\n- reviewer가 fact check 가능하도록 구현과 일치",
+          "risk": "문서가 과도하게 길어질 수 있음. wording에서 Bun 탓으로 단정하지 않도록 주의."
+        },
+        {
+          "id": 4,
+          "title": "review troubleshooting docs",
+          "status": "completed",
+          "owner": "reviewer",
+          "owner_agent_id": "reviewer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            14
+          ],
+          "created_at": "2026-04-19T14:22:26.746Z",
+          "context": "Writer deliverable verification. README/README.en troubleshooting note가 구현/검증 사실과 일치하는지 확인 필요.",
+          "approach": "README.md / README.en.md 의 새 troubleshooting/install/setup reliability 섹션을 사실성, 대칭성, wording 관점에서 리뷰. 특히 bun global install에 대한 주장과 setup fallback 예시가 실제 CLI와 일치하는지 확인.",
+          "acceptance": "- README/README.en facts PASS or concrete findings\n- noninteractive setup example correctness 확인\n- bun global install wording이 과도한 단정 없음\n- 최종 PASS/FAIL report 제공",
+          "risk": "Docs wording subtlety. reviewer는 사실성과 대칭성에 집중."
+        },
+        {
+          "id": 5,
+          "title": "feature branch 생성 + working tree baseline 정리",
+          "status": "completed",
+          "owner": "lead",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [],
+          "created_at": "2026-04-20T12:41:46.998Z",
+          "context": "현재 default branch=main 위에서 실행 중. Branch Guard 에 따라 substantial execution 전 feature branch 로 분기해야 함. 또한 working tree 에 `@opencode-ai/plugin` 1.4.7→1.4.9 bump + `.opencode/skills/*` + `AGENTS.md` 의 0.15.1 기준 `bun run sync` 재실행 결과물이 커밋되지 않은 채 떠 있음. 이 상태로 0.16.2 채택 작업을 시작하면 \"0.15.1 재sync 변경\" 과 \"0.16.2 재sync 변경\" 이 diff 상 섞여서 Issue #3/#4 감사의 입력이 흐려짐. baseline 을 명확히 해야 후속 architect 감사가 의미 있는 diff 를 볼 수 있다.",
+          "approach": "`git checkout -b feat/adopt-nexus-core-0_16` 로 feature branch 생성. working tree 에 떠 있는 변경 중 (a) `@opencode-ai/plugin` 1.4.7→1.4.9 bump 은 0.16.2 bump 와 함께 처리하기 위해 **별도 커밋 없이 drop** (Task 2 에서 다시 적용되거나 lockfile resolution 으로 동일 결과), (b) `AGENTS.md` 와 `.opencode/skills/*` 의 0.15.1 sync 재생성 결과물도 **drop** (Task 2 에서 0.16.2 로 재sync 됨). 실제로는 `git restore package.json bun.lock AGENTS.md .opencode/skills/` 로 원복. `git status` 로 clean 상태 확인.",
+          "acceptance": "- 현재 branch: `feat/adopt-nexus-core-0_16`\n- `git status` 가 clean (untracked 파일만 허용, modified/staged 없음)\n- `git log --oneline -1` 이 main HEAD 와 동일\n- `package.json` 에 `@moreih29/nexus-core: ^0.15.1`, `@opencode-ai/plugin: 1.4.7` (main 기준)\n- `AGENTS.md` 와 `.opencode/skills/*` 가 main 기준 그대로",
+          "risk": "working tree 에 있던 변경을 drop 하는 과정에서 다른 사용자 작업이 섞여 있지 않은지 확인 필요. `git diff` 로 drop 대상이 오직 plugin bump + sync 재생성 결과물임을 확인한 후 진행. 만약 그 외 변경이 있다면 별도 stash 로 보존."
+        },
+        {
+          "id": 6,
+          "title": "nexus-core ^0.16.2 dep bump + validate + re-sync 적용",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "created_at": "2026-04-20T12:42:08.692Z",
+          "context": "Issue #1 결정으로 `@moreih29/nexus-core` 를 `^0.16.2` caret 으로 bump 한다. Issue #2 결정으로 검증 순서는 bump → validate → sync:dry → sync → check → test:e2e → test:cli. 이 task 는 'bump + sync 적용' 까지만 담당하고, 실제 check/test 회귀 PASS 는 Task 9 (tester) 에서 최종 확정. git diff 생성물이 Task 3/4 감사의 입력이 됨. v0.16.0 \"OpenCode fragment 제거\" + v0.15.2 handler 경로 이동 (`../assets/hooks/.../handler.js` → `../hooks/*.js`) 이 이 시점에 실제 파일로 내려온다.",
+          "approach": "(1) `package.json` 에서 `@moreih29/nexus-core: ^0.15.1` → `^0.16.2`. `@opencode-ai/plugin` 은 이 시점에 1.4.9 로도 함께 bump (working tree baseline 에서 drop 했던 것을 여기서 공식 적용). (2) `bun install` → `bun.lock` 갱신 확인. (3) `bun run validate` (nexus-core frontmatter/YAML 유효성). (4) `bun run sync:dry` 출력 캡처 → 예상 변경 목록을 diff 분석 입력으로 저장. (5) `bun run sync` 실제 적용. 이 단계에서 `.opencode/skills/*`, `AGENTS.md` NEXUS block, `src/agents/*.ts`, `src/index.ts` 가 0.16.2 기준으로 재생성. `opencode.json.fragment` 은 더 이상 재생성되지 않고 기존 tracked 파일은 그대로 남음 (Task 5 에서 삭제). (6) `git add -A` + `git commit -m \"chore(deps): adopt nexus-core ^0.16.2 + re-sync\"` (혹은 bump 와 sync 재생성을 두 개 커밋으로 분리).",
+          "acceptance": "- `package.json`: `@moreih29/nexus-core: ^0.16.2`, `@opencode-ai/plugin: 1.4.9`\n- `bun.lock` 이 0.16.2 (+ `@opencode-ai/sdk 1.4.9` 등) 로 resolve\n- `bun run validate` exit 0\n- `bun run sync:dry` exit 0, stdout 캡처 저장\n- `bun run sync` exit 0, git diff 가 생성됨\n- `node_modules/@moreih29/nexus-core/package.json` version 필드 = `0.16.2`\n- feature branch 에 해당 변경이 commit 됨",
+          "risk": "v0.16.0 계약 재정렬로 sync 산출물 구조가 바뀌어 TypeScript compile (`tsc --noEmit`) 이 실패할 수 있음. 이 경우 fail-fast 로 Task 3 감사 결과를 기다리지 않고 이 단계에서 조기 발견. sync 가 Managed 파일을 덮어쓰지만 Template 은 보존하므로 `src/plugin.ts` 같은 Template 은 유지됨 — 하지만 Template 분류 여부를 SSOT (`harness-io.md`) 로 재확인 필요."
+        },
+        {
+          "id": 7,
+          "title": "Tier A 감사 — runtime subpath / manifest handler bundle / plugin imports",
+          "status": "completed",
+          "owner": "architect",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 3,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-20T12:42:26.766Z",
+          "context": "Issue #3 감사 항목 1, 2, 3 (Tier A 블로커). 0.16.2 하에서 플러그인 런타임이 깨지지 않는지 확인하는 필수 검증. v0.15.2 의 handler 경로 이동 (`../assets/hooks/.../handler.js` → `../hooks/*.js`) 이 실제 manifest JSON 과 packaged bundle 간 정합성에 영향. architect 재-spawn 으로 진행 (이전 plan 결정에서 이미 how_agents=['architect','explore'] 로 참여했고 plan continuity 로 resume 가능).",
+          "approach": "Task 2 완료 후 수행. (1) `node_modules/@moreih29/nexus-core/package.json` 의 `exports` 필드에서 `./hooks/opencode-mount`, `./hooks/opencode-manifest`, `./types` subpath 가 존재하는지 확인. (2) `node_modules/@moreih29/nexus-core/dist/manifests/opencode-manifest.json` 을 읽고, 모든 entry 의 `handlerPath` 가 실제 파일로 resolve 되는지 `node:fs.existsSync` 로 검증. 특히 prompt-router 엔트리 필수. (3) `src/plugin.ts` 의 import 경로가 0.16.2 exports 에서 여전히 유효한지 정적 대조 + `bunx tsc --noEmit` 단발 실행으로 signature drift 확인. (4) 발견한 issue 는 severity (critical/warning/suggestion) 로 분류하고 우리 쪽 fix 가 필요한 것 vs upstream 문제인 것 구분.",
+          "acceptance": "- HOW output contract 형식의 보고서 (current state / problem / recommendation / trade-offs / risks) 반환\n- exports subpath 3개 존재 여부 PASS/FAIL 명시\n- manifest handlerPath resolve 결과 전수 (entry 수, PASS 수, FAIL 수)\n- src/plugin.ts 호환성 판정\n- findings severity 분류 (critical/warning/suggestion/note)\n- 우리 쪽 fix 필요 항목은 Task 5/6 중 어느 것에 해당하는지 매핑",
+          "risk": "architect 가 런타임 코드를 수정하지 않도록 주의 — 감사와 권고까지만. 실제 fix 가 필요하면 run 파이프라인에 Task 로 별도 등록해 engineer 에게 넘긴다."
+        },
+        {
+          "id": 8,
+          "title": "Tier B 감사 — 재sync 산출물 diff 를 contract SSOT 기준 리뷰",
+          "status": "completed",
+          "owner": "architect",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 3,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-20T12:42:43.077Z",
+          "context": "Issue #3 감사 항목 7. Task 2 가 생성한 git diff (특히 `src/index.ts`, `src/agents/*.ts`, `.opencode/skills/*`, `AGENTS.md` NEXUS block, opencode.json instructions 주입 여부) 를 `docs/contract/harness-io.md` 를 SSOT 로 해석. v0.16.0 에서 `harness-io.md §4-2 OpenCode` 섹션이 어떻게 재작성됐는지 재확인 필요 — 현 0.15.1 에서는 fragment 가 정식 Managed 였으나 0.16.2 에서 표가 어떻게 바뀌었는지가 이 task 의 핵심 확인 포인트.",
+          "approach": "(1) `node_modules/@moreih29/nexus-core/docs/contract/harness-io.md` v0.16.2 판본을 읽고 §4-2 OpenCode 섹션의 새 Managed/Template 분류표 확인. (2) Task 2 의 `git diff` 를 파일 단위로 돌면서 각 변경이 SSOT 의 분류·경로·용도와 일치하는지 확인. (3) 새로 나타난 경로/삭제된 경로/분류 전환을 별도로 기록. (4) 우리 리포에만 남아있는 stale artifact (Task 5 에서 처리할 `opencode.json.fragment`, legacy plugin shim 등) 도 이 단계에서 SSOT 기준으로 확인.",
+          "acceptance": "- HOW output contract 형식 보고서\n- v0.16.2 `harness-io.md §4-2` 의 Managed/Template 표를 이 task 보고서에 포함\n- Task 2 diff 의 각 변경 파일 → SSOT 분류 매핑\n- SSOT 와 불일치 지점 (있다면) severity + 권고 action\n- Task 5 (stale artifact 정리) 의 대상 목록 재확인",
+          "risk": "upstream docs 내부 불일치 (contract vs plugin-guide vs template README) 를 발견할 수 있음. 이 경우 우리 fix 대상이 아니므로 Task 7 의 warning 기록으로 넘기고 감사는 contract 기준으로만 판단."
+        },
+        {
+          "id": 9,
+          "title": "stale artifact 정리 — opencode.json.fragment 삭제 + legacy plugin shim 판정",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            2,
+            3,
+            4
+          ],
+          "created_at": "2026-04-20T12:43:03.525Z",
+          "context": "Issue #3 감사 항목 4, 5. 두 파일 모두 'bump 후 stale 해지는 stale artifact' 로 분류되며 같은 정리 세션으로 묶임 (same_file_bundle, artifact-coherence). explore 결과: `opencode.json.fragment` 는 git-tracked 44 라인 파일로 v0.16.x sync 가 더 이상 생성하지 않음. `.opencode/plugins/opencode-nexus.js` 는 `dist/index.js` 참조하는 legacy shim 으로 v0.10.0 이전 잔재 의심.",
+          "approach": "(1) `opencode.json.fragment`: `git rm opencode.json.fragment`, `.gitignore` 에 한 줄 추가 (`/opencode.json.fragment`). Task 3/4 감사 보고서에서 이 파일이 더 이상 참조되지 않음을 재확인 후 진행. (2) `.opencode/plugins/opencode-nexus.js`: 실제로 OpenCode loader 가 이 파일을 로드하는지 판정. OpenCode 는 `opencode.json` 의 `plugin: [\"opencode-nexus\"]` + package.json `main`/`exports` 경로로 로드하므로 이 wrapper shim 은 사용되지 않을 가능성이 높음. 판정 근거 확인 후 (a) 로드 안 됨 → `git rm .opencode/plugins/opencode-nexus.js` + 디렉터리 정리, (b) 로드됨 → `export { default } from \"../../src/plugin.ts\"` 형태로 수정. README 의 설치 안내 (`plugin: [\"opencode-nexus\"]`) 와 `MIGRATION.md` 에 shim 참조가 있는지 함께 확인.",
+          "acceptance": "- `opencode.json.fragment` 가 git 에서 제거됨 + `.gitignore` 갱신\n- `.opencode/plugins/opencode-nexus.js` 에 대한 판정 근거가 커밋 메시지 또는 주석으로 기록됨\n- 판정 결과에 따라 삭제 또는 수정 완료\n- README / MIGRATION.md 에 stale shim 참조 없음 재확인\n- `bun run test:e2e` / `bun run test:cli` 재실행 시 regression 없음 (최소한 이 Task 내부 smoke 로 확인)",
+          "risk": "legacy shim 이 실제로 어떤 consumer 에게 여전히 로드 경로로 쓰이고 있을 수 있음. 판정이 모호하면 'wrapper 는 현 src/plugin.ts 를 가리키게 수정' 쪽이 삭제보다 안전한 기본값. 삭제를 선택한 경우 최소 1회 e2e 가 PASS 해야 함."
+        },
+        {
+          "id": 10,
+          "title": "e2e 강화 — manifest resolves + prompt-router self-contained + fragment-absence",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 4,
+          "deps": [
+            2
+          ],
+          "created_at": "2026-04-20T12:43:23.966Z",
+          "context": "Issue #4 결정. 현 e2e 는 mountHooks 반환이 function 인지까지만 보고, 그 function 이 참조하는 handler 번들의 실제 존재·로드 가능성은 검증하지 않는 빈 구멍이 있음. v0.15.2 의 handler 경로 이동 + v0.16.1 의 \"prompt-router 번들 self-contained\" fix 를 우리 측 회귀로 못박는다.",
+          "approach": "`scripts/e2e-nexus-integration.mjs` 를 수정. (1) **E block: hook manifest resolves** — `import manifest from \"@moreih29/nexus-core/hooks/opencode-manifest\" with { type: \"json\" }` 로 load (또는 fs.readFileSync 로 JSON parse), 각 entry 의 `handlerPath` 를 `node:path.resolve` 후 `fs.existsSync` 로 검증. prompt-router 엔트리가 manifest 에 포함돼 있는지도 assertion. (2) **F block: prompt-router self-contained load** — prompt-router handlerPath 를 `import()` 로 동적 로드, `typeof module.default === \"function\"` 또는 적어도 export 가 비어있지 않은지 sanity 체크. (3) **C block 강화**: sync dry-run stdout 에 `opencode.json.fragment` 문자열이 포함되지 않음을 `!stdout.includes(\"opencode.json.fragment\")` 로 assertion (fragment 제거 회귀 방지). 기존 `template-skipped` include 체크는 유지하되 bump 후 실제 실행으로 PASS 확정. (4) 추가된 assertion 이 main (0.15.1) 상태에서도 최소한 \"E block 이 존재하고 parse 가능\" 한지 local dry-run 은 feature branch 안에서만 의미가 있음을 주석 명시.",
+          "acceptance": "- `scripts/e2e-nexus-integration.mjs` 에 E, F block 추가됨\n- C block 에 fragment-absence assertion 한 줄 추가됨\n- `bun run test:e2e` 가 0.16.2 feature branch 에서 PASS (A, B, C, D, E, F 모두 PASS)\n- manifest entry 수가 1 이상이고 prompt-router 포함이 assertion 으로 고정됨\n- prompt-router handler dynamic import 성공 assertion 이 고정됨",
+          "risk": "import attribute (`with { type: \"json\" }`) 가 Node runtime 요구 (≥22). package.json engines 이 이미 `>=22` 선언 상태라 안전. dynamic import path 는 OS 경로 호환성 주의 — `pathToFileURL` 로 변환 권장."
+        },
+        {
+          "id": 11,
+          "title": "docs 갱신 — anti-patterns.md + context + upstream docs warning 기록",
+          "status": "completed",
+          "owner": "writer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            3,
+            4,
+            5
+          ],
+          "created_at": "2026-04-20T12:43:43.411Z",
+          "context": "Issue #3 감사 항목 6, 9 + context sync. (a) `.nexus/memory/anti-patterns.md §9.2, §9.5` 가 stale fragment 경로 예시를 포함 (explore 가 위치 특정). 원칙 자체는 유지, wording 과 경로 예시만 갱신. (b) `.nexus/context/` 의 architecture/decision 관련 문서에 v0.16 채택 반영. (c) upstream nexus-core 내부 docs 불일치 (contract vs plugin-guide vs template README) 를 우리 memory 에 warning 으로 기록 + upstream issue 제출 후보 note. docs_only.coherent 로 하나의 docs 세션에 묶음.",
+          "approach": "(1) `.nexus/memory/anti-patterns.md §9.2`: managed paths 목록에서 `opencode.json.fragment` 항목 제거 또는 \"v0.15.x 까지의 historical path\" 로 재표기. §9.5: 구체 경로 예시 (`node_modules/@moreih29/nexus-core/opencode.json.fragment`) 는 제거하고 \"v0.16 부터 fragment 는 더 이상 생성되지 않으므로 consumer config source-of-truth 는 CLI install path 로 귀속된다\" 로 재작성. 원칙 (fragment-as-SSOT 금지) 은 유지. (2) `.nexus/context/architecture.md` 등에 v0.16 채택 결정 요약과 plan_id=59 참조 추가. (3) 새 memory note (예: `.nexus/memory/upstream-docs-drift.md`) 에 Task 3/4 에서 발견한 upstream docs 불일치 (contract 가 SSOT, plugin-guide/template 이 stale) 항목을 기록하고 nexus-core repo 에 issue 제출 후보로 mark. 실제 upstream issue 제출은 우리 cycle 밖으로 분리 (필요시 사람이 직접 제출).",
+          "acceptance": "- `.nexus/memory/anti-patterns.md §9.2, §9.5` 에 stale fragment 경로 예시 없음, 원칙은 유지\n- `.nexus/context/` 에 v0.16 채택 결정이 반영됨 (최소 한 문서)\n- upstream docs 불일치가 `.nexus/memory/` 에 기록됨 (파일 경로 + 요약)\n- 모든 문서가 Task 3/4 감사 보고서와 사실관계 일치\n- writer output contract (완료 보고, 변경 범위, 요약, 제약/결정 요약)",
+          "risk": "anti-patterns.md wording 에서 과도한 단정 방지 (upstream docs 불일치를 \"upstream bug\" 로 단정 금지). 원칙과 구현 fact 의 분리가 명확해야 함."
+        },
+        {
+          "id": 12,
+          "title": "docs 갱신 리뷰 (anti-patterns + context + upstream drift memo)",
+          "status": "completed",
+          "owner": "reviewer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 3,
+          "deps": [
+            7
+          ],
+          "created_at": "2026-04-20T12:43:54.934Z",
+          "context": "Task 7 의 writer deliverable verification. auto-pairing 규칙에 따라 writer+.md 갱신 → reviewer 필수. 특히 anti-patterns.md 의 원칙/사실 분리가 정확한지, 감사 보고서와 fact 일치 여부가 핵심.",
+          "approach": "(1) `.nexus/memory/anti-patterns.md §9.2, §9.5` 를 Task 3/4 감사 보고서와 대조해 원칙/사실 일치 확인. (2) `.nexus/context/` 의 v0.16 채택 반영이 plan #59 결정과 일치하는지. (3) upstream-docs-drift memo 가 과도한 단정 없이 fact-based 로 기술됐는지. (4) 최종 PASS/FAIL + findings (severity 별) 보고.",
+          "acceptance": "- reviewer output contract: checks list + PASS/FAIL + findings by severity + recommended actions\n- §9.5 wording 이 \"fragment 는 더 이상 생성되지 않음\" 을 단정하지 않음 (v0.16 사실로 기술, v0.15 이전은 historical)\n- context 문서가 plan #59 결정 4건을 모두 반영\n- upstream-docs-drift memo 가 우리 쪽 수정 대상이 아님을 명시",
+          "risk": "reviewer 가 원칙 수정을 요구할 가능성. 그 경우 Task 7 로 피드백 루프, 단 REVISION_REQUIRED 3회 초과 시 fresh writer spawn."
+        },
+        {
+          "id": 13,
+          "title": "전체 회귀 verification — check / test:e2e / test:cli",
+          "status": "completed",
+          "owner": "tester",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 2,
+          "deps": [
+            2,
+            5,
+            6
+          ],
+          "created_at": "2026-04-20T12:44:10.648Z",
+          "context": "Task 2/5/6 의 engineer deliverable verification (auto-pairing). 0.16.2 적용 + stale artifact 정리 + e2e 강화 가 끝난 상태에서 파이프라인 전체 PASS 여부를 tester 가 독립 확인. plan #57 때와 달리 install/interactive hang 경로는 이미 안정돼 있어 install smoke 는 포함하지 않음 (Issue #2 C안 기각 사유 유지).",
+          "approach": "(1) `bun run check` (sync:dry + tsc) PASS 확인. (2) `bun run test:e2e` PASS — 신규 E/F block 포함 모든 block PASS. (3) `bun run test:cli` PASS — 15개 block 전체. (4) 각 단계 exit code, 소요 시간, 실패 시 첫 실패 메시지 기록. (5) PASS 할 경우 최종 diff 규모 요약 (변경 파일 수, 삭제 lines, 추가 lines). (6) 실패 시 severity + 원인 추정 + 권고 action (engineer 로 되돌릴지, architect 자문 필요한지).",
+          "acceptance": "- tester output contract: checks list + PASS/FAIL + findings by severity + recommended actions\n- `bun run check` exit 0\n- `bun run test:e2e` exit 0 (A~F 모든 block)\n- `bun run test:cli` exit 0 (B1~B15)\n- 회귀 보고서에 명령별 exit code, 소요 시간, 요약 포함\n- FAIL 시 blocker 여부 명시",
+          "risk": "test:e2e 의 신규 E block 에서 manifest entry 가 예상과 다른 shape 일 가능성 (0.16.2 에서 포맷이 달라졌을 수 있음). 이 경우 Task 6 (engineer) 로 피드백. tester 는 자동 수정하지 않고 구체 fail message 만 전달."
+        },
+        {
+          "id": 14,
+          "title": "v0.12.0 release 준비 — version bump + CHANGELOG entry",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_reuse_policy": "fresh",
+          "plan_issue": 1,
+          "deps": [
+            8,
+            9
+          ],
+          "created_at": "2026-04-20T12:44:26.534Z",
+          "context": "Issue #1 결정: 릴리즈 타겟 v0.12.0. 이 task 는 **release 준비 커밋까지만** 담당하고, 실제 publish (npm, tag, GitHub release) 는 deploy skill 로 분리. 과거 `v0.10.0 = adopt nexus-core 0.15.1` 와 대칭으로 이번은 \"adopt nexus-core v0.16 (I/O 계약 재정렬 + fragment 제거)\" 메시지.",
+          "approach": "(1) `package.json` version: `0.11.0` → `0.12.0`. (2) `CHANGELOG.md` 에 v0.12.0 entry 추가 — 본 plan 의 4개 결정 + 주요 변경 요약 (nexus-core bump, fragment 제거, stale artifact 정리, e2e 강화). 본 plan id (#59) 도 참조. (3) 최종 `bun run check` 한 번 더 실행해 clean 상태 확인 (회귀 방지). (4) commit 을 논리 단위로 정리 (예: deps bump / re-sync / stale cleanup / e2e + docs / release prep 등, 또는 하나의 PR 에 여러 커밋). (5) 실제 git tag / npm publish / GitHub release 는 이 task 범위 밖, deploy skill 담당.",
+          "acceptance": "- `package.json` version = `0.12.0`\n- `CHANGELOG.md` 에 v0.12.0 entry (4개 결정 요약 + plan #59 참조)\n- `bun run check` PASS\n- feature branch 커밋이 PR/릴리즈 준비 상태 (논리적으로 구분된 커밋 또는 단일 정돈 커밋)\n- deploy skill 로의 handoff 포인트 명시 (README/CHANGELOG 에 next step 기술 불필요; lead 에게 인계)",
+          "risk": "CHANGELOG wording 이 upstream 변경 (OpenCode fragment 제거) 을 우리 변경처럼 오해시키지 않도록 주의. \"adopt nexus-core v0.16 (consumer-side contract realignment)\" 형태로 upstream 행위자성 유지."
+        },
+        {
+          "id": 15,
+          "title": "Task 9 stale artifacts cleanup",
+          "status": "completed",
+          "owner": "engineer",
+          "owner_agent_id": "engineer",
+          "owner_reuse_policy": "resume_if_same_artifact",
+          "plan_issue": 3,
+          "deps": [],
+          "created_at": "2026-04-20T13:07:28.098Z",
+          "context": "Plan #59 Issue #3 marks opencode.json.fragment and .opencode/plugins/opencode-nexus.js as stale after nexus-core v0.16.x adoption.",
+          "approach": "Confirm fragment is legacy shape, remove tracked stale files, add gitignore guard, verify shim loadability by checking target dist/index.js existence and package loading path assumptions, then run bun run check.",
+          "acceptance": "opencode.json.fragment removed, .gitignore has /opencode.json.fragment legacy line, plugin shim deleted or updated with rationale, bun run check passes.",
+          "risk": "Accidentally touching unrelated files or misjudging shim usage."
+        }
+      ],
+      "memoryHint": {
+        "taskCount": 15,
+        "decisionCount": 4,
+        "cycleTopics": [
+          "opencode-nexus: adopt nexus-core v0.16.x (I/O 계약 재정렬 + OpenCode fragment 제거 + smoke gate 정합)",
+          "Remove stale artifacts safely with evidence-backed decision."
+        ]
+      }
     }
   ],
   "schema_version": "0.5"

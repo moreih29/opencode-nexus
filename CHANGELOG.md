@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.12.0] — 2026-04-20
+
+### Changed
+
+- **Adopted `@moreih29/nexus-core ^0.16.2`** — 3-harness consumer plugin I/O contract realignment, OpenCode fragment 제거, smoke-consumer gate. Canonical OpenCode contract: `harness-io.md §4-2` (sync outputs = `package.json`/`src/plugin.ts` Template + `src/index.ts`/`src/agents/*.ts`/`.opencode/skills/*` Managed; `plugin: ["<name>"]` auto-register; `agents` array in consumer config is invalid).
+- `@opencode-ai/plugin` bumped to `1.4.9`.
+- `.nexus/memory/anti-patterns.md` §9.2 / §9.5 re-contextualized — `opencode.json.fragment`을 v0.15.x 이전의 legacy 로 명시, 원칙(fragment-as-install-SSOT 금지) 유지.
+- `.nexus/context/architecture.md` + `build-and-release.md` — v0.16 adoption + v0.12.0 타겟 반영.
+
+### Added
+
+- e2e `scripts/e2e-nexus-integration.mjs` blocks:
+  - **E. hook manifest resolves** — manifest JSON load + `handlerPath` existsSync for every entry (prompt-router 포함).
+  - **F. prompt-router self-contained load** — dynamic `import()` sanity of the packaged prompt-router handler.
+  - **C block** fragment-absence assertion — `sync --dry-run` stdout must not mention `opencode.json.fragment`.
+- `.nexus/memory/upstream-docs-drift.md` — record of observed upstream nexus-core docs drift (SSOT vs tutorial/template), kept for future upstream follow-up outside this cycle.
+
+### Removed
+
+- **`opencode.json.fragment`** — no longer produced by `nexus-core` v0.16.0+ `sync`. Stale tracked file removed from the repo, `.gitignore` updated to prevent accidental re-introduction.
+- **`.opencode/plugins/opencode-nexus.js`** — legacy shim that re-exported a stale `dist/index.js`. Not referenced by OpenCode loader (canonical registration is `plugin: ["opencode-nexus"]` → `package.json exports` → `./src/plugin.ts`), not in `files` whitelist, confirmed removable.
+
+### Upstream
+
+- nexus-core v0.15.2 `fix(hooks)` — `dist/hooks/*.js` CLI bootstrap 주입.
+- nexus-core v0.16.0 `feat(contract)` — 3-harness consumer plugin I/O 계약 재정렬 + OpenCode fragment 제거 + smoke gate (#45).
+- nexus-core v0.16.1 `fix(hooks)` — prompt-router 번들 self-contained화 + smoke-consumer gate (#46, #47).
+- nexus-core v0.16.2 `fix(codex)` — Codex `disabled_tools`를 `[mcp_servers.nx]` 블록으로 이동 (#48, #49); OpenCode harness 에는 영향 없음.
+- Tier A bootstrap audit: subpath exports 3/3 PASS, manifest handlerPath resolve 4/4 PASS (`session-init`, `prompt-router`, `agent-finalize`, `agent-bootstrap`), `src/plugin.ts` tsc PASS.
+- Tier B SSOT diff review: sync output fully aligned with `docs/contract/harness-io.md §4-2` (v0.16.2).
+
+### Verification
+
+- `bun run check` PASS (sync:dry + `tsc --noEmit`).
+- `bun run test:e2e` PASS (blocks A–F).
+- `bun run test:cli` PASS (B1–B15, 15/15).
+
+### References
+
+- Plan #59 (`opencode-nexus: adopt nexus-core v0.16.x`) — 4 decisions (caret bump + v0.12.0 target; B-tier diff verification; Tier A + targeted Tier B audit; e2e manifest/prompt-router/fragment-absence assertions).
+
+---
+
 ## [0.11.0] — 2026-04-20
 
 ### Added

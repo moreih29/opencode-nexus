@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const failures = [];
+const require = createRequire(import.meta.url);
 
 function assert(condition, message) {
   if (!condition) failures.push(message);
@@ -220,6 +224,7 @@ async function main() {
   assert(secondSync.code === 0, `C: second sync --dry-run exited with code ${String(secondSync.code)}`);
   assert(firstSync.stdout === secondSync.stdout, "C: sync --dry-run outputs differ between consecutive runs");
   assert(firstSync.stdout.includes("template-skipped"), "C: first sync summary missing 'template-skipped'");
+  assert(!firstSync.stdout.includes("opencode.json.fragment"), "C: sync dry-run stdout must not mention opencode.json.fragment (fragment removed in v0.16.0)");
 
   section("D. plugin module load");
 
@@ -235,6 +240,64 @@ async function main() {
 
   assert(moduleLoaded, "D: plugin module did not load");
   assert(typeof pluginDefault === "function", "D: plugin default export is not a function");
+
+  section("E. hook manifest resolves");
+
+  const packageRoot = dirname(require.resolve("@moreih29/nexus-core/package.json"));
+  const manifestPath = resolve(packageRoot, "dist", "manifests", "opencode-manifest.json");
+
+  let manifest;
+  try {
+    const imported = await import("@moreih29/nexus-core/hooks/opencode-manifest", { with: { type: "json" } });
+    manifest = imported.default;
+  } catch {
+    try {
+      manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    } catch (error) {
+      failures.push(`E: failed to load manifest JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const manifestHooks = manifest?.hooks;
+  assert(Array.isArray(manifestHooks), "E: manifest.hooks is not an array");
+
+  let promptRouterHandlerPath;
+  if (Array.isArray(manifestHooks)) {
+    assert(manifestHooks.length > 0, "E: manifest.hooks is empty");
+
+    for (const [index, hook] of manifestHooks.entries()) {
+      assert(isRecord(hook), `E: hook entry at index ${index} is not an object`);
+      if (!isRecord(hook)) continue;
+
+      const handlerPath = hook.handlerPath;
+      assert(typeof handlerPath === "string" && handlerPath.length > 0, `E: hook ${hook.name ?? `#${index}`} missing handlerPath`);
+      if (typeof handlerPath !== "string" || handlerPath.length === 0) continue;
+
+      const handlerAbsolutePath = resolve(packageRoot, "dist", "manifests", handlerPath);
+      assert(existsSync(handlerAbsolutePath), `E: handlerPath missing on disk for ${hook.name ?? `#${index}`}: ${handlerPath}`);
+
+      if (hook.name === "prompt-router") {
+        promptRouterHandlerPath = handlerAbsolutePath;
+      }
+    }
+  }
+
+  assert(!!promptRouterHandlerPath, "E: prompt-router entry missing from manifest.hooks");
+
+  section("F. prompt-router self-contained load");
+
+  if (!promptRouterHandlerPath) {
+    failures.push("F: prompt-router handler path unavailable from manifest");
+  } else {
+    try {
+      const promptRouterModule = await import(pathToFileURL(promptRouterHandlerPath).href);
+      const hasDefaultFunction = typeof promptRouterModule.default === "function";
+      const hasAnyFunctionExport = Object.values(promptRouterModule).some((value) => typeof value === "function");
+      assert(hasDefaultFunction || hasAnyFunctionExport, "F: prompt-router module has no function export");
+    } catch (error) {
+      failures.push(`F: failed to import prompt-router handler: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   if (failures.length === 0) {
     console.log("\n✅ All blocks PASS");

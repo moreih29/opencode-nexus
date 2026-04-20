@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": false,
   "type": "module",
   "description": "OpenCode plugin wrapper delivering nexus-core shared runtime substrate",
@@ -56,8 +56,8 @@
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
-    "@moreih29/nexus-core": "^0.15.1",
-    "@opencode-ai/plugin": "1.4.7"
+    "@moreih29/nexus-core": "^0.16.2",
+    "@opencode-ai/plugin": "1.4.9"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
