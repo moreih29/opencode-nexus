@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "@opencode-ai/plugin";
@@ -96,7 +97,42 @@ function mergeAgentConfig(base: Record<string, unknown>, override: Record<string
   return merged;
 }
 
+// cmux integration: forward lifecycle signals to the cmux desktop app via its
+// CLI (`cmux notify`) so users get native OS notifications when a response is
+// ready or the agent is asking for input. This is a best-effort integration:
+// we only fire when the OpenCode process is running inside a cmux terminal
+// (identified by the CMUX_WORKSPACE_ID env var that cmux injects) and we
+// swallow any failure silently so non-cmux environments see no change.
+// Disable entirely by setting OPENCODE_NEXUS_CMUX=0 or OPENCODE_NEXUS_CMUX=false.
+function isCmuxNotifyEnabled(): boolean {
+  if (!process.env.CMUX_WORKSPACE_ID) return false;
+  const flag = process.env.OPENCODE_NEXUS_CMUX;
+  if (flag === "0" || flag === "false") return false;
+  return true;
+}
+
+function cmuxNotify(title: string, body: string): void {
+  if (!isCmuxNotifyEnabled()) return;
+  try {
+    const child = spawn("cmux", ["notify", "--title", title, "--body", body], {
+      stdio: "ignore",
+      detached: true,
+    });
+    child.on("error", () => {
+      /* cmux CLI not found or spawn failed — silently skip */
+    });
+    child.unref();
+  } catch {
+    /* swallow any synchronous spawn errors too */
+  }
+}
+
 export const OpencodeNexus: Plugin = async ({ directory }) => {
+  // Track root sessions so we only forward `session.idle` to cmux for the
+  // top-level session. Subagent sessions also emit `session.idle` whenever
+  // they finish a turn, and notifying on each of those would be spam.
+  const rootSessions = new Set<string>();
+
   return {
     config: async (config) => {
       const configRecord = config as Record<string, unknown>;
@@ -113,9 +149,26 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
       }
     },
     event: async ({ event }) => {
-      if (event.type !== "session.created") return;
-      if (event.properties.info.parentID) return;
-      ensureNexusStructure(directory);
+      if (event.type === "session.created") {
+        if (!event.properties.info.parentID) {
+          rootSessions.add(event.properties.info.id);
+          ensureNexusStructure(directory);
+        }
+        return;
+      }
+      if (event.type === "session.deleted") {
+        rootSessions.delete(event.properties.info.id);
+        return;
+      }
+      if (event.type === "session.idle" && rootSessions.has(event.properties.sessionID)) {
+        cmuxNotify("opencode-nexus", "Response ready");
+        return;
+      }
+    },
+    "tool.execute.before": async (input) => {
+      if (input.tool === "question") {
+        cmuxNotify("opencode-nexus", "Waiting for your input");
+      }
     },
     "chat.message": async (_input, output) => {
       const textPart = output.parts.find((part) => part.type === "text");
