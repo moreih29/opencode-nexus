@@ -2,6 +2,34 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.13.3] — 2026-04-22
+
+### 변경됨
+
+- **`@moreih29/nexus-core` `0.19.1` → `0.19.2`** 로 승격.
+- 번들 planning skill 의 HOW resume 지시가 자연어 설명에서 하네스별 concrete invocation 으로 **구체화**됐다 (업스트림 moreih29/nexus-core#65). OpenCode 의 경우 이제 `task({ task_id: "<id>", prompt: "<resume prompt>" })` 호출이 직접 명시된다.
+  - `skills/nx-plan/SKILL.md` Step 4 의 resume bullet
+  - `skills/nx-auto-plan/SKILL.md` 동일 위치
+- runtime 코드 / generate 로직 / frontmatter 구조 변경 없음. skill 본문 2줄만 재싱크 영향.
+
+### 업스트림
+
+- nexus-core v0.19.2 `fix(plan)`: planning skill 의 resume 지시가 "continue with the existing session" (자연어) 에서 `{{subagent_resume agent_id=<id> prompt=<resume prompt>}}` 매크로로 바뀌어, OpenCode 하네스에서는 `task(...)` 호출로 치환된다 (moreih29/nexus-core#65).
+
+### 사용자 영향
+
+- **기존 사용자**: 업데이트 필수 아님 (v0.13.2 정상 동작). 다만 Lead 가 resume 호출 시 더 명확한 가이드를 받으려면 `opencode-nexus install` 재실행 권장.
+- **신규 설치**: 자동 반영, 추가 조치 불필요.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- **§5-1 skill frontmatter static check** PASS (3/3 skill 스펙 준수 재확인)
+- **§5-2 live load smoke test** PASS (`opencode debug skill` 3개 skill 정상 반환)
+
+---
+
 ## [0.13.2] — 2026-04-22
 
 ### 수정됨 (Hotfix)
