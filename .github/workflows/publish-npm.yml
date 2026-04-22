@@ -1,16 +1,3 @@
-# opencode-nexus publish workflow
-#
-# Triggered by a semver tag push (`v[0-9]+.[0-9]+.[0-9]+`) created by
-# the release process, or manually via workflow_dispatch for dry-run verification.
-#
-# Authentication: OIDC Trusted Publishing only.
-# - npmjs.com has `moreih29/opencode-nexus` + `publish-npm.yml` registered as
-#   a Trusted Publisher for the `@moreih29/opencode-nexus` package.
-# - No `NPM_TOKEN` secret, no `NODE_AUTH_TOKEN`, no long-lived credentials.
-# - `registry-url` is deliberately NOT set on setup-node: it would inject
-#   NODE_AUTH_TOKEN which takes precedence over OIDC and routes publish
-#   through token auth.
-
 name: Publish npm package
 
 env:
@@ -22,10 +9,10 @@ on:
       dry_run:
         type: boolean
         default: false
-        description: "Pack only, skip publish"
+        description: Pack only, skip npm publish
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -38,6 +25,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,12 +33,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3"
+          bun-version: "1.3.9"
 
-      - name: Setup Node 24 (bundled npm 11+ for OIDC Trusted Publishing)
-        # Node 24 LTS ships with npm 11+, required for Trusted Publishing.
-        # DO NOT add registry-url here — would inject NODE_AUTH_TOKEN env
-        # which takes precedence over OIDC and routes publish through token auth.
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -58,28 +43,25 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check types
+      - name: Validate package
         run: bun run check
 
-      - name: Version match check (git tag vs package.json)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          PKG_VERSION=$(bun -e "console.log(require('./package.json').version)")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "Version mismatch: package.json=$PKG_VERSION, git tag=$TAG_VERSION"
-            exit 1
-          fi
-          echo "Version match: $PKG_VERSION"
-
-      - name: Run end-to-end tests
+      - name: Run integration tests
         run: bun run test:e2e
 
       - name: Verify package contents
         run: npm pack --dry-run
 
-      - name: Publish to npm (OIDC Trusted Publishing)
-        if: ${{ !inputs.dry_run }}
+      - name: Check version matches git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: package.json=$PKG_VERSION, git tag=$TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Publish to npm
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         run: npm publish --provenance --access public
-        # No NODE_AUTH_TOKEN — OIDC via id-token:write permission above.
-        # Trusted Publisher registered in npmjs.com for this repo+workflow.
