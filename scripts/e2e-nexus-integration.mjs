@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -12,11 +12,11 @@ function assert(condition, message) {
   if (!condition) failures.push(message);
 }
 
-function run(command, args, { cwd = process.cwd(), timeoutMs = 10000 } = {}) {
+function run(command, args, { cwd = process.cwd(), timeoutMs = 10000, env = process.env } = {}) {
   return new Promise((resolvePromise) => {
     const child = spawn(command, args, {
       cwd,
-      env: process.env,
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -42,6 +42,18 @@ function run(command, args, { cwd = process.cwd(), timeoutMs = 10000 } = {}) {
       resolvePromise({ code, stdout, stderr, timedOut });
     });
   });
+}
+
+function installMockOpencode(tempDir) {
+  const binDir = join(tempDir, ".bin");
+  const scriptPath = join(binDir, "opencode");
+  mkdirSync(binDir, { recursive: true });
+  Bun.write(scriptPath, "#!/usr/bin/env node\nif (process.argv[2] === 'models' && process.argv[3] === '--pure') {\n  process.stdout.write('openai/gpt-5.4\\nopenai/gpt-5.3\\n');\n  process.exit(0);\n}\nprocess.stderr.write('unsupported mock command\\n');\nprocess.exit(1);\n");
+  chmodSync(scriptPath, 0o755);
+  return {
+    ...process.env,
+    PATH: `${binDir}:${process.env.PATH ?? ""}`,
+  };
 }
 
 async function main() {
@@ -75,6 +87,7 @@ async function main() {
 
   const tempDir = mkdtempSync(join(tmpdir(), "opencode-nexus-"));
   try {
+    const cliEnv = installMockOpencode(tempDir);
     const existingConfigPath = join(tempDir, "opencode.json");
     Bun.write(existingConfigPath, `${JSON.stringify({
       plugin: ["custom-plugin", "opencode-nexus@0.1.0", "opencode-nexus"],
@@ -88,6 +101,7 @@ async function main() {
 
     const installResult = await run("node", [resolve("bin/opencode-nexus.mjs"), "install", "--scope=project"], {
       cwd: tempDir,
+      env: cliEnv,
     });
     assert(!installResult.timedOut, "install CLI timed out");
     assert(installResult.code === 0, `install CLI failed: ${installResult.stderr || installResult.stdout}`);
@@ -118,6 +132,7 @@ async function main() {
       "--model=openai/gpt-5.4",
     ], {
       cwd: tempDir,
+      env: cliEnv,
     });
     assert(!modelsResult.timedOut, "models CLI timed out");
     assert(modelsResult.code === 0, `models CLI failed: ${modelsResult.stderr || modelsResult.stdout}`);
