@@ -32,22 +32,24 @@ CLI 실행은 `node` 기준입니다. `bun`으로 패키지를 설치할 수는 
 가장 권장하는 방법은 전역 설치입니다.
 
 ```bash
-npm install -g opencode-nexus@0.13.5
+npm install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
 일회성 실행만 원하면:
 
 ```bash
-npx opencode-nexus@0.13.5 install
+npx opencode-nexus@latest install
 ```
 
 `bun`으로 설치해도 됩니다.
 
 ```bash
-bun install -g opencode-nexus@0.13.5
+bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
+
+특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.14.0`).
 
 ## install이 하는 일
 
@@ -62,12 +64,12 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `.opencode/skills/` 아래에 Nexus 스킬 복사
 - 현재 실행 중인 CLI 버전으로 plugin pin
 
-예를 들어 `0.13.5`에서는 다음과 같이 기록됩니다.
+`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.14.0`이면 다음과 같이 기록됩니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.13.5"],
+  "plugin": ["opencode-nexus@0.14.0"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -136,6 +138,23 @@ interactive 화면에서는:
 ```bash
 opencode-nexus models --scope=project --agents=lead,general,explore --model=openai/gpt-5.4
 ```
+
+## cmux 통합 (데스크톱 알림)
+
+[cmux](https://github.com/coder/mux) 데스크톱 앱 안에서 OpenCode 를 실행 중이라면, Nexus plugin 이 두 시점에 OS 네이티브 알림을 자동으로 띄웁니다.
+
+- **응답 완료**: Lead 의 한 턴이 끝나 사용자 입력을 기다리는 상태로 돌아갈 때 "Response ready"
+- **사용자 질문 대기**: Lead 또는 서브에이전트가 `question` 툴을 호출하는 순간 "Waiting for your input"
+
+활성화 조건: cmux 가 자동으로 설정하는 `CMUX_WORKSPACE_ID` 환경변수가 있을 때만 동작합니다. cmux 밖에서 실행 중이면 알림 코드는 no-op 이므로 다른 환경에 영향이 없습니다.
+
+비활성화하려면 shell 환경에 다음을 export 하세요.
+
+```bash
+export OPENCODE_NEXUS_CMUX=0
+```
+
+cmux 가 없어도, 환경변수가 없어도, 모두 silent fallback 되며 plugin 의 다른 기능은 그대로 작동합니다.
 
 ## 업그레이드
 

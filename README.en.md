@@ -32,22 +32,24 @@ The CLI runs with `node`. You may install the package with `bun`, but the `openc
 The recommended path is a global install.
 
 ```bash
-npm install -g opencode-nexus@0.13.5
+npm install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
 For a one-off run:
 
 ```bash
-npx opencode-nexus@0.13.5 install
+npx opencode-nexus@latest install
 ```
 
 You can also install it with Bun.
 
 ```bash
-bun install -g opencode-nexus@0.13.5
+bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
+
+To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.14.0`).
 
 ## What `install` does
 
@@ -62,12 +64,12 @@ It then applies the following:
 - copies Nexus skills into `.opencode/skills/`
 - pins the plugin to the exact currently running CLI version
 
-For example, on `0.13.5` it writes:
+`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.14.0`, it writes:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.13.5"],
+  "plugin": ["opencode-nexus@0.14.0"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -136,6 +138,23 @@ For automation or scripting, direct mode is available.
 ```bash
 opencode-nexus models --scope=project --agents=lead,general,explore --model=openai/gpt-5.4
 ```
+
+## cmux integration (desktop notifications)
+
+If you run OpenCode inside the [cmux](https://github.com/coder/mux) desktop app, the Nexus plugin automatically posts native OS notifications at two lifecycle points:
+
+- **Response ready**: Lead finishes a turn and the session returns to idle waiting for your input.
+- **Waiting for input**: Lead or any subagent invokes the `question` tool.
+
+The integration activates only when cmux's `CMUX_WORKSPACE_ID` env var is present (cmux injects it automatically in its terminals). Outside cmux the notification code is a no-op, so other environments are unaffected.
+
+To disable, export the following in your shell:
+
+```bash
+export OPENCODE_NEXUS_CMUX=0
+```
+
+When cmux is not installed, or when the env var is absent, all notify calls fall back silently and the rest of the plugin continues to work.
 
 ## Upgrade
 

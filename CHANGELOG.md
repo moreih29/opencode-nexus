@@ -2,6 +2,47 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.14.0] — 2026-04-22
+
+### 추가됨
+
+- **cmux 데스크톱 통합** — cmux 터미널 안에서 OpenCode 를 실행 중일 때, Nexus plugin 이 다음 두 시점에 `cmux notify` 를 호출해 OS 알림을 띄운다. cmux 외부 환경에서는 자동으로 no-op 이므로 다른 사용자 환경에는 영향 없음.
+  - **응답 완료 (`session.idle`)** — Lead 가 한 턴의 응답을 마쳤을 때 "Response ready" 알림. subagent 세션이 idle 되는 경우는 알림 스팸 방지를 위해 제외 (root session 만 추적).
+  - **사용자 입력 대기 (`tool.execute.before` + tool === `question`)** — Lead 또는 서브에이전트가 사용자에게 질문 툴을 호출한 순간 "Waiting for your input" 알림.
+- 활성화 조건: `CMUX_WORKSPACE_ID` 환경변수가 설정되어 있어야 한다 (cmux 가 cmux 터미널에 주입하는 env). 또한 `OPENCODE_NEXUS_CMUX=0` 또는 `false` 로 명시 비활성화 가능.
+- fire-and-forget 구조 (spawn → detached → unref) 로 plugin 흐름을 blocking 하지 않으며, cmux CLI 가 PATH 에 없는 경우 spawn 에러는 silent 처리.
+
+### 변경됨
+
+- **README 설치 예시를 `@latest` 기준으로 전환** — 지금까지 README (ko/en) 의 `npm install -g opencode-nexus@x.y.z` 예시가 매 릴리즈마다 하드코딩 업데이트 대상이었고, 사용자가 구 버전을 실수로 설치할 수 있는 drift 위험이 있었다. 이제 설치/업그레이드 예시는 `@latest` 로 고정하고, 버전 pin 예시는 본문 안 설명용 illustrative 숫자로만 남긴다. 릴리즈 체크리스트 §1 에 이 규칙을 §1-1 로 추가하여 "README 의 모든 버전 숫자를 매번 동기화" 부담을 제거했다.
+
+### 업스트림
+
+- `@moreih29/nexus-core` 버전 변경 없음 (0.19.2 유지).
+
+### 사용자 영향
+
+- **cmux 사용자**: 알림이 자동 활성화된다. cmux notification center 에 "opencode-nexus" 출처 알림이 뜸. 비활성화하려면 shell 환경에 `OPENCODE_NEXUS_CMUX=0` export.
+- **cmux 미사용자**: 변경 없음. `CMUX_WORKSPACE_ID` env 가 없으면 모든 notify 호출이 no-op.
+- install / models / publish 흐름 변경 없음. 기존 설정 재설치 불필요. v0.14.0 을 설치하면 plugin 코드가 새 hook 두 개를 자동으로 추가 활성화.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- **§5-1 / §5-2 / §5-3 (a)(b)** 회귀 PASS
+- **cmux 통합 단위 테스트** — plugin hooks 를 직접 호출하여 4 케이스 검증:
+  - `tool.execute.before` (tool=question) → fire ✅
+  - `session.created` (root) + `session.idle` → fire ✅
+  - `session.idle` (non-root sessionID) → no-fire ✅
+  - `tool.execute.before` (tool=bash) → no-fire ✅
+
+### 향후
+
+- cmux 의 `claude-hook` 통합 (sidebar status `running` / `idle` 반영) 은 범용 OpenCode plugin 에서 바로 쓰기 애매한 부분이 있어 이번에는 제외. 사용자 요청 있으면 후속 minor 에서 추가 검토.
+
+---
+
 ## [0.13.5] — 2026-04-22
 
 ### 수정됨 (Hotfix — v0.13.4 반쪽 수정 보완)

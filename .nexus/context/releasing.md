@@ -12,10 +12,16 @@
 - pre-v1 정책에 따라 breaking change가 있으면 patch가 아니라 minor를 선택
 - breaking change가 없으면 patch를 우선 검토
 - `package.json`의 `version`이 위 결정과 일치하는지 확인
-- README의 설치 예시 버전이 `package.json` 버전과 일치하는지 확인
 - 생성 예정 태그가 있다면 형식이 `vX.Y.Z`인지 확인
 - 생성 예정 태그 버전이 `package.json` 버전과 정확히 일치하는지 확인
 - 가능하면 `npm view opencode-nexus versions --json`로 같은 버전이 이미 배포되었는지 확인
+
+### 1-1. README 버전 표기 규칙
+
+- **설치 / 업그레이드 명령 예시**: 항상 `opencode-nexus@latest` 를 기준으로 작성한다. 매 릴리즈마다 버전 숫자를 고칠 필요 없고, 사용자가 구 버전을 실수로 설치하는 위험도 없다.
+- **옵션 pin 설명용 예시**: "특정 버전 pin 하려면 `@x.y.z`" 라는 언급 안에서만 숫자를 쓴다. 이 숫자는 illustrative 이므로 최신 버전을 채워두는 것을 권장하지만, 일치하지 않아도 릴리즈 blocker 는 아님.
+- **`opencode.json` 예시 블록**: install CLI 가 "현재 실행 중인 CLI 버전"을 자동 pin 한다는 동작을 보여주는 예시다. 이 블록의 JSON 안 버전 숫자는 가급적 현재 릴리즈 버전으로 맞춰두되, 놓쳤다고 해서 release gate 가 깨지지는 않는다.
+- CHANGELOG 의 각 버전 entry 는 별도 규칙 (§13) 을 따른다. `@latest` 대체 불가.
 
 ## 2. 작업트리 상태
 
