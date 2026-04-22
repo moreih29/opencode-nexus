@@ -2,6 +2,45 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.13.5] — 2026-04-22
+
+### 수정됨 (Hotfix — v0.13.4 반쪽 수정 보완)
+
+- **nexus-mcp shim 이 서버 기동을 skip 하던 버그 수정** — v0.13.4 에서 `opencode-nexus` 의 `bin.nexus-mcp` 를 노출시켜 `$PATH` 문제는 해소했지만, shim 이 `await import("@moreih29/nexus-core/mcp")` 만 호출하는 구조였다. upstream `dist/mcp/server.js` 의 `main()` 은 `isDirectRun = import.meta.url === "file://${process.argv[1]}"` 가드 안에 있어, import 경로로 로드되면 guard 가 false 가 되어 `main()` 이 호출되지 않는다. 결과적으로 `StdioServerTransport` 가 열리지 않고 프로세스가 즉시 event loop 종료로 빠져나가, OpenCode 가 `MCP error -32000: Connection closed` 로 실패.
+- 수정: shim 이 `main` 을 이름 기반 import 후 명시적으로 `await main()`. 이제 `nexus-mcp` 가 실제 stdio 서버로 기동되어 OpenCode 의 MCP handshake (initialize 요청) 에 정상 응답한다.
+- **기존 사용자 조치**: v0.13.5 로 CLI 재설치. `opencode mcp list` 에서 `nx` 가 failed 없이 뜨면 복구 완료. `opencode.json` 수정 불필요.
+
+### 변경됨
+
+- 릴리즈 체크리스트 (`.nexus/context/releasing.md`) **§5-3 를 3단계로 재구성**:
+  - (a) **PATH 노출**: 기존 검사
+  - (b) **Handshake 응답**: 실제 MCP `initialize` 요청을 보내 `serverInfo` 포함 JSON-RPC 응답을 받는지 확인 (신규)
+  - (c) **`opencode mcp list` 확인**: 호스트 OpenCode 에서 `failed` 없이 뜨는지 확인 (신규)
+- v0.13.4 가 (a) 만 검증하고 (b)(c) 를 놓쳐 반쪽짜리로 배포된 원인을 직접 차단한다.
+- `.nexus/memory/pattern-bug-fix-routing.md` 의 anti-patterns 에 두 항목 추가:
+  - "spawn 성공 = 기능 동작" 착각 (v0.13.4 의 실제 원인)
+  - "shim 이 import 만으로 충분" 착각 (이 hotfix 의 직접 원인)
+
+### 업스트림
+
+- 이번 릴리즈는 업스트림 패키지 버전 변경 없음 (`@moreih29/nexus-core` 0.19.2 유지). wrapper 의 bin shim 로직만 수정.
+
+### 사용자 영향
+
+- **v0.13.4 를 글로벌 설치한 모든 사용자**: MCP 서버가 보이기는 있지만 `Connection closed` 로 즉시 실패 상태. v0.13.5 로 업그레이드 후 `opencode mcp list` 로 복구 확인.
+- **신규 설치**: 자동 정상 동작.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- **§5-1 / §5-2** PASS (skill 관련 기존 검증)
+- **§5-3 (a) PATH 노출** PASS
+- **§5-3 (b) MCP handshake 응답** PASS — 격리된 npm prefix 에 설치 후 stdio 로 `initialize` 보내면 `"serverInfo":{"name":"nexus-core","version":"0.19.2"}` 포함 응답 수신 확인
+- **§5-3 (c) `opencode mcp list`** PASS — 호스트 환경 업그레이드 후 `nx` 항목이 failed 없이 뜸을 확인 (본 릴리즈 배포 후 사용자 환경에서 검증 완료)
+
+---
+
 ## [0.13.4] — 2026-04-22
 
 ### 수정됨 (Hotfix)
