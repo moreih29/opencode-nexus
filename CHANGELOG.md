@@ -2,6 +2,45 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.13.2] — 2026-04-22
+
+### 수정됨 (Hotfix)
+
+- **번들 skill 로딩 실패 수정** — v0.13.1 (그리고 사실상 그 이전 모든 OpenCode 계열 릴리즈) 에서 생성된 `SKILL.md` frontmatter 는 OpenCode 공식 Agent Skills 스펙 (https://opencode.ai/docs/skills/) 을 위반해 있었다. `name` 필드가 누락되고, OpenCode가 인식하지 않는 `triggers` 필드가 emit 되어 있었다. 결과적으로 OpenCode는 어떤 skill 도 등록하지 않았고 `[plan]` / `[auto-plan]` / `[run]` 호출 시 `Skill "nx-plan" not found. Available skills: none` 으로 실패했다.
+- 업스트림 `@moreih29/nexus-core` v0.19.1 (moreih29/nexus-core#60) 에서 opencode harness 의 frontmatter emit 로직이 수정되어, 이번 릴리즈부터 재싱크된 skill 은 `name: <id>` 를 포함하고 `triggers` 는 emit 되지 않는다.
+- **기존 사용자 조치**: v0.13.2 로 CLI 를 업그레이드한 뒤 `opencode-nexus install` 을 다시 실행하면 `.opencode/skills/` 또는 `~/.config/opencode/skills/` 아래 SKILL.md 가 교체되어 skill 로딩이 정상 복구된다.
+
+### 변경됨
+
+- **`@moreih29/nexus-core` `0.19.0` → `0.19.1`** 로 승격.
+- 번들 planning skill Step 3 (HOW 분석 기록) 및 Lead 의 Subagent ID Recording Practice 섹션이 **더 엄격하게** 재정의됐다 (업스트림 moreih29/nexus-core#61). `nx_plan_analysis_add` / `nx_task_update` 의 `agent_id` 에는 **반드시 하네스 spawn 툴이 반환한 agent id** 를 넘겨야 하며, 사람이 읽기 쉬운 assigned name 으로 대체하지 않는다. name 은 활성 세션 메시징용일 뿐, 종료된 세션을 안전하게 재개할 수 있는 식별자가 아니기 때문이다.
+- 릴리즈 체크리스트 (`.nexus/context/releasing.md`) §5 에 **§5-1 skill frontmatter 스펙 정적 검증** 과 **§5-2 live load smoke test** 를 추가했다. 이번 사건 (v0.13.1 에 broken skill 을 배포한) 의 직접적 원인이 이 검증의 부재였다.
+
+### 추가됨
+
+- `.nexus/memory/pattern-bug-fix-routing.md` — 버그 발견 시 원인 위치에 따라 upstream 이슈 경로와 로컬 수정 경로 중 어느 쪽으로 가는지 판단하는 결정 패턴을 명문화. 이번 사이클의 실제 사례 (moreih29/nexus-core#57 → v0.19.1 fix → 이 릴리즈) 를 포함.
+
+### 업스트림
+
+- nexus-core v0.19.1 `fix(opencode)` — opencode harness sync 가 `SKILL.md` frontmatter 에 `name: <id>` 를 주입하고 `triggers` emit 을 중단 (moreih29/nexus-core#60). 우리 이슈 moreih29/nexus-core#57 의 fix.
+- nexus-core v0.19.1 `fix(plan)` — `nx_plan_analysis_add` / `nx_task_update` 의 agent_id strict 화 (moreih29/nexus-core#61). 사람이 읽기 쉬운 name 대체 불허.
+- nexus-core v0.19.1 `fix(codex)` — codex 자식 agent 가 부모 세션의 `nx` MCP launcher 를 보존 (moreih29/nexus-core#62). OpenCode 하네스에는 영향 없음.
+
+### 사용자 영향
+
+- **기존 v0.13.1 사용자**: skill 이 로드되지 않는 상태 → 이 hotfix 로 복구. `opencode-nexus install` 재실행 권장.
+- **신규 설치**: 자동으로 정상 동작.
+- **plan session 운영자**: `nx_plan_analysis_add` / `nx_task_update` 호출부에서 agent_id 에 스폰 툴 응답 id 를 사용하고 있는지 점검. name 을 쓰고 있었다면 strict 가이드 위반으로 향후 `nx_plan_resume` / `nx_task_resume` 재개가 실패할 수 있음.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- §5-1 skill frontmatter 정적 검증 PASS
+- §5-2 live load smoke test PASS
+
+---
+
 ## [0.13.1] — 2026-04-22
 
 ### 변경됨
