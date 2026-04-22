@@ -94,3 +94,5 @@
 - **Local hotfix 없이 무작정 upstream 대기**: 사용자가 critical 영향을 받는 상태를 방치하면 신뢰 손상. C 경로 검토 필요.
 - **경로를 정한 후 다른 경로 섞기**: A 로 결정했는데 중간에 local 이 급해 patch 쌓기 시작하면 나중에 upstream merge 와 충돌. 경로 전환 시에는 결정 자체를 다시 내리고 기록.
 - **원인 식별 생략**: 증상만 보고 바로 경로 선택 금지. 재현 + spec 대조 + 원인 위치 확정이 선행되어야 한다.
+- **"spawn 성공 = 기능 동작"으로 착각**: 프로세스가 에러 없이 종료되는 것과 실제로 서비스가 기동되어 요청을 처리하는 것은 완전히 다른 조건이다. 특히 stdin-driven 서버에서 `</dev/null` 로 보낸 뒤 exit 0 을 보고 "OK" 로 처리하면 실패를 성공으로 오인한다. 실제 프로토콜 요청을 보내 응답 수신까지 확인해야 한다. v0.13.4 가 이 착각으로 반쪽 fix 로 배포되어 v0.13.5 hotfix 가 필요했다. 이어서 §5-3 이 세 단계(PATH 노출 / handshake 응답 / `opencode mcp list`)로 분해됐다.
+- **"shim 이 import 만으로 충분"으로 착각**: 재사용하려는 upstream 엔트리가 `isDirectRun` 같은 가드로 보호되어 있으면 dynamic import 만으로는 main 이 호출되지 않는다. 반드시 exported entrypoint 를 이름 기준으로 import 해서 명시적으로 호출하라. 단순히 `await import("@pkg/entry")` 는 upstream 이 "direct run" 을 전제로 설계된 경우 no-op 이 된다.
