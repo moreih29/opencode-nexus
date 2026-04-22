@@ -1,9 +1,9 @@
 {
   "name": "opencode-nexus",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": false,
   "type": "module",
-  "description": "OpenCode plugin wrapper delivering nexus-core shared runtime substrate",
+  "description": "OpenCode plugin wrapper for @moreih29/nexus-core",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -19,8 +19,7 @@
     "nexus",
     "nexus-core",
     "agents",
-    "orchestration",
-    "cli"
+    "orchestration"
   ],
   "packageManager": "bun@1.3.9",
   "engines": {
@@ -35,29 +34,26 @@
   },
   "files": [
     "src",
-    "lib",
     "bin",
-    ".opencode/skills",
-    "scripts/postinstall.mjs"
+    "lib",
+    "skills"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "sync": "bunx @moreih29/nexus-core sync --harness=opencode --target=./",
-    "sync:dry": "bunx @moreih29/nexus-core sync --harness=opencode --target=./ --dry-run",
-    "sync:strict": "bunx @moreih29/nexus-core sync --harness=opencode --target=./ --strict",
-    "validate": "bunx @moreih29/nexus-core validate",
+    "sync": "./node_modules/.bin/nexus-sync --harness=opencode --target=./",
+    "sync:dry": "./node_modules/.bin/nexus-sync --harness=opencode --target=./ --dry-run",
     "build": "bun run sync && tsc --noEmit",
     "check": "bun run sync:dry && tsc --noEmit",
-    "test:e2e": "bun scripts/e2e-nexus-integration.mjs",
-    "test:cli": "bun scripts/e2e-cli.mjs",
-    "prepack": "bun run sync:strict",
-    "postinstall": "node scripts/postinstall.mjs"
+    "test:e2e": "bun run sync && bun scripts/e2e-nexus-integration.mjs",
+    "prepack": "bun run build"
   },
   "dependencies": {
-    "@moreih29/nexus-core": "^0.16.2",
-    "@opencode-ai/plugin": "1.4.9"
+    "@moreih29/nexus-core": "0.18.2",
+    "@opencode-ai/plugin": "1.4.9",
+    "ink": "^7.0.1",
+    "react": "^19.2.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
