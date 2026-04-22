@@ -32,20 +32,20 @@ The CLI runs with `node`. You may install the package with `bun`, but the `openc
 The recommended path is a global install.
 
 ```bash
-npm install -g opencode-nexus@0.13.0
+npm install -g opencode-nexus@0.13.1
 opencode-nexus install
 ```
 
 For a one-off run:
 
 ```bash
-npx opencode-nexus@0.13.0 install
+npx opencode-nexus@0.13.1 install
 ```
 
 You can also install it with Bun.
 
 ```bash
-bun install -g opencode-nexus@0.13.0
+bun install -g opencode-nexus@0.13.1
 opencode-nexus install
 ```
 
@@ -62,12 +62,12 @@ It then applies the following:
 - copies Nexus skills into `.opencode/skills/`
 - pins the plugin to the exact currently running CLI version
 
-For example, on `0.13.0` it writes:
+For example, on `0.13.1` it writes:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.13.0"],
+  "plugin": ["opencode-nexus@0.13.1"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -161,9 +161,14 @@ The canonical orchestration rules and specifications still come from `@moreih29/
 
 ## Development
 
+This repo dogfoods itself by installing `opencode-nexus` into its own `.opencode/`. All install outputs — `opencode.json`, `.opencode/skills/`, and the supporting files under `.opencode/` — are gitignored, so you need to bootstrap once after cloning. Per-agent model picks are provider-specific personal preferences and are **not** tracked; configure them yourself with `opencode-nexus models`.
+
 ```bash
 bun install
-bun run sync
+bun run bootstrap       # sync + write baseline opencode.json + install into .opencode/
+opencode-nexus models   # (optional) pick per-agent models for your providers
 bun run check
 bun run test:e2e
 ```
+
+When bumping `@moreih29/nexus-core`, run `bun run sync` to regenerate `skills/` and `src/agents/`, and re-run `bun run bootstrap` whenever you want the local `.opencode/` and the plugin pin in `opencode.json` to catch up. `bootstrap` does not overwrite per-agent model overrides you have already set.
