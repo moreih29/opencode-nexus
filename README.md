@@ -1,132 +1,166 @@
 # opencode-nexus
 
-`opencode-nexus` is a thin OpenCode wrapper around `@moreih29/nexus-core`.
+OpenCode에서 Nexus Core 기반 에이전트, 스킬, MCP 구성을 빠르게 설치하고 유지하기 위한 플러그인입니다.
 
-It only wires the surfaces that `nexus-core` expects an OpenCode consumer to provide:
+- npm: https://www.npmjs.com/package/opencode-nexus
+- 라이센스: https://github.com/moreih29/opencode-nexus/blob/main/LICENSE
+- English README: https://github.com/moreih29/opencode-nexus/blob/main/README.en.md
 
-- pinned npm plugin entry: `plugin: ["opencode-nexus@0.13.0"]`
-- local MCP server: `mcp.nx -> ["nexus-mcp"]`
-- runtime agent registration for `lead` plus the Nexus subagents
-- core skills only: `nx-auto-plan`, `nx-plan`, `nx-run`
+## 무엇을 해주나요?
 
-It does not add extra skills, extra runtime behavior, or OpenCode-only orchestration outside the Nexus Core contract.
+`opencode-nexus`는 OpenCode 프로젝트에 아래 구성을 자동으로 맞춥니다.
 
-## Install
+- `plugin: ["opencode-nexus@<현재버전>"]` pin
+- `mcp.nx` 등록 (`nexus-mcp`)
+- `default_agent: "lead"`
+- OpenCode 기본 primary인 `build`, `plan` 숨김
+- Nexus Core 스킬 복사
+  - `nx-auto-plan`
+  - `nx-plan`
+  - `nx-run`
+- `lead`, `general`, `explore`, Nexus subagent용 모델 설정 도우미 제공
 
-The CLI runs with `node`, so `Node.js >= 22` is required.
+## 요구사항
 
-`bun` is supported for package installation, but the `opencode-nexus` command itself still executes with Node.
+- `Node.js >= 22`
+- OpenCode 설치 및 사용 가능 환경
 
-Global CLI install via npm is the recommended path.
+CLI 실행은 `node` 기준입니다. `bun`으로 패키지를 설치할 수는 있지만, `opencode-nexus` 명령 자체는 Node로 실행됩니다.
+
+## 설치
+
+가장 권장하는 방법은 전역 설치입니다.
 
 ```bash
 npm install -g opencode-nexus@0.13.0
 opencode-nexus install
 ```
 
-This writes a pinned plugin entry for the exact installed package version. For `0.13.0`, the generated config contains:
-
-```json
-{
-  "plugin": ["opencode-nexus@0.13.0"]
-}
-```
-
-When `install` runs in an interactive terminal, it walks through:
-
-1. scope selection (`project` or `user`)
-2. whether to configure agent models now
-
-`install` always pins the exact version of the currently running CLI. If you want a different plugin version, first install that CLI version, then run `opencode-nexus install` again.
-
-Install also sets the OpenCode defaults expected by Nexus:
-
-- `default_agent: "lead"`
-- `agent.build.disable: true`
-- `agent.plan.disable: true`
-
-If you prefer a one-off install without a global CLI:
+일회성 실행만 원하면:
 
 ```bash
 npx opencode-nexus@0.13.0 install
 ```
 
-If you prefer Bun for installation, that is also supported:
+`bun`으로 설치해도 됩니다.
 
 ```bash
 bun install -g opencode-nexus@0.13.0
 opencode-nexus install
 ```
 
-Skip the model wizard when needed:
+## install이 하는 일
+
+interactive terminal에서 `opencode-nexus install`을 실행하면:
+
+1. 설치 scope 선택
+2. 지금 agent model을 설정할지 선택
+
+설치 결과로 아래가 반영됩니다.
+
+- `opencode.json` 생성 또는 병합
+- `.opencode/skills/` 아래에 Nexus 스킬 복사
+- 현재 실행 중인 CLI 버전으로 plugin pin
+
+예를 들어 `0.13.0`에서는 다음과 같이 기록됩니다.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-nexus@0.13.0"],
+  "mcp": {
+    "nx": {
+      "type": "local",
+      "command": ["nexus-mcp"]
+    }
+  },
+  "default_agent": "lead"
+}
+```
+
+추가로 install은 아래 기본값도 함께 맞춥니다.
+
+- `agent.build.disable: true`
+- `agent.plan.disable: true`
+
+## Scope
+
+- `project`: 현재 프로젝트의 `./opencode.json`에 기록
+- `user`: `~/.config/opencode/opencode.json`에 기록
+- `both`: user/project에 나눠서 기록
+
+직접 지정하고 싶으면:
+
+```bash
+opencode-nexus install --scope=project
+```
+
+모델 설정 wizard를 건너뛰려면:
 
 ```bash
 opencode-nexus install --scope=project --skip-models
 ```
 
-Supported scopes:
+## Agent Models
 
-- `project`: writes `./opencode.json`, sets `default_agent`, and copies skills to `./.opencode/skills/`
-- `user`: writes `~/.config/opencode/opencode.json`, sets `default_agent`, and copies skills to `~/.config/opencode/skills/`
-- `both`: writes `plugin` and `mcp.nx` to user config, `default_agent` to project config, and copies skills to project scope
+모델 설정 화면은 언제든 다시 열 수 있습니다.
 
-Useful flags:
+```bash
+opencode-nexus models
+```
 
-- `--dry-run`: print what would be written
-- `--force`: overwrite `mcp.nx` or `default_agent` if they already exist with different values
+지원 대상:
 
-## Upgrade
+- `lead`
+- OpenCode built-in: `general`, `explore`
+- Nexus subagents:
+  - `architect`
+  - `designer`
+  - `postdoc`
+  - `strategist`
+  - `engineer`
+  - `researcher`
+  - `writer`
+  - `reviewer`
+  - `tester`
 
-Upgrade the global CLI to the version you want, then rerun `install` so the pinned plugin entry and copied skills are refreshed.
+interactive 화면에서는:
+
+- 체크박스로 여러 agent를 한 번에 선택
+- provider 선택
+- model 선택
+- 메인 화면으로 복귀 후 반복 설정
+
+자동화나 스크립트 용도로는 direct mode도 지원합니다.
+
+```bash
+opencode-nexus models --scope=project --agents=lead,general,explore --model=openai/gpt-5.4
+```
+
+## 업그레이드
+
+다음 버전으로 올릴 때는 CLI를 업그레이드한 뒤 `install`을 다시 실행하세요.
 
 ```bash
 npm install -g opencode-nexus@latest
 opencode-nexus install --scope=project
 ```
 
-With Bun:
+`install`은 항상 현재 실행 중인 CLI 버전을 기준으로 plugin을 pin합니다.
+즉 다른 버전을 적용하고 싶으면, 먼저 그 버전의 CLI를 설치한 뒤 `install`을 다시 실행해야 합니다.
 
-```bash
-bun install -g opencode-nexus@latest
-opencode-nexus install --scope=project
-```
+## 이 패키지가 배포하는 것
 
-If the global install resolves to `0.14.0`, rerunning `install` rewrites the plugin entry to `opencode-nexus@0.14.0`.
+이 저장소는 `@moreih29/nexus-core` 위에 얇은 OpenCode wrapper를 제공합니다.
 
-## Agent Models
+- 런타임 plugin entry
+- install / models CLI
+- OpenCode용 generated agents
+- OpenCode용 bundled skills
 
-You can reopen the agent model picker at any time:
+핵심 스펙과 오케스트레이션 규칙 자체는 `@moreih29/nexus-core`를 기준으로 합니다.
 
-```bash
-opencode-nexus models
-```
-
-When `models` runs without `--scope`, it asks whether to write to project or user config first.
-
-The picker supports:
-
-- `lead`
-- OpenCode built-ins: `general`, `explore`
-- Nexus subagents: `architect`, `designer`, `postdoc`, `strategist`, `engineer`, `researcher`, `writer`, `reviewer`, `tester`
-
-The interactive screen keeps the agent checkboxes and the `Next` / `Done` / `Cancel` actions on the same TTY view. Use `Space` to toggle agents, move to `Next`, then press `Enter` to choose a provider and model.
-
-For automation or scripting, you can also set agent models directly:
-
-```bash
-opencode-nexus models --scope=project --agents=lead,architect --model=openai/gpt-5.4
-```
-
-## Generated From Nexus Core
-
-These paths are synced from `nexus-core` and should be treated as generated outputs:
-
-- `src/agents/*.ts`
-- `skills/*/SKILL.md`
-
-`src/plugin.ts` is the OpenCode-specific consumer layer. It injects generated agent definitions into OpenCode config at runtime and wires the Nexus hook behavior that `nexus-core` leaves to the consumer.
-
-## Development
+## 개발
 
 ```bash
 bun install
@@ -134,5 +168,3 @@ bun run sync
 bun run check
 bun run test:e2e
 ```
-
-The legacy implementation history remains archived in `./.legacy/` for reference only.
