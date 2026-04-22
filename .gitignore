@@ -32,3 +32,18 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# OpenCode local install artifacts.
+# Both `opencode.json` (plugin pin, mcp.nx, default_agent, and optional per-agent
+# model overrides) and the `.opencode/` directory are produced by `opencode-nexus
+# install` and `opencode-nexus models` — they are machine-written install outputs,
+# not hand-maintained source. Per-agent model picks in particular are personal
+# (provider-specific) preferences that must not be forced on other contributors.
+# Run `bun run bootstrap` after cloning to regenerate, then use
+# `opencode-nexus models` for personal model selection.
+opencode.json
+.opencode/node_modules
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+.opencode/skills

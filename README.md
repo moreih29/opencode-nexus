@@ -32,20 +32,20 @@ CLI 실행은 `node` 기준입니다. `bun`으로 패키지를 설치할 수는 
 가장 권장하는 방법은 전역 설치입니다.
 
 ```bash
-npm install -g opencode-nexus@0.13.0
+npm install -g opencode-nexus@0.13.1
 opencode-nexus install
 ```
 
 일회성 실행만 원하면:
 
 ```bash
-npx opencode-nexus@0.13.0 install
+npx opencode-nexus@0.13.1 install
 ```
 
 `bun`으로 설치해도 됩니다.
 
 ```bash
-bun install -g opencode-nexus@0.13.0
+bun install -g opencode-nexus@0.13.1
 opencode-nexus install
 ```
 
@@ -62,12 +62,12 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `.opencode/skills/` 아래에 Nexus 스킬 복사
 - 현재 실행 중인 CLI 버전으로 plugin pin
 
-예를 들어 `0.13.0`에서는 다음과 같이 기록됩니다.
+예를 들어 `0.13.1`에서는 다음과 같이 기록됩니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.13.0"],
+  "plugin": ["opencode-nexus@0.13.1"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -162,9 +162,14 @@ opencode-nexus install --scope=project
 
 ## 개발
 
+이 저장소는 자체 dogfooding을 위해 `opencode-nexus`를 자신의 `.opencode/` 에 설치하는 구조입니다. install 산출물 — `opencode.json`, `.opencode/skills/`, 그리고 그 아래 부속 파일들 — 은 모두 gitignore 되어 있어 clone 직후 한 번 bootstrap이 필요합니다. 특히 per-agent model 선택(provider 별 취향)은 tracked 대상이 아니므로 각자 `opencode-nexus models` 로 별도 설정합니다.
+
 ```bash
 bun install
-bun run sync
+bun run bootstrap       # sync + 기본 opencode.json 생성 + .opencode/ install (최초 1회)
+opencode-nexus models   # (선택) per-agent model 개별 설정
 bun run check
 bun run test:e2e
 ```
+
+이후 `@moreih29/nexus-core` 를 올릴 때는 `bun run sync` 로 `skills/`, `src/agents/` 를 재생성하고, 필요하면 `bun run bootstrap` 을 한 번 더 돌려 로컬 `.opencode/` 와 `opencode.json` 의 plugin pin 을 갱신하세요. 기존에 설정해둔 model override는 bootstrap 이 덮어쓰지 않고 유지됩니다.

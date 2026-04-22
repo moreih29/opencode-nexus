@@ -2,6 +2,35 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.13.1] — 2026-04-22
+
+### 변경됨
+
+- **`@moreih29/nexus-core` `0.18.2` → `0.19.0`** 로 승격.
+- 번들되는 planning skill 본문을 `nx_plan_decide` 최신 계약에 맞춰 재싱크했다 (`skills/nx-plan/SKILL.md`, `skills/nx-auto-plan/SKILL.md` Step 5 문단).
+- **dev workspace 일관성 정리**: repo 자체의 dogfooding 용 install 산출물을 gitignore 로 통합했다. 대상은 `opencode.json` (plugin pin + mcp.nx + default_agent + agent.build/plan disable + **개인별 agent.*.model overrides**) 과 `.opencode/skills/*/SKILL.md` 3개, `.opencode/package-lock.json`. 모두 `opencode-nexus install` / `opencode-nexus models` CLI 가 자동 write 하는 머신 출력물이고, 특히 per-agent model 은 provider 별 개인 취향이라 다른 contributor 에게 강제되면 첫 실행을 깨뜨릴 수 있다. `.opencode/` 내부 `.gitignore` 의 셀프-참조 구조 대신 root `.gitignore` 에 단일화했고, 기존 tracked 파일들은 `git rm --cached` 로 해제 (working copy 는 유지).
+- **bootstrap 스크립트 도입**: `bun run bootstrap` = `bun run sync` + `opencode-nexus install --scope=project --yes`. clone 직후 한 번으로 dev workspace 의 `.opencode/` 가 완성된다.
+- README (ko/en) 의 Development 섹션 및 설치 예시의 하드코딩 버전을 `0.13.1` 로 갱신.
+
+### 업스트림
+
+- nexus-core v0.19.0 `fix(plan)`: `nx_plan_decide` 입력 스키마를 `{issue_id, decision}` 로 축소하고 `issue.analysis` 에 append 하지 않도록 수정 (#56). HOW 분석 기록은 `nx_plan_analysis_add` 경유로만 누적된다.
+- Wrapper 런타임은 `nx_plan_decide` 를 직접 호출하지 않기 때문에 코드 변경 없음. 영향 범위는 번들 skill 문서 2개 파일의 Step 5 표현뿐.
+
+### 사용자 영향
+
+- **기존 사용자 (end user)**: 새 skill 본문을 반영하려면 `opencode-nexus install` 을 다시 실행하기를 권장. plan session 을 운영 중인 프로젝트라면 `nx_plan_decide` 호출부에서 `how_agents` / `how_summary` / `how_agent_ids` 필드를 제거하고, HOW 분석 기록은 `nx_plan_analysis_add` 로 이관.
+- **신규 설치**: v0.13.1 CLI 가 최신 계약을 반영한 skill 을 그대로 설치한다. 추가 조치 불필요.
+- **이 repo 의 contributor**: clone 후 `bun install && bun run bootstrap` 으로 dev workspace 를 초기화해야 한다. bootstrap 은 `opencode.json` 과 `.opencode/skills/` 를 기본값으로 새로 쓰며, per-agent model 은 이어서 `opencode-nexus models` 로 각자 설정한다. 기존 clone 을 유지하는 경우에는 local `opencode.json` 의 model 설정이 그대로 보존된다 (tracked 해제만 되고 파일 자체는 삭제되지 않음).
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- `bun run bootstrap` PASS (dev workspace `.opencode/skills/*` 재생성 확인)
+
+---
+
 ## [0.13.0] — 2026-04-22
 
 ### 추가됨
