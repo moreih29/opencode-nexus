@@ -32,20 +32,20 @@ CLI 실행은 `node` 기준입니다. `bun`으로 패키지를 설치할 수는 
 가장 권장하는 방법은 전역 설치입니다.
 
 ```bash
-npm install -g opencode-nexus@0.13.1
+npm install -g opencode-nexus@0.13.2
 opencode-nexus install
 ```
 
 일회성 실행만 원하면:
 
 ```bash
-npx opencode-nexus@0.13.1 install
+npx opencode-nexus@0.13.2 install
 ```
 
 `bun`으로 설치해도 됩니다.
 
 ```bash
-bun install -g opencode-nexus@0.13.1
+bun install -g opencode-nexus@0.13.2
 opencode-nexus install
 ```
 
@@ -62,12 +62,12 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `.opencode/skills/` 아래에 Nexus 스킬 복사
 - 현재 실행 중인 CLI 버전으로 plugin pin
 
-예를 들어 `0.13.1`에서는 다음과 같이 기록됩니다.
+예를 들어 `0.13.2`에서는 다음과 같이 기록됩니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.13.1"],
+  "plugin": ["opencode-nexus@0.13.2"],
   "mcp": {
     "nx": {
       "type": "local",

@@ -65,6 +65,27 @@
 - `agent.plan.disable === true`인지 확인
 - `.opencode/skills/` 아래에 `nx-auto-plan`, `nx-plan`, `nx-run`이 복사되는지 확인
 
+### 5-1. Skill frontmatter 스펙 준수 (OpenCode Agent Skills spec)
+
+OpenCode는 `name` / `description` 두 필드가 모두 있어야 skill을 등록한다. 이 검증을 생략하면 skill이 말없이 사라지며 "Available skills: none" 만 남는다. 배포된 후에야 사용자 신고로 발견하면 hotfix 릴리즈가 불가피하다.
+
+생성된 각 `.opencode/skills/<name>/SKILL.md`에 대해 확인한다:
+
+- frontmatter에 `name: <name>` 라인이 존재하는지 확인 (디렉토리명과 정확히 일치)
+- frontmatter에 `description:` 라인이 존재하는지 확인 (1-1024자)
+- `name` 값이 regex `^[a-z0-9]+(-[a-z0-9]+)*$` 를 만족하는지 확인
+- `name` 값이 `-` 로 시작/끝나지 않고 `--` 를 포함하지 않는지 확인
+- OpenCode가 인식하지 않는 프런트매터 필드(예: `triggers`) 는 무시되므로 필수가 아니지만, 있다면 번들 크기를 낭비할 뿐임을 인지
+
+### 5-2. Live load smoke test (권장)
+
+정적 검증만으로는 OpenCode 런타임에서 실제로 load되는지 확신할 수 없다. 최소 한 가지 방법으로 실제 로드를 확인한다:
+
+- OpenCode를 실행해 `/skills` 또는 `skill` 툴 응답에 `nx-plan`, `nx-auto-plan`, `nx-run` 3개가 모두 보이는지 확인
+- 또는 `[plan]` 태그로 메시지를 보내 `Skill "nx-plan" not found` 가 발생하지 않는지 확인
+
+이 단계를 수동으로라도 한 번 거친다. 특히 업스트림 nexus-core의 generate 로직이 바뀐 릴리즈는 반드시 수행한다.
+
 ## 6. 병합 동작 점검
 
 기존 설정 파일이 있을 때도 의도한 키만 바뀌는지 확인한다.

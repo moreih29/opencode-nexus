@@ -1,7 +1,6 @@
 ---
+name: nx-run
 description: Execution — user-directed agent composition.
-triggers:
-  - "[run]"
 ---
 ## Role
 
