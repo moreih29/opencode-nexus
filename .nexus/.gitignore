@@ -1,9 +1,0 @@
-*
-!context/
-!context/**
-!memory/
-!memory/**
-!rules/
-!rules/**
-!history.json
-!.gitignore

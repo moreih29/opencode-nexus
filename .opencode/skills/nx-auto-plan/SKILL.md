@@ -1,44 +1,43 @@
 ---
-description: Structured multi-perspective analysis to decompose issues, align on
-  decisions, and produce an enriched execution plan before acting. Planning only
-  — does not execute.
+description: Autonomous planning skill — Lead decomposes, analyzes, and decides
+  issues without user confirmation, producing an execution plan. Keeps nx-plan's
+  research and analysis depth while skipping user dialogue.
 triggers:
-  - "[plan]"
+  - "[auto-plan]"
 ---
 ## Role
 
-A skill for decomposing issues, comparing options, and producing a plan before execution begins. Lead orchestrates subagent research and analysis while forming its own position and presenting recommendations.
+Performs the same research and analysis process as nx-plan, but Lead makes decisions autonomously without presenting options or waiting for user responses. HOW subagent usage, researcher/explore investigations, prior-knowledge lookup, and issue decomposition are identical to nx-plan. The only difference is at decision time — instead of emitting a comparison table and awaiting user response, Lead deliberates internally and records the decision immediately.
 
-This skill does not execute. Execution is handled separately by the `[run]` flow.
+This skill does not execute. Execution is handled separately by the `[run]` flow. It is also the path `[run]` invokes internally when tasks.json is absent.
 
 ## Constraints
 
-- NEVER execute — this skill's purpose is planning and decision alignment, not execution.
-- MUST handle one issue at a time. NEVER present multiple issues simultaneously.
-- NEVER ask groundless questions. MUST investigate code, existing knowledge, and prior decisions first.
-- MUST present a comparison table before requesting a decision. NEVER describe options in prose alone.
-- Lead is both synthesizer and participant — MUST form an independent recommendation and push back when warranted, not merely relay subagent results.
+- **NEVER request user confirmation.** All decisions MUST be made by Lead autonomously and recorded directly.
+- **MUST maintain the same research and analysis depth as nx-plan.** HOW subagent spawning, researcher/explore investigations, and the existing-knowledge-first principle all apply.
+- **MUST record both the selected approach with rationale AND rejected alternatives with dismissal reasons in every decision.** Comparison tables are not output, but internal deliberation is mandatory.
+- **MUST brief all decisions at once after completion.** NEVER notify the user per-decision.
 
 ## Procedure
 
 ### Step 1: Intent Discovery
 
-Assess the complexity of the request and determine how deeply to pursue the plan.
+Determine issue scope and complexity from the request itself. Do not conduct additional user interviews.
 
 | Level | Signal | Exploration Scope |
 |---|---|---|
 | Specific | File path, function name, error message, or concrete target named | Focus on the relevant file or module |
 | Direction-setting | Open-ended question, "it would be nice if ~", choice needed among approaches | Related area + external case research |
-| Abstract | "I'm not sure how to approach this", goal itself unclear, fundamental direction needed | Full codebase + external research + comparable project comparison |
+| Abstract | Goal itself unclear, fundamental direction needed | Full codebase + external research + comparable project comparison |
 
 - Specific request → derive issues immediately.
-- Direction-setting request → use hypothesis-based questions to understand intent.
-- Abstract request → actively interview to uncover the root goal the user hasn't yet articulated.
+- Direction-setting → Lead selects the most reasonable direction based on research findings.
+- Abstract → broaden research scope and have Lead infer the root goal.
 
 #### HOW Subagent Selection
 
-- If the user names HOW agents explicitly, use them as-is; propose additions if gaps are visible.
-- If the user does not specify, Lead proposes agents based on the issue scope.
+- Lead autonomously selects HOW subagents matching the issue scope.
+- If the user explicitly named HOW agents, use them as-is and add missing axes when visible.
 - Additional HOW subagents can be spawned at any point during analysis.
 
 ### Step 2: Research
@@ -59,11 +58,11 @@ Understand code, core knowledge, and prior decisions before forming the planning
 | External research needed | `task({ subagent_type: "researcher", prompt: "<research question>", description: "researcher" })` for web search |
 | Both needed | Spawn `task({ subagent_type: "explore", prompt: "<file/code search task>", description: "explore" })` and `task({ subagent_type: "researcher", prompt: "<research question>", description: "researcher" })` in parallel |
 
-- Researcher subagents return findings to Lead and do not participate in the plan session itself.
+- Researcher subagents return findings to Lead and do not participate in the auto-plan session itself.
 
 ### Step 3: Session Start
 
-Once research is complete, open the planning session with `nx_plan_start`. Any existing `plan.json` is automatically archived. Show the issue list to the user and confirm the direction before proceeding.
+Once research is complete, open the planning session with `nx_plan_start`. Any existing `plan.json` is automatically archived. Unlike nx-plan, the issue list is NOT presented to the user beforehand — proceed directly to Step 4.
 
 ### Step 4: Issue-by-Issue Analysis
 
@@ -73,9 +72,9 @@ Issues must be processed one at a time. For each issue:
 2. If needed, spawn HOW subagents for independent analysis.
    - If reusing context from a prior HOW session for the same role is advantageous, check resume routing information with `nx_plan_resume` first.
    - If resumable, continue with the existing session; otherwise, spawn fresh.
-3. When HOW results return, record them on the issue with `nx_plan_analysis_add(issue_id, role, agent_id=<id from spawn>, summary)`. The `agent_id` is the value `nx_plan_resume` will return on a future resume request for the same role, so always pass the id obtained from the spawn tool response (or the name the Lead assigned). This record feeds both future resume paths and Step 7 task decomposition.
-4. After synthesis, present a comparison table and recommendation.
-5. Receive the user's response and record the decision.
+3. When HOW results return, record them on the issue with `nx_plan_analysis_add(issue_id, role, agent_id=<id from spawn>, summary)`. The `agent_id` is the value `nx_plan_resume` will return on a future resume request for the same role, so always pass it.
+4. **Lead internal deliberation**: enumerate candidate options, compare pros/cons and trade-offs, and select the most reasonable one. Do not output comparison tables or option presentations.
+5. Proceed immediately to Step 5 to record the decision.
 
 #### HOW Domain Mapping
 
@@ -90,43 +89,35 @@ Issues must be processed one at a time. For each issue:
 - If the issue crosses multiple domains, spawn multiple HOWs together.
 - To skip spawning, state the reason explicitly in the analysis text.
 
-#### Comparison Table Format
-
-<example>
-
-| Item | A: {title} | B: {title} | C: {title} |
-|---|---|---|---|
-| Pros | ... | ... | ... |
-| Cons | ... | ... | ... |
-| Trade-offs | ... | ... | ... |
-| Best for | ... | ... | ... |
-
-**Recommendation: {X} ({title})**
-
-- Option A falls short because {reason}
-- Option B falls short because {reason}
-- Option X overcomes {limitations} and delivers {core benefit}
-
-</example>
-
 ### Step 5: Record Decision
 
-When a decision is reached, use `nx_plan_decide` to mark the issue as decided. If HOW subagents participated in the issue, bundle their contribution information so it can be referenced in future resumes and Step 7 task decomposition.
+Use `nx_plan_decide` to mark the issue as decided. The decision text MUST include:
 
-- Immediately after recording, check overall progress with `nx_plan_status` and announce the next issue in one line.
-- Check whether new follow-up questions have emerged, and if so, add follow-up issues with `nx_plan_update`.
-- To reverse a decision, reopen the issue with `nx_plan_update` and return to Step 4.
+- The selected approach and its rationale
+- The rejected alternatives and their dismissal reasons
+
+If HOW subagents participated in the issue, bundle their contribution information so it can be referenced in future resumes and Step 7 task decomposition.
+
+If the decision creates follow-up questions or derived issues, add them with `nx_plan_update` and move to Step 6. Do not ask the user for confirmation.
 
 ### Step 6: Dynamic Agenda Management
 
-- If a decision creates new questions, add follow-up issues with `nx_plan_update`.
+- If derived issues emerge, add them via `nx_plan_update` and return to Step 4.
 - If unresolved issues remain, move on to the next issue.
-- Once all issues are decided, check for gaps against the original question.
+- Once all issues are decided, Lead checks for gaps against the original request.
 - If gaps exist, register new issues with `nx_plan_update` and return to Step 4.
 
-### Step 7: Plan Document Generation
+### Step 7: Briefing and Plan Document Generation
 
-Once all issues are decided, decompose the decisions from `plan.json` into actionable tasks and populate `tasks.json` via `nx_task_add`. From this point, task tools — not plan tools — take over.
+Once all issues are decided, brief the user in a single pass:
+
+```
+[auto-plan complete] N issues, N decisions
+- #1: {selected} ({rejected alternative} — reason)
+- #2: ...
+```
+
+Immediately after briefing, decompose the decisions from `plan.json` into actionable tasks and populate `tasks.json` via `nx_task_add`. From this point, task tools — not plan tools — take over.
 
 Fill in the following fields for each task:
 
@@ -155,4 +146,4 @@ For issues where HOW subagents participated, reference the analysis recorded in 
 - If a `writer` task has a verifiable deliverable criterion in its acceptance, pair a `reviewer` task.
 - Researcher tasks are not auto-paired by default.
 
-Once tasks are generated, show the user a summary and instruct them to execute with `[run]`.
+Once tasks are generated, instruct the user to execute with `[run]`. If this skill was invoked internally by `[run]`, hand off to the run flow directly without the instruction.

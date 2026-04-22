@@ -1,121 +1,108 @@
 ---
-description: "Execution — user-directed agent composition."
+description: Execution — user-directed agent composition.
 triggers:
-  - run
+  - "[run]"
 ---
 ## Role
 
-Execution norm that Lead follows when the user invokes the [run] tag. Composes subagents dynamically based on user direction and drives the full execution pipeline from intake to completion.
+Execution norm that Lead follows when the user invokes the `[run]` tag. Reads tasks.json, dynamically composes subagents based on the `owner` field, and drives the execute-verify-complete cycle.
 
 ## Constraints
 
-- NEVER modify files via shell commands (sed, echo redirection, heredoc, tee, etc.) — always use the harness's dedicated file-editing primitives (gate enforced)
-- NEVER terminate while pending tasks remain (Gate Stop nonstop)
-- NEVER spawn a new branch without checking for main/master first
-- MUST check tasks.json before executing — if absent, generate the plan first
-- MUST spawn subagents per-task based on owner field — Do not handle multi-task work as Lead solo when task count ≥ 2 or target files ≥ 2
-- MUST NOT spawn parallel Engineers if their target files overlap — serialize instead
-- MUST call nx_task_close before completing the cycle — archive plan+tasks to history.json
+- NEVER execute without a plan. If tasks.json is absent, invoke nx-auto-plan first to generate one, then return.
+- Tasks are executed by their `owner`. Delegation to the matching subagent is the default — not Lead solo handling.
+- NEVER stop while incomplete tasks remain. Continue the cycle until `nx_task_list` confirms all tasks are `completed`.
+- NEVER work on main/master. Move to a branch appropriate to the task type before starting execution.
 
-## Guidelines
+## Procedure
 
-## Flow
+### Step 1: Preparation
 
-### Step 1: Intake (Lead)
-
-- **User specifies agents/direction** → follow the instruction as given.
-- **[run] only (no direction)** → confirm direction with user before proceeding.
-- User decides scope and composition. Lead fills in what is not specified.
-- **Branch Guard**: if on main/master, create a branch appropriate to the task type before proceeding (prefix: `feat/`, `fix/`, `chore/`, `research/`, etc. — Lead's judgment). Auto-create without user confirmation.
-- Check for `tasks.json`:
-  - **Exists** → read it and proceed to Step 2.
-  - **Absent** → auto-invoke `skill({ name: "nx-plan" })` to generate tasks.json. Do NOT ask — `[run]` implies execution intent. After plan generation, proceed to Step 2.
-- If tasks.json exists, check prior decisions with `nx_plan_status`.
-
-### Step 1.5: TUI Progress
-
-Register tasks for visual progress tracking (Ctrl+T):
-
-- **≤ 10 tasks**: `nx_task_add({ subject: "<per-task label>" }) then nx_task_update({ taskId, status: "pending" })` per task
-- **> 10 tasks**: group by `plan_issue`, `nx_task_add({ subject: "<group label>" }) then nx_task_update({ taskId, status: "pending" })` per group
-- Update the registered entry via `nx_task_add({ subject: "<label>" }) then nx_task_update({ taskId, status: "in_progress" })` / `nx_task_add({ subject: "<label>" }) then nx_task_update({ taskId, status: "completed" })` as execution proceeds
-- **Skip only if**: non-TTY environment (VSCode, headless)
-- **Known issue**: TUI may freeze during auto-compact (#27919) — task data on disk remains correct
+- **Branch Guard**: if on main/master, create and switch to a branch matching the task type (prefix: `feat/`, `fix/`, `chore/`, `research/`, etc. — Lead's judgment).
+- **Load tasks.json**:
+  - **Exists** → read the list with `nx_task_list` and check prior decisions with `nx_plan_status`.
+  - **Absent** → auto-invoke `skill({ name: "nx-auto-plan" })` to generate tasks.json. Do NOT ask the user — `[run]` implies execution intent.
 
 ### Step 2: Execute
 
-- **Present tasks.json** to the user — show task list with owner, deps, approach summary. Proceed immediately without asking for confirmation.
-- Execute tasks based on `owner` field:
-  - `owner: "lead"` → Lead handles directly
-  - `owner: "engineer"`, `"researcher"`, `"writer"`, etc. → spawn subagent matching the owner role
-  - `owner: "architect"`, `"tester"`, `"reviewer"`, etc. → spawn corresponding HOW/CHECK subagent
-- For each subagent, pass the task's `context`, `approach`, and `acceptance` as the prompt.
-- **Parallel execution**: independent tasks (no overlapping target files, no deps) can be spawned in parallel. Tasks sharing target files must be serialized.
-- **SubagentStop escalation chain**: when a subagent stops with incomplete work:
-  1. **Do/Check failed** → spawn the relevant HOW agent (e.g., Engineer failed → Architect) to diagnose the failure, review the approach, and suggest adjustments.
-  2. **Re-delegate** → apply HOW's adjusted approach and re-delegate to a new Do/Check agent.
-  3. **HOW also failed** → Lead reports the failure to the user with diagnosis details and asks for direction.
-  - Maximum: 1 HOW diagnosis + 1 re-delegation per task. After that, escalate to user.
-  - Relevant HOW mapping: Engineer→Architect, Writer→Strategist, Researcher→Postdoc, Tester→Architect.
+#### Task Registration
+
+For each task, call `nx_task_add({ subject: "<label>" }) then nx_task_update({ taskId, status: "pending" })` to register progress tracking. Keep registrations to a maximum of 10. If tasks exceed 10, group related tasks by a natural grouping unit such as `plan_issue` or target file, so that registered entries stay within 10.
+
+#### Task Dispatch
+
+- Execute tasks according to the `owner` field.
+  - `owner: "lead"` → Lead handles directly.
+  - Others → spawn the subagent matching the owner role.
+- Pass the task's `context`, `approach`, and `acceptance` as the prompt to each subagent.
+- **Resume decision**: for each task, query `nx_task_resume` for resume routing information and decide whether to spawn fresh or resume according to the Resume Dispatch Rule below.
+- **Parallel execution**: tasks with no deps can be spawned in parallel. Serialize tasks that share overlapping target files.
+
+#### State Transitions
+
+- On task start, update to `in_progress` via `nx_task_update`; on completion, update to `completed`.
+- When a subagent is freshly spawned, include `owner={role, agent_id: <id from spawn>, resume_tier: <ephemeral|bounded|persistent>}` in the same `nx_task_update` call so that a future `nx_task_resume` can return this id.
+- At the same moment, update progress tracking with `nx_task_add({ subject: "<label>" }) then nx_task_update({ taskId, status: "in_progress" })` / `nx_task_add({ subject: "<label>" }) then nx_task_update({ taskId, status: "completed" })`. Reuse the exact label set at initial registration.
 
 ### Resume Dispatch Rule
 
-For each task, Lead chooses between fresh spawn and resume based on the `owner`'s `resume_tier`:
+Lead acts based on the `resume_tier` and `agent_id` values returned by `nx_task_resume`.
 
-1. Lookup `resume_tier` from `agents/{owner}.md` frontmatter (if absent → treat as `ephemeral`).
-2. If `ephemeral` → fresh spawn. Stop.
-3. If `bounded` → check tasks.json history: did the same `owner` previously work on overlapping target files? If yes AND no intervening edits by other agents → resume candidate. Otherwise fresh. Always include "re-read target files before any modification" instruction in the resume prompt.
-4. If `persistent` → resume by default if the same agent worked earlier in this run. Cross-task reuse allowed.
-5. Before attempting any resume, verify the harness's resume mechanism is available. If unavailable, fall back to fresh spawn silently — do NOT throw an error.
+- `ephemeral` → spawn fresh.
+- `bounded` → resume if the same owner has prior work on overlapping target files and no other agent has edited in between. The resume prompt MUST include an instruction to "re-read target files before making any modifications."
+- `persistent` → resume if the same agent participated in a prior task in this run. Cross-task reuse allowed.
 
-### Step 3: Verify (Lead + Check subagents)
+When resume is chosen, invoke the `task({ task_id: "<id>", prompt: "<resume prompt>" })` tool with the `agent_id` returned by `nx_task_resume`. Always provide a fresh resume prompt — some harnesses (OpenCode) do not expose a path to push additional input into a running session and support resume only by injecting a new prompt into an idle session.
 
-**Lead**: confirm build + E2E pass/fail.
+If `nx_task_resume` returns `agent_id: null`, or the harness can no longer locate that id, fall back to fresh spawn silently — do NOT throw an error.
 
-**Tester — acceptance criteria verification**:
-- Tester reads each completed task's `acceptance` field from tasks.json
-- Verifies each criterion with PASS/FAIL judgment
-- All criteria must pass for the task to be considered done
-- If any criterion fails → Step 2 rework (reopen task)
-- Tester spawn conditions (any one triggers):
-  - tasks.json contains at least 1 task with an `acceptance` field
-  - 3 or more files changed
-  - Existing test files modified
-  - External API/DB access code changed
-  - Failure history for this area exists in memory
+### Escalation Chain
 
-**Reviewer — writer deliverable verification**:
-- Whenever Writer produced a deliverable in Step 2, Reviewer MUST verify it
-- Writer → Reviewer is a mandatory pairing, not optional
-- Reviewer checks: factual accuracy, source consistency, grammar/format
+The default path is a ping-pong between Do and Check. If Check fails twice consecutively, escalate to HOW. If failure continues after HOW review, Lead escalates to the user.
 
-- If issues found: code problems → Step 2 rework; design problems → re-run nx-plan before re-executing.
+Maximum path:
+
+```
+Do → Check(fail) → Do → Check(fail) → HOW(review) → Do → Check(fail) → Lead → user
+```
+
+- **Check fails once** → re-delegate to the same Do agent (resume allowed), pass failure feedback, and run Check again after correction.
+- **Check fails twice consecutively** → Lead selects and spawns the HOW agent appropriate to the task domain, receives a reviewed/adjusted approach, then re-delegates to Do.
+- **Check still fails after HOW review** → Lead reports to the user with diagnostic details and requests direction.
+
+### Step 3: Verify
+
+Check subagents verify autonomously based on each task's `acceptance` field. Detailed judgment is left to the subagent.
+
+- **Tester** — code verification (engineer deliverables).
+- **Reviewer** — document verification (writer deliverables).
+
+Verification failures follow the Escalation Chain above.
 
 ### Step 4: Complete
 
-Execute in order:
+Execute in order.
 
-1. **nx-sync**: invoke `skill({ name: "nx-sync" })` if code changes were made in this cycle. Best effort — failure does not block cycle completion.
-2. **nx_task_close**: call to archive plan+tasks to history.json. This updates `.nexus/history.json`.
-3. **git commit**: stage and commit source changes, build artifacts (`bridge/`, `scripts/`), `.nexus/history.json`, and any modified `.nexus/memory/` or `.nexus/context/`. Use explicit `git add` with paths (not `git add -A`) and a HEREDOC commit message with `Co-Authored-By`. This ensures the cycle's history archive lands in the same commit as the code changes, giving a 1:1 cycle-commit mapping.
-4. **Report**: summarize to user — changed files, key decisions applied, and suggested next steps. Merge/push is the user's decision and outside this skill's scope.
+1. **`nx_task_close`**: archives plan+tasks to `.nexus/history.json`. `plan.json` and `tasks.json` are removed.
+2. **git commit**: bundle source changes, build artifacts (`bridge/`, `scripts/`), `.nexus/history.json`, and any modified `.nexus/memory/` or `.nexus/context/` into a single commit to maintain 1:1 cycle-commit mapping. Use explicit paths instead of `git add -A`.
+3. **Report**: summarize to the user — changed files, key decisions applied, and suggested next steps. Merge/push is the user's decision and outside this skill's scope.
 
 ---
 
 ## Reference Framework
 
 | Phase | Owner | Content |
-|-------|-------|---------|
-| 1. Intake | Lead | Clarify intent, confirm direction, Branch Guard, check tasks.json / invoke nx-plan if absent |
-| 2. Execute | Do subagents | Spawn per-task by owner, delegation criteria, parallel where safe |
-| 3. Verify | Lead + Check subagent | Build check, quality verification |
-| 4. Complete | Lead | nx-sync, nx_task_close, git commit, report |
+|---|---|---|
+| 1. Preparation | Lead | Branch Guard, read tasks.json via `nx_task_list` / invoke nx-auto-plan if absent |
+| 2. Execute | Do subagents | Spawn per owner, resume decision via `nx_task_resume`, state transitions via `nx_task_update` |
+| 3. Verify | Check subagents | Tester (code) / Reviewer (document) verification against `acceptance` criteria |
+| 4. Complete | Lead | `nx_task_close`, git commit, report |
 
 ---
 
 ## Structured Delegation
 
-When Lead delegates tasks to subagents, structure the prompt in this format:
+When Lead delegates a task to a subagent, structure the prompt in this format:
 
 ```
 TASK: {specific deliverable}
@@ -137,18 +124,6 @@ ACCEPTANCE:
 
 ---
 
-## Key Principles
-
-1. **Lead = interpret user direction + coordinate + own tasks**
-2. **User decides scope and composition**
-3. **tasks.json is the single source of state** — produced by nx-plan, read at Step 1, updated as tasks complete
-4. **Do subagents = execute per owner** — Lead spawns one subagent per task based on the `owner` field. Engineers focus on code changes. Doc updates are done in bulk by Writer in Step 4. Researcher records to reference/ immediately.
-5. **Check subagents = verify** — Lead's discretion + 4 conditions
-6. **SubagentStop escalation** — when a subagent stops with incomplete work, escalate through HOW diagnosis → re-delegation → user report. Max 1 cycle per task.
-7. **Gate Stop nonstop** — cannot terminate while pending tasks exist
-8. **Plan first** — if tasks.json is absent, nx-plan must run before Step 2
-9. **No file modification via shell commands** — sed, echo redirection, heredoc, tee, and similar shell-based file edits are prohibited. Always use the harness's dedicated file-editing primitives (gate enforced)
 ## State Management
 
-`.nexus/state/tasks.json` — produced by nx-plan, managed via `nx_task_add`/`nx_task_update`. Gate Stop enforcement.
-On cycle end, archive plan+tasks to `.nexus/history.json` via `nx_task_close`.
+`.nexus/state/tasks.json` is created by nx-plan variants (plan/auto-plan) via `nx_task_add`, and state transitions during the nx-run cycle are reflected via `nx_task_update`. Querying is handled by `nx_task_list`, and resume decisions by `nx_task_resume`. On cycle end, call `nx_task_close` to archive plan+tasks to `.nexus/history.json`.
