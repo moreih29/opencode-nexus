@@ -2,6 +2,39 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.13.4] — 2026-04-22
+
+### 수정됨 (Hotfix)
+
+- **MCP 서버 기동 실패 수정** — 글로벌 설치 환경에서 OpenCode 세션의 `nx_*` MCP 툴이 전부 unavailable 이던 회귀를 수정했다. v0.13.1 ~ v0.13.3 에 공통으로 영향.
+- 원인: `opencode-nexus install` 이 `opencode.json` 의 `mcp.nx.command` 에 `["nexus-mcp"]` 를 기록했지만, 이 바이너리는 `@moreih29/nexus-core` 의 transitive bin 이라 글로벌 설치 시 `opencode-nexus` 의 nested `node_modules/.bin/` 에만 존재하고 글로벌 `$PATH` 에는 symlink 되지 않았다 (npm/bun 표준 동작). OpenCode 는 `✗ nx failed. Executable not found in $PATH: "nexus-mcp"` 로 조용히 기동 실패.
+- 수정: `bin/nexus-mcp.mjs` re-export shim 을 추가하고 `package.json` 의 `bin` 섹션에 `"nexus-mcp": "./bin/nexus-mcp.mjs"` 를 선언했다. 이제 `opencode-nexus` 를 글로벌 설치하면 `nexus-mcp` 도 함께 글로벌 bin 에 symlink 되어 OpenCode 의 `command: ["nexus-mcp"]` 가 정상 resolve 된다.
+- **기존 사용자 조치**: v0.13.4 로 CLI 를 업그레이드하면 된다. `opencode.json` 의 `mcp.nx.command` 값은 변경 불필요 — 같은 `nexus-mcp` 문자열이 이제 `$PATH` 에 노출된다. `opencode mcp list` 에서 `nx` 가 failed 없이 뜨면 복구 완료.
+
+### 변경됨
+
+- 릴리즈 체크리스트 (`.nexus/context/releasing.md`) §5 에 **§5-3 MCP binary reachability** 검증 항목 추가. 격리된 임시 prefix 에서 `npm pack → npm install -g → ls global bin → spawn test` 로 모든 MCP 바이너리가 글로벌 PATH 에 노출되는지 정적 + 동적 혼합 확인.
+- `.nexus/memory/pattern-bug-fix-routing.md` 에 이번 사이클의 local fix 경로 사례를 추가하고, v0.13.2 의 upstream 경로 사례와 대비한 비교표를 기록했다. 같은 증상이라도 원인 위치가 local vs upstream 으로 완전히 갈리는 대표 예제가 된다.
+
+### 업스트림
+
+- 이번 릴리즈는 업스트림 패키지 버전 변경 없음 (`@moreih29/nexus-core` 0.19.2 유지). wrapper 내부의 bin 노출 구조 수정만 포함.
+
+### 사용자 영향
+
+- **유저 스코프로 v0.13.1 ~ v0.13.3 설치했던 사용자**: MCP 가 조용히 기동 실패 상태였음. v0.13.4 로 업그레이드 후 `opencode mcp list` 로 복구 확인.
+- **새 설치**: 자동 정상 동작.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- **§5-1 skill frontmatter static check** PASS
+- **§5-2 live load smoke test** PASS
+- **§5-3 MCP binary reachability** PASS — 격리된 npm prefix 에 `npm install -g` 한 결과 `opencode-nexus` 와 `nexus-mcp` 둘 다 글로벌 bin 에 symlink, `nexus-mcp` spawn 시 stdio 대기 상태 정상 진입 확인
+
+---
+
 ## [0.13.3] — 2026-04-22
 
 ### 변경됨
