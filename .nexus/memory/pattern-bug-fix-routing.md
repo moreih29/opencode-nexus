@@ -50,13 +50,36 @@
 
 ## 사례
 
-### 2026-04-22 — opencode-nexus v0.13.1 skill 로딩 실패
+### 2026-04-22 — opencode-nexus v0.13.1 skill 로딩 실패 (Upstream 경로)
 
 - **증상**: `[plan]` 호출 시 OpenCode 가 `Skill "nx-plan" not found. Available skills: none`
 - **원인 위치**: `@moreih29/nexus-core` 의 opencode harness sync 출력이 OpenCode 공식 spec 위반 (`name` 필드 누락, `triggers` 비표준 필드 사용)
 - **경로 선택**: **A 단독** (upstream 이슈만)
 - **근거**: upstream repo owner 가 wrapper 저자와 동일인 → turnaround 짧음 추정. Local patch 는 sync post-process 복잡도 대비 이득 낮음.
-- **Issue**: https://github.com/moreih29/nexus-core/issues/57
+- **Issue / Fix / Release**: moreih29/nexus-core#57 → #60 → v0.19.1 → opencode-nexus v0.13.2 downstream 반영
+
+### 2026-04-22 — opencode-nexus v0.13.3 MCP 서버 기동 실패 (Local 경로)
+
+- **증상**: 유저 스코프 설치 후 세션에서 `nx_plan_*` MCP 툴 전부 unavailable. `opencode mcp list` → `✗ nx failed. Executable not found in $PATH: "nexus-mcp"`.
+- **원인 위치**: **wrapper (opencode-nexus) 자체** — install CLI 가 `opencode.json` 의 `mcp.nx.command` 에 `["nexus-mcp"]` 를 기록하지만, `nexus-mcp` 바이너리는 `@moreih29/nexus-core` 가 선언한 bin 이라 **글로벌 설치 시 opencode-nexus 의 nested `node_modules/.bin/` 에만 존재**하고 글로벌 `$PATH` 에는 symlink 되지 않음. npm/bun 모두 transitive dep 의 bin 을 글로벌 PATH 에 노출하지 않는 것이 표준 동작.
+- **공식 스펙 대조**: OpenCode MCP 스펙 (https://opencode.ai/docs/mcp-servers/) 은 `command` 배열을 `$PATH` 또는 절대경로 기준으로 해석 — 우리 config 자체는 스펙 준수, 단 execution 조건을 wrapper 가 보장해야 함.
+- **경로 선택**: **B 단독** (local fix)
+- **근거**: nexus-core 는 자기 bin 을 적법하게 선언하고 있고, wrapper 가 의존성 bin 을 재노출해야 하는 책임이 분명히 local 쪽. upstream 이 개입할 영역 아님.
+- **Fix**: `bin/nexus-mcp.mjs` 에 `await import("@moreih29/nexus-core/mcp")` shim 을 두고 `package.json` 의 `bin` 섹션에 `"nexus-mcp": "./bin/nexus-mcp.mjs"` 추가. 글로벌 설치 시 bun/npm 이 이 bin 도 PATH 에 symlink → 기존 사용자 `opencode.json` 의 `command: ["nexus-mcp"]` 가 그대로 정상 동작 (config 변경 불필요).
+- **Release**: opencode-nexus v0.13.4
+
+### 두 사례의 대비
+
+| 축 | Skill 사건 | MCP 사건 |
+|---|---|---|
+| 증상 발생 위치 | OpenCode 가 skill 등록 거부 | OpenCode 가 MCP 서버 spawn 실패 |
+| 스펙 위반? | ✅ upstream 출력이 OpenCode 스펙 위반 | ❌ 설정은 스펙 준수 |
+| 원인 위치 | upstream (nexus-core) | local (opencode-nexus) |
+| 원인 유형 | 생성된 본문의 내용 오류 | wrapper 가 실행 경로를 노출하지 않음 |
+| 해결 주체 | upstream fix 후 downstream bump | local fix 단독 |
+| 체크리스트 보강 | §5-1 (static), §5-2 (live load) | §5-3 (binary reachability) |
+
+**교훈**: 증상이 같은 "OpenCode 가 우리 기능을 쓰지 못함" 이더라도 원인 위치는 완전히 다를 수 있다. 공식 spec 대조만으로는 후자 같은 설치-경로 문제를 찾지 못한다. 정적 검증 + 격리된 설치 시뮬레이션 + 런타임 smoke test 세 층을 모두 거쳐야 사각지대가 사라진다.
 
 ## 부수 교훈 — 체크리스트 보완 후보
 
