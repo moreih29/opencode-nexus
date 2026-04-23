@@ -720,6 +720,157 @@
           "created_at": "2026-04-23T07:38:31.082Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T08:05:31.537Z",
+      "branch": "chore/bump-nexus-core-0.20.0",
+      "plan": {
+        "id": 5,
+        "topic": "v0.15.1 배포 전 cmux pill stuck (session.error/abort 경로) 수정",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Plugin 코드 수정 범위 및 물리적 위치 결정",
+            "status": "decided",
+            "decision": "**선정**: src/plugin.ts 두 분기 수정 (defense-in-depth).\n\n(a) `session.error` 분기 — root session일 때 `cmuxClearStatus(PILL_KEY)` 추가. 순서는 log → notify → clearStatus. 현재 `sessionID && !rootSessions.has(sessionID)` 가드 유지(non-root는 skip).\n\n(b) `session.status` 분기 — root session일 때 `status.type === \"idle\"`이면 `cmuxClearStatus(PILL_KEY)` 호출. busy/retry/idle 세 variant 모두 명시 처리. 미래의 SDK 변경으로 새 variant가 추가되면 noop (현재 switch 없이 if-else 체인이므로 안전).\n\n`session.idle` 분기(L197)는 이미 clear 호출 중 — 건드리지 않음.\n\n**근거**:\n- **인과 재검증**: cmux 로그에 MessageAbortedError 기록 존재 → `session.error` 훅이 호출됐다는 증거. 그 시점에 pill이 치워지지 않았다는 것이 stuck의 직접 원인. 즉 fix (a)가 증상을 직접 해결.\n- **defense-in-depth 이유**: `session.idle` 이벤트가 abort 경로에서 뜨는지 문서화되지 않음. OpenCode SDK는 `session.idle`을 독립 이벤트로, `session.status: idle`을 status 이벤트 variant로 둘 다 정의. 일반 완료 경로에서는 `session.idle`이 fire하지만, abort/error 경로에서 `session.status: idle`만 fire하고 `session.idle`은 생략될 가능성이 있음. fix (b)로 이 갭을 메움.\n- **리스크 프로파일**: 현재 버그는 사용자가 체감하는 UI stuck 상태 → release 전 필수 수정.\n- **코드 크기**: 두 분기 합쳐 ~4 lines 추가. 복잡도 낮고 기존 구조와 정합.\n\n**기각된 대안**:\n1. (a)만 수정, session.status idle 무시 — 기각: `session.idle` 이벤트가 모든 비정상 종료에서 fire하는지 OpenCode 문서에 보장 없음. 한 경로 의존은 재발 위험.\n2. (b)만 수정, session.error pill clear 생략 — 기각: (b)만 있으면 `session.status: idle`이 fire하지 않는 시나리오에서 여전히 stuck. (a)가 abort 경로 가장 가까운 방어선.\n3. 새 이벤트(`message.aborted` 등) 탐색 — 기각: OpenCode SDK event union에 해당 없음. 존재하지 않는 이벤트에 의존 불가.\n4. Heartbeat/타이머 기반 pill auto-clear — 기각: 근본 원인이 아닌 workaround. 이벤트 기반 정확 처리가 우월."
+          },
+          {
+            "id": 2,
+            "title": "실험/테스트 강화 범위: cmux-h/i/j scenario 신규 항목 결정",
+            "status": "decided",
+            "decision": "**선정**: 기존 cmux-a~g(7개)에 더해 **3개 신규 scenario 추가**.\n\n- **cmux-h (fix (a) 검증)**: `session.error` + root session → log + notify + **clear-status** 3개 모두 assert. 기존 cmux-e 확장이 아닌 별도 scenario로 두고, cmux-e는 원래 assertion(log + notify) 유지. 이유: cmux-e 자체가 regression 회귀용으로 남아야 기존 동작 보장.\n- **cmux-i (fix (b) 검증)**: `session.status` + root + `status.type === \"idle\"` → **clear-status** assert. busy는 cmux-b에서, retry는 현 코드 logWarning만 하므로 추후 필요 시 추가.\n- **cmux-j (non-root guard 확인)**: `session.error` + non-root sessionID → cmux 호출 0건 assert. 기존 가드 로직이 fix 추가 후에도 여전히 non-root을 걸러내는지 regression 회귀.\n\n**추가 assertion 수**: cmux-h(3) + cmux-i(1) + cmux-j(1) = 총 5개. 테스트 스위트 전체는 기존 ~91 → 96 수준.\n\n**근거**:\n- 테스트는 두 가지 버그(log-only / clear 누락)와 두 가지 fix(session.error clear / session.status idle clear)에 **1:1 대응**.\n- non-root guard는 fix 추가 시 가장 많이 망가지는 부분이므로(새 clear 호출이 가드 밖으로 새어나갈 위험) **부정(negative) assertion**을 반드시 같이 걸어 regression 회귀 확보.\n- pattern-bug-fix-routing.md의 `\" spawn 성공 = 기능 동작\"으로 착각` anti-pattern 회피 — 실제로 clear-status가 호출되는지 **shim 로그**로 확인하는 실증 검증.\n\n**기각된 대안**:\n1. cmux-e를 확장(pill clear assert까지 추가) — 기각: 기존 scenario가 단일 관심사(log+notify) 담당이었고 새 동작(clear)을 섞으면 scenario 의미가 흐려짐. 별도 cmux-h가 더 선명.\n2. cmux-j 생략, non-root guard 회귀 검증 skip — 기각: fix가 guard에 의존하므로 guard가 미래에 실수로 제거되면 silent regression. 부정 assertion이 저렴한 보험.\n3. session.status retry clear 추가 — 기각: 현재 fix 범위 밖. retry는 recoverable 상태라 pill 치우면 안 됨(기존 코드 의도 맞음)."
+          },
+          {
+            "id": 3,
+            "title": "릴리즈 번들링 전략 — v0.15.1에 포함 vs v0.15.2 분리",
+            "status": "decided",
+            "decision": "**선정**: **v0.15.1에 fix 번들링**. 기존 chore 브랜치 `chore/bump-nexus-core-0.20.0`에 별도 두 번째 commit 추가.\n\n**근거**:\n- 사용자 명시 요청: \"배포하기 전에 그 전 버전에서 확인된 문제 수정하자\" — 배포 이전 상태에서 fix를 묶어 내는 것이 명시 의도.\n- 아직 push/tag/PR 모두 미수행 상태. remote에 반영되지 않았으므로 v0.15.1 단일 릴리즈로 통합 가능.\n- 두 변경 모두 pre-v1 patch 범주: (bump) 업스트림 adopt, (fix) 사용자 영향 UI 버그 — minor bump 조건 없음.\n- 별도 commit 유지: nx-run \"1 cycle = 1 commit\" 원칙에 부합 (bump 사이클 = commit 1, fix 사이클 = commit 2). amend하지 않음 — Lead Hard Prohibitions에서 amend는 명시 요청 필수.\n- PR 단계에서 사용자가 squash-merge하면 main 관점 단일 commit, 그대로 merge하면 history에 2개 commit 보존. 둘 다 자연스러운 운영.\n\n**기각된 대안**:\n1. v0.15.2로 분리(v0.15.1 먼저 배포 후 0.15.2 hotfix) — 기각: 사용자 요청(\"배포하기 전\")과 명시적 반대. 2회 배포는 cost도 높고 사용자가 0.15.1만 설치하면 stuck bug 잔존.\n2. 기존 v0.15.1 commit을 amend — 기각: amend 조건(명시 요청 등) 미충족. 2 commit 모델이 더 단순.\n3. fix 브랜치 `fix/cmux-pill-stuck` 따로 파서 v0.15.1 머지 — 기각: 브랜치·PR 오버헤드 vs 수정 크기 불균형. 같은 릴리즈 타겟이라 같은 브랜치에 commit 추가가 깔끔."
+          },
+          {
+            "id": 4,
+            "title": "CHANGELOG 0.15.1 entry 갱신 방식 결정",
+            "status": "decided",
+            "decision": "**선정**: 기존 CHANGELOG 0.15.1 entry에 **`### 수정됨` 섹션 추가** + `### 검증` 섹션에 cmux-h/i/j 시나리오 통과 기재 + `### 사용자 영향`에 MessageAbortedError 이후 pill stuck 해결 명시.\n\n**섹션 배치** (현재 `[0.15.1]`의 순서: 업스트림 → 변경됨 → 사용자 영향 → 검증):\n1. **`### 수정됨`** 신규 섹션을 `### 변경됨` 아래, `### 사용자 영향` 위에 삽입. \n   - cmux 사이드바 상태 pill이 `session.error`(MessageAbortedError 포함 abort 경로)에서 치워지지 않던 문제 수정. `session.status` type `\"idle\"` variant도 명시 처리해 방어 강화.\n2. **`### 사용자 영향`** 내용 보강: \"cmux 사용자: abort/error 발생 후 `Running` pill stuck 현상 해결. 기존 0.15.0에서 stuck된 pill이 남아 있다면 세션 재시작 시 자동 정리.\"\n3. **`### 검증`** 항목 추가:\n   - cmux-h: session.error root → log+notify+clear-status 3개 모두 호출 assert.\n   - cmux-i: session.status idle root → clear-status 호출 assert.\n   - cmux-j: session.error non-root → cmux 호출 0건 assert(guard regression 회귀).\n\n**근거**:\n- CHANGELOG §13: \"최종 사용자 관점의 변경 요약\" — bug fix는 사용자가 체감하는 변경이므로 명시적 섹션 필요.\n- Keep a Changelog 관행: Added / Changed / Fixed / Removed 구분. 기존 entry는 `추가됨` / `변경됨`만 사용했으나 이번에는 `수정됨`이 정확한 분류.\n- 검증 섹션에 shim-based 실증 assertion 명시 — pattern-bug-fix-routing.md \"spawn 성공 = 기능 동작 착각\" 방지 원칙 반영.\n\n**기각된 대안**:\n1. 기존 entry 삭제 후 재작성 — 기각: bump 항목과 fix 항목은 독립적 변경이며 둘 다 보존이 기록 정확성에 유리.\n2. 별도 `[0.15.1-fix]` entry 신설 — 기각: 버전 관리 혼란. 배포 단위는 0.15.1 단일.\n3. fix를 단순 footnote로 추가 — 기각: 사용자가 릴리즈 노트에서 fix를 검색할 때 눈에 띄지 않음."
+          },
+          {
+            "id": 5,
+            "title": "릴리즈 체크리스트 §5-5 cmux 섹션 보완 필요 여부",
+            "status": "decided",
+            "decision": "**선정**: `.nexus/context/releasing.md` §5-5-1(cmux 활성 환경)에 **두 bullet 추가** + `.nexus/memory/` 신규 파일 `empirical-cmux-pill-clear-paths.md` 기록.\n\n**releasing.md §5-5-1에 추가**:\n- `session.error`(root) → `cmux notify --title \"opencode-nexus\" --body \"Session error\"` + `cmux log --level error --source nexus -- <요약>` + **`cmux clear-status nexus-state`** 모두 호출된다.\n- `session.status` + `status.type === \"idle\"`(root) → `cmux clear-status nexus-state`가 호출된다.\n\n기존 `session.idle`(root) bullet은 그대로 유지 — 정상 완료 경로의 primary clear path.\n\n**empirical-cmux-pill-clear-paths.md 신규 기록 내용**:\n- 증상: MessageAbortedError 이후 pill이 Running stuck.\n- 근본 원인: session.error 경로에 pill clear 없음 + session.status idle variant 미처리.\n- 교훈: OpenCode plugin pill 상태 관리는 **\"set 분기마다 대응 clear 경로 반드시 짝지어 두기\"** 원칙. 새 set 경로 추가 시 대응 abort/error 경로에서의 clear 도 같이 설계.\n- 진단 방법: `cmux list-log --workspace workspace:<id>` + `cmux list-status --workspace workspace:<id>` 조합이 원인 지목에 효과적 — log에 error 기록은 있으나 status에 clear 흔적 없으면 clear 경로 누락 판정 가능.\n\n**근거**:\n- releasing.md §5-5는 cmux 통합 검증 항목으로, 이번 stuck 버그는 바로 이 섹션의 blind spot이 만든 결과. 같은 유형 회귀 방지에 §5-5 보완이 직접적.\n- `pattern-bug-fix-routing.md`에서 \"체크리스트 보완\"이 부수 교훈으로 명시된 선례 — 같은 패턴 적용.\n- `empirical-` prefix가 맞음: 이번 사이클에서 실제 관찰된 재현 사례(workspace:1/10 로그) 기반 교훈. `external-`(OpenCode SDK 자체 스펙)이나 `pattern-`(재사용 recipe) 아님. 단, pattern-bug-fix-routing.md의 \"set-clear pair 원칙\"을 후속 `[m:gc]` 사이클에서 pattern-으로 승격할 후보.\n\n**기각된 대안**:\n1. releasing.md만 갱신, memory 기록 생략 — 기각: `pill-clear-paths` 같은 특정 도메인 원리는 `.nexus/memory/`가 더 발견 친화적. 체크리스트는 매번 읽지 않음.\n2. memory만 기록, releasing.md 미수정 — 기각: 다음 릴리즈에서 동일 경로 누락이 release gate에서 걸리도록 체크리스트 업데이트 필요.\n3. 기존 `pattern-bug-fix-routing.md`에 새 사례 추가만 — 기각: bug-fix 라우팅 패턴과 pill-clear 설계 원리는 추상화 층이 다름. 별도 파일이 응집도 좋음.\n4. 이번 사이클에서 pattern-pill-clear-paired.md로 승격 — 기각: 단일 사례만으로 pattern 승격은 너무 이름. 추가 재현 시 `[m:gc]`로 승격하는 게 합당."
+          }
+        ],
+        "research_summary": "실증 조사 완료. (1) `cmux list-log --workspace workspace:{1,10}` 결과 `[nexus] [error] MessageAbortedError` 로그 존재, 동시에 `cmux list-status --workspace workspace:{1,10}` 결과 `nexus-state=Running` pill stuck 상태 확인. (2) src/plugin.ts:211-219 `session.error` 분기가 `cmuxClearStatus(PILL_KEY)` 호출 누락 — 로그·알림만 수행. (3) src/plugin.ts:202-210 `session.status` 분기는 `busy`/`retry`만 처리, OpenCode SDK `SessionStatus` 타입 세 번째 variant `\"idle\"` 미처리. (4) OpenCode SDK `EventSessionError.error`는 `ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError` union으로 `MessageAbortedError.name === \"MessageAbortedError\"` 정식 variant. (5) scripts/e2e-nexus-integration.mjs는 cmux shim 기반 mock 검증을 cmux-a~g 7개 scenario로 수행 중이며, cmux-e가 session.error에서 log+notify만 assert — pill clear assert 부재. 배포 사이클 상태: chore/bump-nexus-core-0.20.0 브랜치에 `v0.15.1: adopt nexus-core 0.20.0` 커밋 1건 존재, 미push. v0.15.1 릴리즈에 본 fix 번들링이 체크리스트 §14 관점에서 taxonomically 합당.",
+        "created_at": "2026-04-23T07:58:26.924Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "e2e 테스트 확장 — cmux-h/i/j scenario 추가 (TDD: fix 전 fail 확인)",
+          "status": "completed",
+          "context": "scripts/e2e-nexus-integration.mjs에 cmux-h (session.error root → log+notify+clear), cmux-i (session.status idle root → clear), cmux-j (session.error non-root → no cmux calls) 3개 scenario 추가. 이 task를 fix 이전에 수행해 일단 테스트가 FAIL함을 확인(실험적 검증).",
+          "acceptance": "- scripts/e2e-nexus-integration.mjs에 cmux-h/i/j 블록 3개 존재\n- `bun run test:e2e` 실행 시 cmux-h \"session.error must clear status pill\" FAIL\n- cmux-i \"session.status idle must clear status pill\" FAIL\n- cmux-j \"session.error non-root must not spawn cmux\" 예상 동작 — 현 코드도 non-root guard가 session.error L213에 있으므로 PASS 가능성 — 확인만 하고 기록\n- 실패 메시지를 stdout에 기록해 fix 후 비교 용이",
+          "approach": "기존 cmux-g 바로 다음 위치에 삽입. rootSessionID / otherSessionID 기존 변수 재활용. log 포맷은 cmux-e 참고. assertion 3개(h) + 1개(i) + 1개(j) = 5개. 작성 후 `bun run test:e2e` 실행하여 cmux-h/i FAIL, cmux-j PASS 확인 예상.",
+          "risk": "cmux-j이 현 코드에서도 PASS할 가능성 — fix가 non-root guard 뚫는 regression을 일으키지 않는지 회귀 보험 목적이라 PASS 자체는 괜찮음",
+          "plan_issue": 2,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:00:35.036Z"
+        },
+        {
+          "id": 2,
+          "title": ".nexus/context/releasing.md §5-5-1 bullet 2개 추가",
+          "status": "completed",
+          "context": "이슈 5 결정. session.error(root) 검증 bullet에 clear-status 추가, session.status idle(root) bullet 신규 추가.",
+          "acceptance": "- §5-5-1에 \"session.error(root) → ... + cmux clear-status nexus-state가 호출된다\" bullet 존재\n- §5-5-1에 \"session.status + status.type === idle(root) → cmux clear-status nexus-state가 호출된다\" bullet 존재\n- 기존 bullet 파괴 없음",
+          "approach": "Edit로 §5-5-1 섹션의 session.error(root) 기존 bullet을 확장 (clear-status 호출 포함)하고 session.status idle(root) bullet을 신규 추가.",
+          "plan_issue": 5,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:00:55.550Z"
+        },
+        {
+          "id": 3,
+          "title": ".nexus/memory/empirical-cmux-pill-clear-paths.md 신규 파일 기록",
+          "status": "completed",
+          "context": "이슈 5 결정. empirical- prefix, 이번 사이클 실증 사례 기반. 증상·근본 원인·교훈·진단 방법 4축.",
+          "acceptance": "- .nexus/memory/empirical-cmux-pill-clear-paths.md 존재\n- 증상/근본원인/교훈/진단방법 4축 구조\n- workspace:1·10의 실증 근거 기재\n- \"set 분기마다 대응 clear 경로 짝지우기\" 원칙 명시",
+          "approach": "Write로 신규 파일 생성. 기존 pattern-bug-fix-routing.md 스타일 참조, 간결한 마크다운. 프론트매터 태그는 cmux, pill, hook, set-clear-pair.",
+          "plan_issue": 5,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:01:00.269Z"
+        },
+        {
+          "id": 4,
+          "title": "src/plugin.ts 수정 — session.error에 clearStatus 추가 + session.status idle 분기 추가",
+          "status": "completed",
+          "context": "L202-210 session.status 분기에 idle 처리 추가(busy/retry/idle 세 variant). L211-219 session.error 분기에 cmuxClearStatus 추가(log → notify → clear 순).",
+          "acceptance": "- src/plugin.ts의 session.status 분기에 idle case 명시 존재\n- src/plugin.ts의 session.error 분기가 cmuxClearStatus를 호출\n- non-root guard(sessionID && !rootSessions.has(sessionID)) 유지\n- `bun run check` PASS (tsc --noEmit 0 errors)\n- 이전 task에서 FAIL했던 cmux-h/i가 PASS로 전환",
+          "approach": "(1) session.status 분기: `if (status.type === \"busy\") { ... } else if (status.type === \"retry\") { ... } else if (status.type === \"idle\") { cmuxClearStatus(PILL_KEY); }` 형태. (2) session.error 분기: 기존 log+notify 다음 줄에 `cmuxClearStatus(PILL_KEY);` 추가.",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:01:21.501Z"
+        },
+        {
+          "id": 5,
+          "title": "전체 검증 파이프라인 재실행 — test:e2e + check + npm pack --dry-run",
+          "status": "completed",
+          "context": "releasing.md §3. fix 이후 기존 7개 + 신규 3개 cmux scenario 모두 PASS 요구.",
+          "acceptance": "- check exit 0\n- test:e2e에서 cmux-h/i/j 포함 모든 scenario PASS\n- npm pack --dry-run 결과 정상",
+          "approach": "(1) `bun run check`, (2) `bun run test:e2e` — \"All integration checks passed.\" 확인, (3) `npm pack --dry-run` — 0.15.1 유지 + 27 files 유지.",
+          "plan_issue": 1,
+          "deps": [
+            4
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:01:26.111Z"
+        },
+        {
+          "id": 6,
+          "title": "CHANGELOG.md 0.15.1 entry에 수정됨 + 검증 보강 추가",
+          "status": "completed",
+          "context": "기존 [0.15.1] entry에 ### 수정됨 섹션 신규 삽입(변경됨 ↔ 사용자 영향 사이), 사용자 영향 내 cmux stuck 해결 bullet, 검증 섹션에 cmux-h/i/j 항목.",
+          "acceptance": "- ### 수정됨 섹션이 ### 변경됨과 ### 사용자 영향 사이에 존재\n- session.error 경로·session.status idle variant 명시\n- cmux-h/i/j가 검증 섹션에 나열됨\n- 사용자 영향에 stuck pill 해결 bullet 포함",
+          "approach": "Edit로 CHANGELOG.md 해당 구간 수정. 이슈 4 결정 텍스트 그대로 반영.",
+          "plan_issue": 4,
+          "deps": [
+            5
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:01:31.642Z"
+        },
+        {
+          "id": 7,
+          "title": "사이클 마감 — nx_task_close + fix commit 생성 + 배포 진행 준비",
+          "status": "in_progress",
+          "context": "같은 브랜치에 두 번째 commit. 메시지: \"v0.15.1: fix cmux status pill not cleared on session error / idle\". 배포(push/PR/tag/release)는 후속 단계에서 사용자 요청 범위에 따라 별도 cycle/직접 진행.",
+          "acceptance": "- nx_task_close 성공\n- chore/bump-nexus-core-0.20.0 브랜치에 두 번째 commit 생성\n- git status clean\n- push/PR/tag/release는 후속 단계에서 처리",
+          "approach": "(1) nx_task_close, (2) git add 명시 경로(src/plugin.ts, scripts/e2e-nexus-integration.mjs, CHANGELOG.md, .nexus/context/releasing.md, .nexus/memory/empirical-cmux-pill-clear-paths.md, .nexus/history.json), (3) git commit. 이후 \"배포까지 다 완료하고 브랜치 정리\" 사용자 요청 실행은 별도 시퀀스로 이어짐.",
+          "plan_issue": 3,
+          "deps": [
+            6,
+            2,
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:01:37.884Z"
+        }
+      ]
     }
   ]
 }

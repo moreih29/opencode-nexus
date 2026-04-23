@@ -426,7 +426,11 @@ async function main() {
         },
       },
     });
-    const callsE = await waitForCmuxCalls(logFile, 2);
+    // session.error now spawns 3 cmux commands (log + notify + clear-status).
+    // We wait for all 3 to drain so a late-arriving clear-status does not
+    // bleed into cmux-f's reset log. cmux-e keeps its original assertions
+    // (log + notify); the clear-status semantic is covered by cmux-h below.
+    const callsE = await waitForCmuxCalls(logFile, 3);
     assert(
       callsE.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error" && call[3] === "--source" && call[4] === "nexus" && call[5] === "--" && call[6] === "boom"),
       `cmux-e: session.error must write error log, got ${JSON.stringify(callsE)}`,
@@ -462,6 +466,73 @@ async function main() {
       callsG.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
       `cmux-g: session.idle must clear status pill, got ${JSON.stringify(callsG)}`,
     );
+
+    // cmux-h: session.error on a root session must also clear the status pill
+    // in addition to writing the error log and Session error notification. This
+    // covers MessageAbortedError cases where session.idle never fires but the
+    // pill was previously set to "Running" by a session.status busy event.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: rootSessionID,
+          error: { name: "MessageAbortedError", data: { message: "aborted" } },
+        },
+      },
+    });
+    const callsH = await waitForCmuxCalls(logFile, 3);
+    assert(
+      callsH.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error"),
+      `cmux-h: session.error must write error log, got ${JSON.stringify(callsH)}`,
+    );
+    assert(
+      callsH.some((call) => call[0] === "notify" && call[3] === "--body" && call[4] === "Session error"),
+      `cmux-h: session.error must notify Session error, got ${JSON.stringify(callsH)}`,
+    );
+    assert(
+      callsH.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
+      `cmux-h: session.error must clear status pill, got ${JSON.stringify(callsH)}`,
+    );
+
+    // cmux-i: session.status with status.type === "idle" on a root session must
+    // clear the status pill. This backs up session.idle and covers paths where
+    // the session emits a status=idle transition without an accompanying
+    // session.idle event (observed on abort / error in cmux workspace logs).
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionID,
+          status: { type: "idle" },
+        },
+      },
+    });
+    const callsI = await waitForCmuxCalls(logFile, 1);
+    assert(
+      callsI.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
+      `cmux-i: session.status idle must clear status pill, got ${JSON.stringify(callsI)}`,
+    );
+
+    // cmux-j: session.error on a non-root session must not spawn any cmux
+    // command. Regression guard so future edits to session.error do not leak
+    // clears through the non-root branch. Note: otherSessionID was not added
+    // to rootSessions via session.created, so the plugin's guard
+    // (sessionID && !rootSessions.has(sessionID)) must early-return.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: otherSessionID,
+          error: { message: "non-root boom" },
+        },
+      },
+    });
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 150));
+    const callsJ = readCmuxCalls(logFile);
+    assert(callsJ.length === 0, `cmux-j: non-root session.error must not spawn cmux, got ${JSON.stringify(callsJ)}`);
   } finally {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
