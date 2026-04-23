@@ -2,6 +2,36 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.16.2] — 2026-04-23
+
+### 수정됨
+
+- **`session.idle` 알림 body 미리보기가 fallback만 뜨던 현상 근본 해결** — v0.16.0의 preview 캐시가 실제 사용 환경에서 거의 언제나 `"Response ready"`로만 뜨던 현상의 원인을 v0.16.1 진단 로그로 확정한 뒤 정식 fix. OpenCode가 턴 하나에 `session.status` 이벤트를 여러 번(관측상 4번 — 시작부 2회, 종료부 2회) fire하는데, v0.16.0은 busy variant 첫 번째에만 "턴 경계"로 가정하고 `rootSessionLastText.delete`를 호출했다. 실제로는 step-finish 이후 마지막 busy가 한 번 더 오면서 `assistant` text가 캐시된 직후 다시 delete되어, session.idle 시점에 캐시가 비어 fallback body로 귀결. v0.16.2는 턴 경계를 `session.status busy`가 아니라 `message.part.updated`의 `step-start` marker로 옮겨 처리한다.
+
+### 추가됨
+
+- **`assistantTurnActive` 내부 상태** — rootSessionID별로 "assistant 턴이 열려 있는가"를 추적. `step-start`에서 `true`로 set(기존 캐시 초기화), `session.idle`/`session.deleted`에서 delete. text part는 이 플래그가 true일 때만 캐시되므로 user input 텍스트나 기타 pre-assistant 페이로드는 preview에 오염되지 않는다.
+
+### 사용자 영향
+
+- breaking change 없음. trigger 태그·MCP 인터페이스·CLI 전부 동일.
+- v0.16.0/v0.16.1에서 `"Response ready"` fallback만 받던 사용자가 이번 버전에서 **실제 응답 텍스트 첫 100자 미리보기**를 받게 된다.
+- `[Pre-check]` 블록 skip, 100자 + `…`, 공백 collapse, 공백만 있는 텍스트 fallback 같은 v0.16.0 동작은 그대로 유지.
+- `OPENCODE_NEXUS_NOTIFY_PREVIEW=0|false` opt-out, `OPENCODE_NEXUS_DEBUG_PREVIEW=1|true` 진단 env도 그대로 유지(유사 이슈 재현 시 재사용 가능).
+- 기존 설치본에서 `opencode-nexus install` 또는 글로벌 업데이트 후 OpenCode 재시작만 하면 fix가 반영됨.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS — cmux hook scenario `a~p` + 신규 `q` 총 17개 통과
+  - **cmux-l**: `step-start + text + session.idle` → body에 assistant text 포함 (preview 동작)
+  - **cmux-m**: `[Pre-check]` 블록 skip 검증
+  - **cmux-n**: `OPENCODE_NEXUS_NOTIFY_PREVIEW=0` opt-out
+  - **cmux-p** (의미 교체): 새 step-start가 이전 턴 캐시를 reset함을 검증 (v0.16.0/0.16.1의 busy reset을 step-start reset으로 대체)
+  - **cmux-q** (신규): step-start 없이 text만 오면 캐시 안 되어 fallback 유지 (user input 누출 방지)
+- `npm pack --dry-run` — 27 files, 0.16.2
+- 실증 경로: v0.16.1의 `OPENCODE_NEXUS_DEBUG_PREVIEW=1` 로그가 `part.type=text textLen=18` 이후 session.idle 사이에 `session.status` 2번 추가 발행을 보여줘 원인 확정
+
 ## [0.16.1] — 2026-04-23
 
 ### 수정됨

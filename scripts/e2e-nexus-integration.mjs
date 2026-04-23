@@ -590,8 +590,23 @@ async function main() {
     );
 
     // cmux-l: session.idle notify body must preview the last assistant text
-    // part when OPENCODE_NEXUS_NOTIFY_PREVIEW is not opt-out.
+    // part when OPENCODE_NEXUS_NOTIFY_PREVIEW is not opt-out. In v0.16.2 the
+    // preview cache only accepts text parts that arrive *after* a
+    // `step-start` marker, so the scenario now emits step-start first.
     resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-l-step",
+            sessionID: rootSessionID,
+            messageID: "msg-l",
+            type: "step-start",
+          },
+        },
+      },
+    });
     await cmuxHooks.event({
       event: {
         type: "message.part.updated",
@@ -627,11 +642,25 @@ async function main() {
 
     // cmux-m: When the assistant response opens with a [Pre-check] scaffold
     // block, the preview must skip the block and show the body that follows.
+    // step-start precedes the text part as v0.16.2 requires.
     resetCmuxLog(logFile);
     await cmuxHooks.event({
       event: {
         type: "session.status",
         properties: { sessionID: rootSessionID, status: { type: "busy" } },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-m-step",
+            sessionID: rootSessionID,
+            messageID: "msg-m",
+            type: "step-start",
+          },
+        },
       },
     });
     await cmuxHooks.event({
@@ -675,6 +704,19 @@ async function main() {
       event: {
         type: "session.status",
         properties: { sessionID: rootSessionID, status: { type: "busy" } },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-n-step",
+            sessionID: rootSessionID,
+            messageID: "msg-n",
+            type: "step-start",
+          },
+        },
       },
     });
     await cmuxHooks.event({
@@ -731,9 +773,25 @@ async function main() {
       `cmux-o: empty-cache fallback must be "Response ready", got "${bodyO}"`,
     );
 
-    // cmux-p: session.status busy must reset the per-session text cache so
-    // stale text from a prior turn cannot leak into the next turn's preview.
+    // cmux-p: When a new assistant step-start arrives, the per-session text
+    // cache must be cleared, so a stale text part (e.g. the user input text
+    // or an aborted prior turn) cannot leak into the next turn's preview.
+    // This replaces the v0.16.0/0.16.1 busy-based reset which v0.16.2 removed
+    // after empirical evidence that OpenCode fires busy mid-turn.
     resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-p-prior-step",
+            sessionID: rootSessionID,
+            messageID: "msg-p-prior",
+            type: "step-start",
+          },
+        },
+      },
+    });
     await cmuxHooks.event({
       event: {
         type: "message.part.updated",
@@ -750,8 +808,15 @@ async function main() {
     });
     await cmuxHooks.event({
       event: {
-        type: "session.status",
-        properties: { sessionID: rootSessionID, status: { type: "busy" } },
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-p-new-step",
+            sessionID: rootSessionID,
+            messageID: "msg-p-new",
+            type: "step-start",
+          },
+        },
       },
     });
     await cmuxHooks.event({
@@ -760,17 +825,55 @@ async function main() {
         properties: { sessionID: rootSessionID },
       },
     });
-    const callsP = await waitForCmuxCalls(logFile, 3);
+    const callsP = await waitForCmuxCalls(logFile, 2);
     const notifyP = callsP.find((call) => call[0] === "notify");
     assert(notifyP, `cmux-p: session.idle must fire notify, got ${JSON.stringify(callsP)}`);
     const bodyP = notifyP[notifyP.indexOf("--body") + 1];
     assert(
       !bodyP.includes("Previous turn"),
-      `cmux-p: prior turn text must be cleared by busy event, got "${bodyP}"`,
+      `cmux-p: prior turn text must be cleared by the new step-start, got "${bodyP}"`,
     );
     assert(
       bodyP === "Response ready",
-      `cmux-p: cache-reset fallback must be "Response ready", got "${bodyP}"`,
+      `cmux-p: after step-start reset with no new text, body must fall back to "Response ready", got "${bodyP}"`,
+    );
+
+    // cmux-q: Text parts that arrive *without* a preceding step-start marker
+    // (e.g. the user's input text) must NOT enter the preview cache. This
+    // guards against user input leaking into the "Response ready" preview
+    // when the assistant returns a tool-only or empty-text turn.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-q-user",
+            sessionID: rootSessionID,
+            messageID: "msg-q-user",
+            type: "text",
+            text: "This is a user input text that must not be cached as preview.",
+          },
+        },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: rootSessionID },
+      },
+    });
+    const callsQ = await waitForCmuxCalls(logFile, 2);
+    const notifyQ = callsQ.find((call) => call[0] === "notify");
+    assert(notifyQ, `cmux-q: session.idle must fire notify, got ${JSON.stringify(callsQ)}`);
+    const bodyQ = notifyQ[notifyQ.indexOf("--body") + 1];
+    assert(
+      bodyQ === "Response ready",
+      `cmux-q: text without preceding step-start must not be cached (fallback expected), got "${bodyQ}"`,
+    );
+    assert(
+      !bodyQ.includes("user input"),
+      `cmux-q: user input text must not leak into preview, got "${bodyQ}"`,
     );
   } finally {
     if (originalPath === undefined) delete process.env.PATH;
