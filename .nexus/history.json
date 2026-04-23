@@ -423,6 +423,129 @@
           "created_at": "2026-04-23T06:34:13.778Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T07:20:34.202Z",
+      "branch": "main",
+      "plan": {
+        "id": 3,
+        "topic": "v0.15.0 릴리즈 — uninstall/version + cmux 확장 배포",
+        "issues": [
+          {
+            "id": 1,
+            "title": "버전 결정 — 0.14.0 → 0.15.0(minor) vs 0.14.1(patch)",
+            "status": "decided",
+            "decision": "**버전 0.15.0 (minor bump) 선택.** 근거: (1) uninstall은 신규 public CLI 서브커맨드(기능 추가), (2) --version/version 표면은 신규 옵션과 서브커맨드 추가, (3) cmux 사이드바 pill·permission.ask·session.error hook은 신규 외부 통합 표면 확장, (4) 이 repo의 과거 관례상 v0.13.x는 bug fix only를 patch로, v0.14.0처럼 사용자 가시 기능 추가는 minor로 올림. breaking change는 없지만 \"사용 방식이 바뀌는 수정\"(releasing.md §13)과 \"사용자 영향이 있는 변경\"이 다수라 patch보다 minor가 적절. 기각: 0.14.1 patch(기능 추가 다수라 과소 평가), 0.15.0-beta/rc(이 repo는 pre-release 태그 사용 전례 없음)."
+          },
+          {
+            "id": 2,
+            "title": "CHANGELOG 0.15.0 엔트리 구조 및 내용 (두 cycle 변경 통합)",
+            "status": "decided",
+            "decision": "**CHANGELOG 0.15.0 엔트리를 하나로 통합, 0.14.0 엔트리 형식(추가됨/변경됨/업스트림/사용자 영향/검증) 준수.** 두 cycle 변경을 \"추가됨\" 내부에서 두 소섹션으로 분리 서술:\n1. **CLI 확장** — `opencode-nexus uninstall [--scope] [--dry-run] [--force]`, `--version` flag + `version` 서브커맨드. uninstall 정책(namespace 기반 확실한 소유는 항상 제거, provenance 불명 leaf는 정확 일치 또는 --force에서만 제거, $schema 최보수, 빈 컨테이너/파일/디렉터리 cleanup, 멱등, 비-TTY는 --force 필수).\n2. **cmux 통합 확장** — 사이드바 pill(Running/Needs Input, bolt/bell icon, #007AFF), permission.ask hook으로 'Permission requested' toast + Needs Input pill, session.error에서 'Session error' toast + cmux log --level error, session.status retry에서 cmux log --level warning. cmuxNotify를 cmuxSpawn 위에 리팩터링.\n\n**변경됨**: README.en.md의 \"Waiting for input\" → \"Waiting for your input\" 드리프트 수정(실제 notify body와 일치).\n**업스트림**: @moreih29/nexus-core 버전 변경 없음(0.19.2 유지).\n**사용자 영향**: 기존 설치본에 영향 없음. breaking change 없음. uninstall은 기본적으로 우리가 건든 것만 엄격히 되돌리고 drift는 --force에서만 제거.\n**검증**: bun run check PASS / bun run test:e2e PASS (기존 + 신규 A~E + cmux-a~g 총 91 assert). 기각: 두 버전(0.15.0 + 0.15.1)으로 분리 배포 — 사용자가 \"배포하기 전 기능 하나 더\"라고 했으므로 한 번에 배포가 사용자 의도."
+          },
+          {
+            "id": 3,
+            "title": "README ko/en의 illustrative 버전 숫자 0.14.0→0.15.0 업데이트 범위",
+            "status": "decided",
+            "decision": "**README.md와 README.en.md의 illustrative version 숫자 3곳씩(총 6곳)을 0.14.0 → 0.15.0으로 업데이트.** 대상 라인: line 52 `@x.y.z` 예시의 `0.14.0`, line 69 \"현재 설치된 CLI가 0.14.0이면\" 설명, line 74 `opencode.json` JSON 예시 블록의 `opencode-nexus@0.14.0`. releasing.md §1-1은 \"illustrative이므로 release gate는 아니지만 최신 버전을 채워두는 것을 권장\"이라 반영. 기각: 건드리지 않고 0.14.0 유지(기능상 문제 없지만 user confusion 여지), 설치 예시만 업데이트 후 JSON 블록 건드리지 않기(블록도 \"현재 CLI 버전이 X.Y.Z면 이렇게 쓴다\"는 동일 성격의 illustrative이므로 통일성 결여)."
+          },
+          {
+            "id": 4,
+            "title": "PR 생성 title/body 형식 및 merge 전략 (merge commit vs squash vs rebase)",
+            "status": "decided",
+            "decision": "**PR은 gh CLI로 생성, merge 전략은 merge commit(기본).** \n\nPR title: `v0.15.0: uninstall + version CLI 그리고 cmux 통합 확장`\n\nPR body 구조(releasing.md §10 준수):\n- 왜 이 릴리즈가 필요한지\n- 버전 결정 근거(minor, breaking 없음)\n- 사용자에게 보이는 변경점(uninstall/version/cmux 확장 요약)\n- install/models/publish UX 변경 여부(없음)\n- 검증 결과(bun run check / test:e2e / manual cmux shim)\n\nMerge 전략: **merge commit**. 이유: 이 repo는 feat 커밋을 squash/압축하는 일관된 관례가 관찰되지 않고(eb0a429 v0.14.0은 별도 릴리즈 커밋이지만 앞선 96e1d98 feat 커밋도 main history에 존재), merge commit이 가장 많이 쓰이는 기본이며 두 cycle 각각의 feat 커밋 히스토리를 보존하는 편이 history.json archive와도 일관. 기각: squash(커밋 두 개가 하나로 압축되어 각 cycle의 분리된 작업이 히스토리에서 사라짐), rebase(linear history는 깨끗하나 merge 시점이 불명확해짐)."
+          },
+          {
+            "id": 5,
+            "title": "태그 생성 시점·위치와 publish workflow 모니터링 절차",
+            "status": "decided",
+            "decision": "**PR merge 완료 후 main pull → main HEAD에서 v0.15.0 annotated tag 생성 → tag push로 publish workflow 자동 트리거.** 절차:\n1. `gh pr merge --merge` (또는 웹 UI merge 후)\n2. `git checkout main && git pull origin main`\n3. main HEAD가 PR merge commit인지 확인\n4. `git tag -a v0.15.0 -m \"v0.15.0: uninstall + version CLI, cmux integration extensions\"` (annotated tag)\n5. `git push origin v0.15.0`\n6. `gh run watch` 또는 `gh run list --workflow=publish-npm.yml` 로 publish workflow 모니터링\n7. workflow 성공 시 `npm view opencode-nexus@0.15.0` 로 npm 배포 확인\n\nworkflow 실패 시: workflow 로그 확인 → 수정 필요하면 fix commit → 새 PR → 새 tag. 기각: lightweight tag(annotated가 릴리즈 관례에 적합), main이 아닌 feat 브랜치에 태그(Actions workflow는 ref 상관없이 trigger되지만 main 기준 정렬이 원칙)."
+          },
+          {
+            "id": 6,
+            "title": "GitHub Release 생성 방식과 본문 구성",
+            "status": "decided",
+            "decision": "**`gh release create v0.15.0`으로 GitHub Release 생성, 본문은 CHANGELOG 0.15.0 엔트리 기반.** releasing.md §12 준수:\n- title: `v0.15.0`\n- notes body: CHANGELOG 0.15.0 엔트리 내용을 요약·재구성한 것. 핵심 변경 3가지(uninstall/version/cmux 확장), 사용자에게 보이는 변경, install/models UX 영향 없음, breaking change 없음, 검증 결과 포함.\n- publish workflow 성공 확인 후에만 Release 생성(§12: publish 실패 상태에서 Release 확정 금지).\n- `--target v0.15.0` 또는 기본(태그에서 추론). tag는 이미 존재하므로 별도 생성 옵션 불필요. 기각: 자동 생성 릴리즈 노트 사용(§12: \"자동 생성 노트보다 실제 사용자 관점 중요 변경과 주의사항을 수동으로 정리하는 쪽 우선\"), draft release(사용자가 전체 배포 완료 지시했으므로 published로 바로 확정)."
+          },
+          {
+            "id": 7,
+            "title": "브랜치 정리 범위 — 로컬/원격 feat/uninstall-and-version 삭제, 다른 stale 브랜치 여부",
+            "status": "decided",
+            "decision": "**릴리즈 완료 후 feat/uninstall-and-version 브랜치를 로컬 + remote 모두 삭제.** 절차(releasing.md §11 준수):\n1. main checkout 후 `git branch -d feat/uninstall-and-version` (머지 완료되어 있으면 `-d`로 안전 삭제, 아니면 경고 발생 → 확인 후 `-D`)\n2. `git push origin --delete feat/uninstall-and-version`\n3. 다른 stale 브랜치는 `git branch -vv | grep gone` 또는 `git remote prune origin --dry-run` 확인 후 판단. 이번 cycle에선 feat/uninstall-and-version만 정리 대상.\n\n기각: 브랜치 유지(후속 작업 없으므로 정리 대상, §11 규칙), remote만 삭제 로컬 유지(로컬도 같이 정리하는 것이 일관), `-D` 강제 삭제(merge 완료된 브랜치는 `-d`로 충분하고 더 안전)."
+          }
+        ],
+        "research_summary": "직전 두 cycle로 feat/uninstall-and-version 브랜치에 두 개 커밋 누적(c568fff uninstall+version, 98a180b cmux 확장). 둘 다 main에 아직 merge되지 않음. .github/workflows/publish-npm.yml은 `v*.*.*` 태그 push 시 자동 트리거되며 `bun run check` + `bun run test:e2e` + `npm pack --dry-run` + package.json/tag version 일치 검증 + `npm publish --provenance --access public`까지 수행(trusted publisher). validate.yml은 PR과 main push에서 동일 검증. README ko/en에 illustrative version 0.14.0 3곳씩(line 52 '@x.y.z' 예시, line 69/74 opencode.json 예시 블록). releasing.md §1-1은 이 숫자 최신화를 권장하지만 release gate는 아님. releasing.md §3/§5/§6/§9/§10/§12/§13 릴리즈 규약 모두 정비됨. 과거 커밋 패턴: feat/fix PR merge 후 main에서 `vX.Y.Z: <desc>` 형태의 릴리즈 커밋을 만들어 태그 거는 방식으로 추정(eb0a429 예시). 현재 로컬 tags는 v0.9.1까지 보이고 v0.14.0은 remote에 존재. breaking change 없음(uninstall은 신규 명령, cmux 확장은 기존 동작 유지+확장, version은 신규 표면). 기존 설치본 regression 없음. .nexus/history.json에 직전 두 cycle의 archive 존재 → 이번 릴리즈 cycle도 close 후 동일 파일 업데이트.",
+        "created_at": "2026-04-23T07:13:22.458Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Release prep: version bump + CHANGELOG + README",
+          "status": "completed",
+          "context": "v0.15.0 릴리즈를 위해 feat/uninstall-and-version 브랜치에 릴리즈용 커밋 하나 추가. 기존 두 feat 커밋(c568fff, 98a180b)은 그대로 유지하고 위에 release prep 커밋을 쌓는다.",
+          "acceptance": "- package.json version === \"0.15.0\".\n- CHANGELOG.md에 `## [0.15.0]` 엔트리가 최상단 바로 아래에 존재하고 기존 0.14.0/0.13.5 등 보존.\n- README.md/en.md에 `0.14.0` 문자열 0건(`grep 0.14.0 README*` 결과 없음) 또는 0.14.0 → 0.15.0 완전 대체.\n- `bun run check` PASS, `bun run test:e2e` PASS.\n- 로컬 feat/uninstall-and-version 브랜치에 release prep 커밋 추가.",
+          "approach": "1. `package.json` version \"0.14.0\" → \"0.15.0\".\n2. `CHANGELOG.md` 최상단(`# 변경 이력` 뒤, `## [0.14.0]` 앞)에 `## [0.15.0] — 2026-04-23` 엔트리 추가. Issue 2 결정표 형식 따름.\n3. `README.md` 3곳(line 52, 69, 74) `0.14.0` → `0.15.0`.\n4. `README.en.md` 3곳(line 52, 69, 74) `0.14.0` → `0.15.0`.\n5. `bun run check` + `bun run test:e2e` 재확인(PASS 이미 확인됐지만 커밋 전 최종 점검).\n6. `git add` 명시 경로 + `git commit -m \"v0.15.0: bump version, README/CHANGELOG sync\"`.",
+          "plan_issue": 2,
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T07:14:52.972Z"
+        },
+        {
+          "id": 2,
+          "title": "Push feat 브랜치 + PR 생성",
+          "status": "completed",
+          "context": "feat/uninstall-and-version 브랜치를 origin에 push하고 gh CLI로 PR 생성. title/body는 Issue 4 결정에 따름.",
+          "acceptance": "- 원격 origin에 feat/uninstall-and-version 브랜치 push됨.\n- PR 생성되고 URL 획득.\n- validate workflow PR 상태에서 성공.\n- PR body에 릴리즈 근거·변경점·검증 결과 모두 포함.",
+          "approach": "1. `git push -u origin feat/uninstall-and-version`.\n2. `gh pr create --base main --head feat/uninstall-and-version --title \"v0.15.0: uninstall + version CLI 그리고 cmux 통합 확장\" --body \"$(cat <<'EOF' ... )\"` — body에 왜/버전 근거/사용자 변경점/검증 결과 포함.\n3. PR URL 캡처하고 반환.\n4. validate.yml workflow가 PR에서 자동 실행되므로 `gh run watch` 또는 `gh pr checks <PR>`로 모니터링.",
+          "plan_issue": 4,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T07:14:59.060Z"
+        },
+        {
+          "id": 3,
+          "title": "PR merge + tag v0.15.0 생성·push",
+          "status": "completed",
+          "context": "validate workflow PASS 후 PR을 merge commit 전략으로 병합. main으로 이동해 tag 생성 후 push로 publish workflow 트리거.",
+          "acceptance": "- PR이 main에 merge commit으로 병합됨.\n- v0.15.0 annotated tag이 main HEAD에 생성·push됨.\n- publish-npm.yml workflow 성공(exit 0).\n- npm registry에서 opencode-nexus@0.15.0 조회 가능.",
+          "approach": "1. `gh pr merge <PR> --merge --delete-branch=false` (브랜치 삭제는 task 5에서 명시적으로 처리하기 위해 --delete-branch=false).\n2. `git checkout main && git pull origin main`.\n3. `git log --oneline -3` 으로 merge commit 확인.\n4. `git tag -a v0.15.0 -m \"v0.15.0: uninstall + version CLI, cmux integration extensions\"`.\n5. `git push origin v0.15.0`.\n6. `gh run list --workflow=publish-npm.yml --limit 1` 또는 `gh run watch`로 workflow 모니터링.\n7. 성공하면 `npm view opencode-nexus@0.15.0` 로 배포 검증.",
+          "risk": "Publish workflow 실패 가능성(태그-version 불일치 검증은 자동이지만 npm trusted publisher 설정이나 hook 실패 가능). 실패 시 로그 확인 후 fix commit → 새 태그가 필요할 수도 있음.",
+          "plan_issue": 5,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T07:15:07.130Z"
+        },
+        {
+          "id": 4,
+          "title": "GitHub Release 생성 + 브랜치 정리",
+          "status": "in_progress",
+          "context": "publish workflow 성공 확인 후 GitHub Release를 published로 생성하고, feat 브랜치를 로컬/원격 모두 삭제.",
+          "acceptance": "- GitHub Release v0.15.0 가 published 상태로 생성되고 URL 획득.\n- Release body에 핵심 변경, 사용자 영향, 검증 결과 포함.\n- 로컬 feat/uninstall-and-version 브랜치 삭제됨.\n- 원격 origin/feat/uninstall-and-version 삭제됨.\n- `git branch --list feat/uninstall-and-version` 결과 비어있음.\n- 다른 stale 브랜치 확인 결과 기록.",
+          "approach": "1. CHANGELOG 0.15.0 엔트리 내용을 Release body에 맞게 간결 재구성(releasing.md §12 요구사항: 핵심 변경 / 사용자 변경점 / install·models UX 영향 / breaking change 여부 / 검증 결과).\n2. `gh release create v0.15.0 --title \"v0.15.0\" --notes \"$(cat <<'EOF' ... )\"` 실행.\n3. Release URL 획득.\n4. `git branch -d feat/uninstall-and-version` (main에 merge 완료됐으므로 -d 안전 삭제 가능).\n5. `git push origin --delete feat/uninstall-and-version` (PR merge 시 --delete-branch=false로 남겨뒀던 원격 브랜치 제거).\n6. `git branch -vv | grep gone` 로 다른 stale 브랜치 확인.\n7. 필요하면 `git fetch --prune` 으로 원격 추적 정리.",
+          "plan_issue": 7,
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T07:15:14.497Z"
+        }
+      ]
     }
   ]
 }
