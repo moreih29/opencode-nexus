@@ -51,6 +51,8 @@ opencode-nexus install
 
 특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.14.0`).
 
+설치된 CLI 버전은 `opencode-nexus --version` 또는 `opencode-nexus version`으로 확인할 수 있습니다.
+
 ## install이 하는 일
 
 interactive terminal에서 `opencode-nexus install`을 실행하면:
@@ -138,6 +140,59 @@ interactive 화면에서는:
 ```bash
 opencode-nexus models --scope=project --agents=lead,general,explore --model=openai/gpt-5.4
 ```
+
+## Uninstall
+
+설치한 Nexus 구성을 되돌리려면 `uninstall` 명령을 사용합니다.
+
+```bash
+opencode-nexus uninstall --scope=project
+```
+
+지원하는 scope는 `project`, `user`, `both`입니다. `Scope` 섹션의 설명이 uninstall에도 그대로 적용됩니다.
+
+interactive 터미널에서 `--scope`를 생략하면 install과 동일하게 scope 선택 화면이 먼저 표시됩니다. `--force`가 없으면 `Remove opencode-nexus config from <scope>?` 확인 프롬프트가 뜨며, 기본값은 "Cancel"(no)입니다.
+
+비-TTY 환경(CI나 스크립트)에서는 `--force`가 필수입니다. 없으면 `Use --force for non-interactive removal` 에러와 함께 종료됩니다.
+
+```bash
+opencode-nexus uninstall --scope=project --force
+```
+
+`--dry-run`을 주면 실제 변경 없이 제거 계획만 출력합니다(install의 `--dry-run`과 대칭).
+
+```bash
+opencode-nexus uninstall --scope=project --dry-run
+```
+
+### 되돌리는 대상
+
+uninstall은 다음 항목만 제거합니다:
+
+- `plugin` 배열의 `opencode-nexus@*` 엔트리(pin)
+- `mcp.nx` 서버 등록
+- `default_agent`가 `"lead"`인 경우 해당 값
+- `agent.build.disable` 및 `agent.plan.disable`이 `true`인 경우 해당 leaf
+- `.opencode/skills/` 아래에 복사된 Nexus 스킬 디렉터리
+  - `nx-auto-plan`
+  - `nx-plan`
+  - `nx-run`
+
+### 보존하는 대상
+
+사용자가 직접 추가한 다른 `plugin` 엔트리, `mcp`의 다른 서버 등록, `agent`의 다른 속성(예: 모델 설정), `$schema`는 기본 모드에서 그대로 유지됩니다.
+
+### drift 처리
+
+사용자가 `mcp.nx.command`나 `default_agent`를 변경한 상태(drift)라면, 기본 모드에서는 warning을 출력하고 해당 값은 보존합니다. `--force`를 주면 drift된 값도 강제로 제거합니다.
+
+### 멱등성
+
+uninstall은 두 번 실행할 수 있습니다. 이미 제거된 상태에서는 `nothing to remove for scope: ... (no opencode-nexus markers found)` 메시지와 함께 성공(exit 0)으로 종료됩니다.
+
+### 빈 컨테이너 자동 정리
+
+leaf 제거 후 `plugin` 배열이 비거나 `mcp` 객체가 비면 해당 키 자체가 제거됩니다. `agent.build`나 `agent.plan`이 비면 상위 `agent` 키도 정리되며, `opencode.json`이 완전히 빈 객체가 되면 파일 자체가 삭제됩니다. 스킬 상위 디렉터리(`.opencode/skills/`, `.opencode/`)가 비면 함께 정리됩니다.
 
 ## cmux 통합 (데스크톱 알림)
 
