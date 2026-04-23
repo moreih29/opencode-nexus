@@ -546,6 +546,180 @@
           "created_at": "2026-04-23T07:15:14.497Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T07:42:14.019Z",
+      "branch": "chore/bump-nexus-core-0.20.0",
+      "plan": {
+        "id": 4,
+        "topic": "nexus-core 0.19.2 → 0.20.0 업스트림 반영 및 opencode-nexus 릴리즈",
+        "issues": [
+          {
+            "id": 1,
+            "title": "opencode-nexus 버전 bump 자릿수(patch vs minor) 결정",
+            "status": "decided",
+            "decision": "**선정**: opencode-nexus 0.15.0 → **0.15.1 (patch bump)**.\n\n**근거**:\n- 업스트림 0.20.0은 Lead spec/skill 리팩토링이지만 릴리즈 노트가 \"Required changes: 없음. 기존 trigger 태그(`[plan]`, `[auto-plan]`, `[run]`)와 MCP 인터페이스 모두 동일\" 명시.\n- Wrapper 레벨 API, install CLI, `opencode.json` config 스키마, CHANGELOG §9 workflow 모두 변경 없음.\n- 전례 일관성: v0.13.2(← nexus-core 0.19.1), v0.13.3(← 0.19.2) 모두 patch로 처리됨. 같은 성격(업스트림 단독 bump, wrapper 코드 변경 없음)이면 patch 유지.\n- pre-v1 minor 규정은 \"wrapper 자신의 breaking change\"에 적용한다 해석. 업스트림이 주는 관찰 가능한 응답 형식 변화([Pre-check] block)는 계약 브레이크가 아니라 업스트림 동작 개선.\n\n**기각된 대안**: minor bump (0.16.0). 기각 사유 — [Pre-check] 블록 도입이 응답 형식 변화지만 trigger/API/config 파괴가 아니며, 사용자 스크립트·설정 수정이 강제되지 않음. 같은 성격의 이전 업스트림 bump들이 모두 patch로 나갔기에 cadence 일관성 유지."
+          },
+          {
+            "id": 2,
+            "title": "생성된 SKILL.md 3종의 OpenCode frontmatter 스펙 준수 검증 전략",
+            "status": "decided",
+            "decision": "**선정**: `bun run sync` 후 생성된 `.opencode/skills/{nx-plan,nx-auto-plan,nx-run}/SKILL.md` 3종에 대해 (a) frontmatter 정적 검증, (b) `bun run test:e2e`의 자동 검증에 위임, (c) 릴리즈 체크리스트 §5-1 수동 grep 이중 확인.\n\n**근거**:\n- 릴리즈 체크리스트 §5-1이 \"이 검증을 생략하면 skill이 말없이 사라지며 hotfix 불가피\"라 강조. 패턴 노트 `pattern-bug-fix-routing.md`의 2026-04-22 Skill 사건이 정확히 이 경로 실패 사례.\n- 업스트림 0.20.0이 skill 본문을 재작성했으므로 frontmatter 구조에 회귀 가능성 존재. test:e2e가 sync 및 install 결과를 검증하지만, `name`/`description` required 여부·regex·디렉터리명 일치까지 자동 체크하는지는 현 시점 확신 불가 — 이중 방어가 타당.\n- 구체 체크 항목: `name: nx-plan|nx-auto-plan|nx-run`, `description:` 1~1024자, regex `^[a-z0-9]+(-[a-z0-9]+)*$` 만족, 선/후미 `-` 없음, `--` 없음.\n\n**기각된 대안**: \n1) test:e2e만 신뢰하고 수동 grep 생략 — 기각: v0.13.1에서 같은 가정으로 배포 후 hotfix 필요했던 직접 전례.\n2) live load smoke test(§5-2)까지 포함 — 기각: OpenCode 실행 환경 필요한 수동 단계, patch 사이클 안에서 매번 수행하기엔 overhead 과함. 정적 검증이 regression을 대부분 차단."
+          },
+          {
+            "id": 3,
+            "title": "릴리즈 체크리스트 중 이번 bump에 적용할 검증 범위 결정",
+            "status": "decided",
+            "decision": "**선정**: 이번 사이클에서 **실행할 검증**과 **이번 사이클 범위 밖**을 명시 분리.\n\n**실행**:\n- §2 작업트리 상태 — git status 최종 상태 점검\n- §3 자동 검증 전체 — `bun install` → `bun run check` → `bun run test:e2e` → `npm pack --dry-run`\n- §4 패키지 결과물 포함/제외 항목 — `npm pack --dry-run` 결과 read\n- §5-1 Skill frontmatter 정적 검증 (issue 2 결정 연장)\n- §8 문서 정합성 — README가 Node >= 22·install 예시·upgrade 설명 일치 재확인\n- §13 CHANGELOG 규칙 — 새 버전 entry 추가 필수\n- §14 배포 직전 종료 조건 — 위 모두 PASS 여부로 gate\n\n**이번 사이클 범위 밖**(변경 없음으로 판단):\n- §5-2 live load smoke — 수동 OpenCode 실행 필요, patch bump overhead 과도\n- §5-3 MCP binary reachability — 업스트림 릴리즈 노트에 mcp 변경 언급 없음. 단, `npm pack --dry-run` + test:e2e가 PATH/shim 회귀를 감지할 것으로 기대. 이상 감지되면 복구 경로에서 §5-3 수동 재현.\n- §5-4 uninstall 불변조건 — wrapper CLI 변경 없음, test:e2e가 기존 시나리오 A·B·C·D 포함\n- §5-5 cmux 통합 — wrapper plugin 코드 변경 없음\n- §7 CLI UX — install/models/uninstall CLI 변경 없음\n- §9 GitHub Actions — workflow 변경 없음\n- §10 PR 규칙 / §11 브랜치 정리 / §12 GitHub Release — 사용자 의사결정(push·PR·태그 생성) 영역이므로 본 사이클은 \"커밋 생성\"까지만 수행하고 이후는 사용자 판단에 넘김\n\n**근거**:\n- 체크리스트 §14 \"하나라도 실패 시 태그 금지\" 원칙 — gating에 필요한 §3/§5-1/§8/§13이 실행 필수 minimum.\n- 업스트림이 바꾸지 않은 영역(§5-2 run-time shape, §5-3 MCP bin, §5-4 uninstall 경로, §5-5 cmux, §7 UX)까지 매 patch에서 수동 재현하면 cycle cost가 과도해지고 실제 regression risk 대비 이득 낮음. test:e2e 통과를 첫 번째 방어선으로 신뢰하되, frontmatter만 이중 방어.\n\n**기각된 대안**: \n1) 전체 체크리스트 수동 재현 — 기각: overhead 과도, patch bump의 risk profile에 비례 안 함.\n2) test:e2e만 돌리고 §5-1 생략 — 기각: issue 2 결정과 모순."
+          },
+          {
+            "id": 4,
+            "title": "CHANGELOG / README 업데이트 범위 결정",
+            "status": "decided",
+            "decision": "**선정**: \n- **CHANGELOG.md**: `## [0.15.1] — 2026-04-23` entry 신규 작성 (필수).\n- **README.md / README.en.md**: illustrative 버전 숫자 3곳 0.15.0 → 0.15.1 동기화 (릴리즈 체크리스트 §1-1에 따라 권장 수준, blocker 아님).\n- **package.json**: `version` 필드 0.15.0 → 0.15.1, `dependencies[\"@moreih29/nexus-core\"]` 0.19.2 → 0.20.0.\n\n**CHANGELOG entry 구조** (CHANGELOG §13 + v0.13.3 전례 참조):\n```\n## [0.15.1] — 2026-04-23\n\n### 업스트림\n- `@moreih29/nexus-core` 0.19.2 → 0.20.0.\n\n### 변경됨 (업스트림 유래)\n- **Lead 응답 형식**: substantive 요청 응답이 `[Pre-check]` opening scaffold 블록으로 시작. 복잡 요청은 축별 아이템 분해.\n- **Lead 의사결정**: Evidence requirement 신규. Lead 주도 판단은 추론만으로 불가하며 researcher/explore/tester/`.nexus` 기록 중 하나의 출처 인용 필수.\n- **Lead context·memory 정책**: 능동 제안 정책 강화 — Lead가 먼저 제안.\n- **nx-plan**: Absolute Rules 3개 — Lead 단독 결정 금지, 비교표 출력 후 강제 stop, 사용자 응답 보수적 해석.\n- **nx-auto-plan**: Absolute Rules 3개 — 자율 결정, 결정 유도 출력 금지, 안건 사이 멈춤 금지.\n- **nx-run**: 보고 형식 5항목 확장 (변경사항·주요결정·다음단계·미해결질문·리스크).\n\n### 사용자 영향\n- 기존 설치본에 breaking change 없음. 기존 trigger 태그(`[plan]`, `[auto-plan]`, `[run]`)와 MCP 인터페이스 모두 동일 동작.\n- 업데이트 후 Lead 응답에 `[Pre-check]` 블록이 자동으로 나타남 — 정상 동작.\n- 설정 재적용/재설치 불필요. `opencode-nexus install` 기존 호출은 0.15.1 CLI에서 자동 pin으로 갱신됨.\n\n### 검증\n- `bun run check` PASS\n- `bun run test:e2e` PASS\n- `npm pack --dry-run` 결과 정상\n- `.opencode/skills/{nx-plan,nx-auto-plan,nx-run}/SKILL.md` frontmatter 스펙 재확인 PASS\n```\n\n**근거**:\n- CHANGELOG §13: \"GitHub Release 본문은 해당 버전의 CHANGELOG 항목을 요약\" — CHANGELOG 작성은 선행 필수.\n- v0.13.3이 동종(업스트림 단독 bump) 전례 — 업스트림/사용자 영향/검증 세 축 구조 유지.\n- README 숫자 갱신은 §1-1 권장 수준이지만, 같은 사이클에서 함께 업데이트하면 drift 축적 방지.\n\n**기각된 대안**: \n1) README 업데이트 생략 — 기각: illustrative 숫자가 구 버전으로 남으면 장기 drift. 같은 커밋에서 처리가 cheap.\n2) CHANGELOG에 자세한 upstream 내부 변경 나열 — 기각: CHANGELOG §13 \"커밋 목록 복붙이 아니라 최종 사용자 관점의 변경 요약\"에 위배. 사용자가 체감할 동작 변경만 기록."
+          },
+          {
+            "id": 5,
+            "title": "작업 브랜치 네이밍 및 커밋 전략",
+            "status": "decided",
+            "decision": "**선정**: 브랜치 `chore/bump-nexus-core-0.20.0`, 사이클당 단일 커밋, 메시지 형식 `v0.15.1: adopt nexus-core 0.20.0 (Lead spec & skill refactor)`.\n\n**근거**:\n- Lead 베이스 norm `Hard Prohibitions`: \"Working directly on main/master — move to a branch appropriate for the task type before starting (prefix: `feat/`, `fix/`, `chore/`, `research/`, etc.)\" — 현재 main이므로 분기 필수.\n- 업스트림 단독 bump는 wrapper 관점에서 chore. 전례 커밋(`e1929f8 v0.13.3: adopt nexus-core 0.19.2 ...`)이 정확히 같은 메시지 템플릿 사용 — 로그 일관성 유지.\n- nx-run skill \"1 cycle = 1 commit\" 원칙 + releasing.md §10 \"릴리즈에 포함될 수정사항은 가능하면 `main`에 직접 커밋하지 않고 작업 브랜치에서 정리한다\" 준수.\n- 커밋 범위: `package.json`, `bun.lock`, `.opencode/skills/` (regenerated), `CHANGELOG.md`, `README.md`, `README.en.md`, `.nexus/history.json` (nx_task_close 결과). `git add -A` 대신 명시 경로 사용.\n\n**사용자 판단 영역**(본 사이클 범위 밖):\n- `git push`, PR 생성, `main` 병합, git tag `v0.15.1` 생성, GitHub Release, `npm publish` — 사용자가 별도 결정.\n\n**기각된 대안**:\n1) `feat/nexus-core-0.20.0` — 기각: wrapper에 새 기능 추가가 없음, 업스트림 채택은 chore 범주.\n2) `release/0.15.1` — 기각: 현 프로젝트 브랜치 네이밍 전례에 `release/` prefix 부재, `v0.X.Y:` 커밋 메시지 prefix가 이미 버전 명시 역할 수행.\n3) main에 직접 작업 — 기각: Hard Prohibitions 위배."
+          }
+        ],
+        "research_summary": "업스트림 릴리즈 노트(https://github.com/moreih29/nexus-core/releases/tag/v0.20.0)와 CHANGELOG 검토 완료. 핵심: Lead spec/nx-plan/nx-auto-plan/nx-run 대규모 리팩토링, [Pre-check] opening scaffold 신규, Evidence requirement 신규, Absolute Rules 신규. 릴리즈 노트 명시: \"Required changes: 없음. 기존 trigger 태그와 MCP 인터페이스 모두 동일\". 현재 opencode-nexus v0.15.0(0.19.2 pin), package.json/bun.lock 모두 0.19.2. Wrapper 코드·CLI·config 스펙 변경 없음, skill generate 출력만 바뀜. 지난 업스트림 bump 전례(v0.13.2 ← 0.19.1, v0.13.3 ← 0.19.2) 모두 patch로 처리됨. 릴리즈 체크리스트 `.nexus/context/releasing.md` §5-1(frontmatter 검증)·§5-2(live load)·§5-3(MCP handshake)이 특히 upstream skill/mcp 출력 변경 시 필수임을 기록.",
+        "created_at": "2026-04-23T07:34:59.249Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "작업 브랜치 전환: chore/bump-nexus-core-0.20.0",
+          "status": "completed",
+          "context": "현재 main 브랜치. Hard Prohibitions에 따라 main 작업 금지. releasing.md §10도 릴리즈 수정사항의 main 직접 커밋 금지.",
+          "acceptance": "- `git branch --show-current`가 `chore/bump-nexus-core-0.20.0` 출력\n- working tree clean 유지",
+          "approach": "git checkout -b chore/bump-nexus-core-0.20.0",
+          "plan_issue": 5,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:37:49.614Z"
+        },
+        {
+          "id": 2,
+          "title": "package.json 버전 bump 및 의존성 업데이트",
+          "status": "completed",
+          "context": "package.json version 0.15.0 → 0.15.1, dependencies[\"@moreih29/nexus-core\"] 0.19.2 → 0.20.0. 이후 bun install로 bun.lock 재생성.",
+          "acceptance": "- package.json의 `version: \"0.15.1\"`, `@moreih29/nexus-core: \"0.20.0\"`\n- node_modules/@moreih29/nexus-core/package.json이 version 0.20.0\n- bun.lock에 0.20.0 해시 반영",
+          "approach": "Edit 툴로 package.json의 두 필드 수정 → `bun install`. bun.lock에 0.20.0이 반영되는지 확인.",
+          "plan_issue": 4,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:37:53.583Z"
+        },
+        {
+          "id": 3,
+          "title": "bun run sync로 skills/agents 재생성",
+          "status": "completed",
+          "context": "nexus-core 0.20.0의 Lead spec/skill 3종 리팩토링이 `.opencode/` 아래로 전파되어야 함. sync 스크립트가 harness=opencode, target=./ 기준으로 파일을 덮어씀.",
+          "acceptance": "- sync 명령 exit 0\n- `.opencode/skills/nx-plan/SKILL.md`, `.opencode/skills/nx-auto-plan/SKILL.md`, `.opencode/skills/nx-run/SKILL.md`에 0.20.0 기반 내용 반영\n- `.opencode/agent/*.md` 3종(lead 등)에 업스트림 변경 반영\n- git status에서 sync 결과 수정 사항이 확인됨",
+          "approach": "`bun run sync` 실행. 이후 git status로 어떤 파일이 수정됐는지 확인.",
+          "plan_issue": 2,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:37:58.990Z"
+        },
+        {
+          "id": 4,
+          "title": "SKILL.md frontmatter OpenCode 스펙 준수 정적 검증",
+          "status": "completed",
+          "context": "release.md §5-1. v0.13.1 사건에서 frontmatter 스펙 위반으로 skill이 silent 누락된 직접 전례가 있으므로 §5-1을 반드시 재확인.",
+          "acceptance": "- 3개 SKILL.md 모두에서 `name` 디렉터리명 일치 확인\n- 3개 모두 `description` 존재 및 1~1024자 범위\n- 모든 name이 OpenCode regex 통과",
+          "approach": "각 SKILL.md의 frontmatter에서 다음을 확인한다: (1) `name: <디렉터리명>` 정확 일치, (2) `description:` 1~1024자, (3) name 값이 `^[a-z0-9]+(-[a-z0-9]+)*$` 만족, (4) 선/후미 `-` 없음, `--` 없음.",
+          "risk": "업스트림이 skill 본문 재작성 중 frontmatter 구조를 깨뜨렸을 가능성 — v0.13.1 재발 위험",
+          "plan_issue": 2,
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:38:06.271Z"
+        },
+        {
+          "id": 5,
+          "title": "자동 검증 파이프라인 실행: check + test:e2e + npm pack --dry-run",
+          "status": "completed",
+          "context": "releasing.md §3 필수 게이트. 하나라도 실패하면 커밋 금지.",
+          "acceptance": "- `bun run check` exit 0\n- `bun run test:e2e` 모든 assertion PASS (예상 91개)\n- `npm pack --dry-run` 결과에 `README.md`, `LICENSE`, `package.json`, `bin/`, `lib/`, `src/`, `skills/` 포함\n- 결과에 `.github/`, 임시 디렉토리 미포함",
+          "approach": "순서대로: (1) `bun run check` (sync:dry + tsc --noEmit), (2) `bun run test:e2e` (e2e-nexus-integration.mjs 91 assertions), (3) `npm pack --dry-run`로 패키지 포함 파일 목록 확인.",
+          "risk": "업스트림 skill generate 로직 변경이 test:e2e 기존 assertion을 깨뜨릴 가능성",
+          "plan_issue": 3,
+          "deps": [
+            3,
+            4
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:38:11.975Z"
+        },
+        {
+          "id": 6,
+          "title": "CHANGELOG.md에 0.15.1 entry 추가",
+          "status": "completed",
+          "context": "releasing.md §13 — CHANGELOG는 릴리즈 태그 전에 동일 변경셋에서 업데이트 필수. GitHub Release 본문 기준.",
+          "acceptance": "- `## [0.15.1] — 2026-04-23` 헤더 존재\n- 업스트림 0.19.2 → 0.20.0 명시\n- Pre-check block, Evidence requirement, Absolute Rules, nx-run 보고 5항목 확장 모두 기술\n- 기존 설치본 breaking change 없음, 설정 재적용 불필요 명시\n- 검증 결과 항목이 실제 자동 검증 결과(task 5 결과)와 일치",
+          "approach": "CHANGELOG.md 최상단에 issue 4 결정에 따른 구조로 entry 추가. 업스트림/변경됨(업스트림 유래)/사용자 영향/검증 네 축.",
+          "plan_issue": 4,
+          "deps": [
+            5
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:38:18.508Z"
+        },
+        {
+          "id": 7,
+          "title": "README.md / README.en.md illustrative 버전 숫자 0.15.0 → 0.15.1 동기화",
+          "status": "completed",
+          "context": "releasing.md §1-1: install/upgrade 예시는 @latest, 옵션 pin 예시와 opencode.json 예시 블록은 현재 버전으로 맞춰두는 것이 권장. README.md, README.en.md 각각 3곳(예시 pin 문장, 본문 버전 언급, JSON 블록).",
+          "acceptance": "- README.md, README.en.md에서 `@0.15.0` 흔적 0개 (install example `@latest`는 유지)\n- 두 파일의 illustrative pin 예시에 `0.15.1` 반영\n- install 예시 라인의 `@latest`는 건드리지 않음",
+          "approach": "grep으로 식별된 6개 위치 Edit: README.md L52/L69/L74, README.en.md L52/L69/L74. `0.15.0` → `0.15.1`.",
+          "plan_issue": 4,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:38:24.959Z"
+        },
+        {
+          "id": 8,
+          "title": "사이클 마감: nx_task_close + 단일 커밋",
+          "status": "in_progress",
+          "context": "nx-run skill Step 4. 1 cycle = 1 commit 원칙. `git add -A` 금지, 명시 경로 사용.",
+          "acceptance": "- `.nexus/state/plan.json`, `.nexus/state/tasks.json` 제거됨\n- `.nexus/history.json`에 이번 사이클 archived\n- `chore/bump-nexus-core-0.20.0` 브랜치에 단일 신규 커밋 생성\n- `git status` clean\n- push / tag / PR은 사용자 판단 영역으로 남김",
+          "approach": "(1) `nx_task_close` 호출 — plan+tasks를 `.nexus/history.json`으로 아카이브. (2) 명시 경로로 staged: `package.json`, `bun.lock`, `.opencode/`, `CHANGELOG.md`, `README.md`, `README.en.md`, `.nexus/history.json`. (3) 커밋 메시지 `v0.15.1: adopt nexus-core 0.20.0 (Lead spec & skill refactor)`. (4) `git status`로 working tree clean 확인.",
+          "plan_issue": 5,
+          "deps": [
+            6,
+            7
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T07:38:31.082Z"
+        }
+      ]
     }
   ]
 }

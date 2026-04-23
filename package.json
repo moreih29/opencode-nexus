@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "private": false,
   "type": "module",
   "description": "OpenCode plugin wrapper for @moreih29/nexus-core",
@@ -52,7 +52,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "@moreih29/nexus-core": "0.19.2",
+    "@moreih29/nexus-core": "0.20.0",
     "@opencode-ai/plugin": "1.4.9",
     "ink": "^7.0.1",
     "react": "^19.2.5"
