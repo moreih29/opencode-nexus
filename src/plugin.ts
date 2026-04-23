@@ -49,7 +49,7 @@ const PILL_KEY = "nexus-state";
 const PILL_COLOR = "#007AFF";
 const RUNNING_ICON = "bolt";
 const RUNNING_VALUE = "Running";
-const NEEDS_INPUT_ICON = "bell";
+const NEEDS_INPUT_ICON = "bell.fill";
 const NEEDS_INPUT_VALUE = "Needs Input";
 const LOG_SOURCE = "nexus";
 const RESPONSE_READY_FALLBACK = "Response ready";
@@ -213,6 +213,19 @@ function shouldPreviewResponse(): boolean {
   return true;
 }
 
+// Temporary (v0.16.1) opt-in diagnostic for the preview cache path. When
+// enabled the plugin logs each `message.part.updated` event to cmux so users
+// hitting the fallback "Response ready" body can share the payload shape
+// (part.type, part.sessionID, whether the session is tracked as root, and
+// text length) without us having to raise OpenCode's log level. Off by
+// default to avoid flooding the cmux log. Set OPENCODE_NEXUS_DEBUG_PREVIEW
+// to "1" or "true" before launching OpenCode to activate. This will be
+// revisited or removed once v0.16.2 identifies and fixes the caching path.
+function isPreviewDebugEnabled(): boolean {
+  const flag = process.env.OPENCODE_NEXUS_DEBUG_PREVIEW;
+  return flag === "1" || flag === "true";
+}
+
 function buildResponseReadyBody(lastText: string | undefined): string {
   if (!shouldPreviewResponse()) return RESPONSE_READY_FALLBACK;
   if (!lastText) return RESPONSE_READY_FALLBACK;
@@ -303,6 +316,21 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         // fires we are holding the assistant's latest text. Subagents and
         // non-root sessions are ignored (no cache slot).
         const part = event.properties.part;
+        // v0.16.1 temporary diagnostic: when users hit the "Response ready"
+        // fallback even though their response text appeared on screen, we
+        // need the per-event (type, sessionID, rootKnown, textLen) shape to
+        // pick between part-type / sessionID / payload hypotheses. Gated by
+        // an opt-in env so default runs stay quiet.
+        if (isPreviewDebugEnabled()) {
+          const partSessionID = (part as { sessionID?: unknown }).sessionID;
+          const partText = (part as { text?: unknown }).text;
+          const textLen = typeof partText === "string" ? String(partText.length) : "NA";
+          cmuxLog(
+            "info",
+            LOG_SOURCE,
+            `preview-debug: part.type=${part.type} sessionID=${String(partSessionID)} rootKnown=${rootSessions.has(String(partSessionID))} textLen=${textLen}`,
+          );
+        }
         if (part.type !== "text") return;
         if (!rootSessions.has(part.sessionID)) return;
         if (typeof part.text === "string" && part.text.length > 0) {

@@ -49,7 +49,7 @@ bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
-특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.16.0`).
+특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.16.1`).
 
 설치된 CLI 버전은 `opencode-nexus --version` 또는 `opencode-nexus version`으로 확인할 수 있습니다.
 
@@ -66,12 +66,12 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `.opencode/skills/` 아래에 Nexus 스킬 복사
 - 현재 실행 중인 CLI 버전으로 plugin pin
 
-`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.16.0`이면 다음과 같이 기록됩니다.
+`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.16.1`이면 다음과 같이 기록됩니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.16.0"],
+  "plugin": ["opencode-nexus@0.16.1"],
   "mcp": {
     "nx": {
       "type": "local",

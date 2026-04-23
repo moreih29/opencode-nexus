@@ -2,6 +2,34 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.16.1] — 2026-04-23
+
+### 수정됨
+
+- **`Needs Input` pill 아이콘을 `bell.fill`로 교체** — 기존 `bell`(외곽선 종)에서 `bell.fill`(채워진 종) SF Symbol로 변경. 다른 cmux 플러그인(`claude_code`)과 시각적 일관성 확보. `Running` pill의 `bolt` 아이콘은 그대로 유지.
+
+### 추가됨
+
+- **`OPENCODE_NEXUS_DEBUG_PREVIEW` opt-in 진단 환경변수(임시)** — v0.16.0의 `session.idle` 미리보기가 fallback(`"Response ready"`)으로만 뜨는 현상을 조사하기 위한 진단 도구. shell 환경에 `OPENCODE_NEXUS_DEBUG_PREVIEW=1` (또는 `true`)를 설정하고 OpenCode를 실행하면 `message.part.updated` 이벤트마다 `part.type` / `part.sessionID` / `rootKnown` / `textLen`을 cmux log에 기록한다. 재현 후 `cmux list-log --workspace <ref>`로 payload 확인 가능. 기본 OFF. v0.16.2에서 preview 캐시 경로 정식 수정 후 제거 또는 유지 여부 재검토 예정.
+
+### 사용자 영향
+
+- breaking change 없음. 기존 trigger 태그·MCP 인터페이스·`install`/`models`/`uninstall` CLI 모두 동일.
+- 기존 설치본에서 새로 나타나는 `Needs Input` pill이 이제 **채워진 종** 아이콘으로 보임. 다음 pill set 시 자동 반영. 설정 재적용 불필요.
+- preview가 동작하지 않는 케이스 제보하려면:
+  1. shell에 `export OPENCODE_NEXUS_DEBUG_PREVIEW=1` 설정
+  2. OpenCode 재시작 (plugin 재로드 필요)
+  3. 간단 프롬프트 한 번 실행
+  4. `cmux list-log --workspace <your workspace ref>` 결과 공유
+  진단 log가 `[nexus] [info] preview-debug: part.type=... sessionID=... rootKnown=... textLen=...` 형식으로 남음. 해당 데이터로 v0.16.2에서 정식 fix 가능.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS — cmux-a/g/i의 `bell` → `bell.fill` assertion 갱신, 나머지 scenario 그대로 통과
+- `npm pack --dry-run` — 27 files, 0.16.1
+- 아이콘 명명 체계 실증 검증 — `workspace:10`에 `bell.fill`(SF Symbols) / `oct-bell_fill`(Octicons) 두 pill 동시 spawn 후 사용자가 원하는 채워진 종을 `bell.fill`로 확정
+
 ## [0.16.0] — 2026-04-23
 
 ### 추가됨

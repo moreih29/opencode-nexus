@@ -366,8 +366,8 @@ async function main() {
       `cmux-a: permission.ask must notify expected args, got ${JSON.stringify(callsA)}`,
     );
     assert(
-      callsA.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Needs Input" && call[3] === "--icon" && call[4] === "bell" && call[5] === "--color" && call[6] === "#007AFF"),
-      `cmux-a: permission.ask must set Needs Input pill, got ${JSON.stringify(callsA)}`,
+      callsA.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Needs Input" && call[3] === "--icon" && call[4] === "bell.fill" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-a: permission.ask must set Needs Input pill (bell.fill icon), got ${JSON.stringify(callsA)}`,
     );
 
     resetCmuxLog(logFile);
@@ -470,11 +470,11 @@ async function main() {
           call[1] === "nexus-state" &&
           call[2] === "Needs Input" &&
           call[3] === "--icon" &&
-          call[4] === "bell" &&
+          call[4] === "bell.fill" &&
           call[5] === "--color" &&
           call[6] === "#007AFF",
       ),
-      `cmux-g: session.idle must set Needs Input pill (so sidebar reflects the user's turn), got ${JSON.stringify(callsG)}`,
+      `cmux-g: session.idle must set Needs Input pill with bell.fill icon (so sidebar reflects the user's turn), got ${JSON.stringify(callsG)}`,
     );
 
     // cmux-h: session.error on a root session must also clear the status pill
@@ -527,11 +527,11 @@ async function main() {
           call[1] === "nexus-state" &&
           call[2] === "Needs Input" &&
           call[3] === "--icon" &&
-          call[4] === "bell" &&
+          call[4] === "bell.fill" &&
           call[5] === "--color" &&
           call[6] === "#007AFF",
       ),
-      `cmux-i: session.status idle must set Needs Input pill (backup path when session.idle does not fire), got ${JSON.stringify(callsI)}`,
+      `cmux-i: session.status idle must set Needs Input pill with bell.fill icon (backup path when session.idle does not fire), got ${JSON.stringify(callsI)}`,
     );
 
     // cmux-j: session.error on a non-root session must not spawn any cmux
