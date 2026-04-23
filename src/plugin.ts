@@ -205,6 +205,11 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
           cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR);
         } else if (status.type === "retry") {
           cmuxLog("warning", LOG_SOURCE, `Retrying (attempt ${status.attempt}): ${status.message}`);
+        } else if (status.type === "idle") {
+          // Backs up session.idle for abort/error paths where session.status
+          // transitions to idle without firing the separate session.idle event.
+          // Without this, a prior "busy" pill would stay stuck as Running.
+          cmuxClearStatus(PILL_KEY);
         }
         return;
       }
@@ -215,6 +220,10 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         const summary = extractErrorSummary(event.properties.error);
         cmuxLog("error", LOG_SOURCE, summary);
         cmuxNotify("opencode-nexus", "Session error");
+        // Clear the pill so a prior Running state does not linger after an
+        // abort (e.g. MessageAbortedError) or any other fatal error where
+        // session.idle may never fire.
+        cmuxClearStatus(PILL_KEY);
         return;
       }
       if (event.type === "permission.replied" && rootSessions.has(event.properties.sessionID)) {

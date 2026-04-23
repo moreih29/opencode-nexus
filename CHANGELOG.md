@@ -2,6 +2,42 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.15.1] — 2026-04-23
+
+### 업스트림
+
+- `@moreih29/nexus-core` 0.19.2 → 0.20.0. Lead spec과 `nx-plan`/`nx-auto-plan`/`nx-run` skill 대규모 리팩토링. 자기편향 방어, 응답 opening scaffold, 의사결정 경계 강화 중심.
+
+### 변경됨 (업스트림 유래)
+
+- **Lead 응답 형식** — substantive 요청 응답이 `[Pre-check]` opening scaffold 블록으로 시작. 복잡 요청은 축별 아이템 분해.
+- **Lead 의사결정 evidence 요구** — Lead 주도 판단은 추론만으로 불가. `researcher`/`explore`/`tester`/`.nexus` 기록 중 하나의 출처 인용 필수.
+- **Lead context·memory 능동 제안 정책** — Lead가 먼저 제안하도록 강화.
+- **nx-plan Absolute Rules 3개** — Lead 단독 결정 금지, 비교표 출력 후 강제 stop, 사용자 응답 보수적 해석.
+- **nx-auto-plan Absolute Rules 3개** — 자율 결정, 결정 유도 출력 금지, 안건 사이 멈춤 금지.
+- **nx-run 보고 형식 확장** — 변경사항·주요 결정·다음 단계·미해결 질문·리스크 5항목.
+
+### 수정됨
+
+- **cmux 사이드바 상태 pill stuck 버그 수정** — `session.error`(MessageAbortedError 포함 abort 경로)에서 `cmux clear-status nexus-state`를 호출하지 않아 이전에 설정된 `Running` pill이 해제되지 않던 문제를 수정. 추가로 `session.status` 이벤트의 `type === "idle"` variant도 명시 처리해 `session.idle` 이벤트가 fire하지 않는 경로에서도 pill이 정리되도록 방어 강화.
+
+### 사용자 영향
+
+- **기존 설치본에 breaking change 없음.** 기존 trigger 태그(`[plan]`, `[auto-plan]`, `[run]`)와 MCP 인터페이스 모두 동일 동작. `install`/`models`/`uninstall` CLI 변경 없음.
+- 업데이트 후 Lead 응답이 `[Pre-check]` 블록으로 시작하는 것을 확인 — 정상 동작.
+- 설정 재적용/재설치 불필요. `opencode-nexus install`이 기존 `opencode.json`의 plugin entry를 0.15.1로 자동 pin 갱신.
+- **cmux 사용자**: abort / error 이후 사이드바에 `Running` pill이 남아 있던 현상이 해결됨. 0.15.0에 stuck된 pill은 세션 재시작 또는 `cmux clear-status nexus-state`로 수동 정리 가능.
+
+### 검증
+
+- `bun run check` PASS (sync:dry + tsc --noEmit 0 errors).
+- `bun run test:e2e` PASS — "All integration checks passed." 기존 install/models/uninstall + cmux hook 시나리오 a~g + 신규 h/i/j 모두 통과.
+  - **cmux-h**: `session.error`(root) → `log` + `notify` + `clear-status` 3개 모두 호출 assert.
+  - **cmux-i**: `session.status` + `status.type === "idle"`(root) → `clear-status` 호출 assert.
+  - **cmux-j**: `session.error`(non-root) → cmux 호출 0건 assert(non-root guard regression 회귀 보험).
+- `npm pack --dry-run` 결과 정상 — 27 files, 70.8 kB, `README.md`/`LICENSE`/`package.json`/`bin/`/`lib/`/`src/`/`skills/` 포함, `.github/` 미포함.
+- `.opencode/skills/{nx-plan,nx-auto-plan,nx-run}/SKILL.md` frontmatter 정적 검증 PASS — `name` 디렉터리명 일치, `description` 1~1024자 범위, OpenCode regex `^[a-z0-9]+(-[a-z0-9]+)*$` 만족.
+
 ## [0.15.0] — 2026-04-23
 
 ### 추가됨

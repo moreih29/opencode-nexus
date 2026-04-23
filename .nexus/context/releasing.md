@@ -188,7 +188,8 @@ drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 unin
 - `tool.execute.before` + `tool === "question"` → `cmux notify --title "opencode-nexus" --body "Waiting for your input"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
 - `permission.ask` hook → `cmux notify --title "opencode-nexus" --body "Permission requested"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
 - `permission.replied`(root) → `cmux clear-status nexus-state`가 호출된다.
-- `session.error`(root) → `cmux log --level error --source nexus -- <요약>`와 `cmux notify --title "opencode-nexus" --body "Session error"`가 모두 호출된다.
+- `session.error`(root) → `cmux log --level error --source nexus -- <요약>`, `cmux notify --title "opencode-nexus" --body "Session error"`, 그리고 `cmux clear-status nexus-state`가 모두 호출된다. 마지막 clear-status가 빠지면 MessageAbortedError 같은 abort 경로에서 `Running` pill이 stuck된다(v0.15.1에서 수정된 회귀 사례).
+- `session.status` + `status.type === "idle"`(root) → `cmux clear-status nexus-state`가 호출된다. `session.idle` 이벤트가 fire하지 않는 경로에 대비한 2차 방어선이며, 이 bullet이 빠지면 특정 abort 시나리오에서 pill이 stuck된다.
 - `session.status` + `status.type === "retry"` → `cmux log --level warning --source nexus -- <메시지>`가 호출되고 pill은 변경되지 않는다.
 
 #### 5-5-2. cmux 비활성 환경에서 확인 (CMUX_WORKSPACE_ID 미설정 또는 OPENCODE_NEXUS_CMUX=0/false)
