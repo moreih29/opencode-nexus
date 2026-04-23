@@ -10,18 +10,32 @@ import {
   selectConfigureModelsNowInteractive,
   selectInstallScopeInteractive,
 } from "../lib/install-ui.mjs";
+import { PACKAGE_NAME, PACKAGE_VERSION } from "../lib/install-spec.mjs";
 import { install } from "../lib/install.mjs";
+import { uninstall } from "../lib/uninstall.mjs";
+import {
+  confirmUninstallInteractive,
+  selectUninstallScopeInteractive,
+} from "../lib/uninstall-ui.mjs";
 
 const HELP = `opencode-nexus
 
 Usage:
   opencode-nexus install [--scope=project|user|both] [--dry-run] [--force] [--skip-models]
+  opencode-nexus uninstall [--scope=project|user|both] [--dry-run] [--force]
   opencode-nexus models [--scope=project|user|both]
   opencode-nexus models [--scope=project|user|both] --agents=lead,architect --model=openai/gpt-5.4
+  opencode-nexus version
 
 Commands:
-  install   Merge the pinned Nexus plugin config and copy core skills
-  models    Configure per-agent model overrides
+  install     Merge the pinned Nexus plugin config and copy core skills
+  uninstall   Revert the Nexus config keys and skills we installed (non-Nexus entries are preserved)
+  models      Configure per-agent model overrides
+  version     Print the CLI version
+
+Options:
+  -h, --help     Show this help
+      --version  Show CLI version
 `;
 
 function printInstallResult(result, dryRun) {
@@ -51,6 +65,41 @@ function printModelResult(result) {
   }
 }
 
+function printUninstallResult(result, dryRun) {
+  if (result.noOp) {
+    console.log(`nothing to remove for scope: ${result.scope} (no opencode-nexus markers found)`);
+    return;
+  }
+
+  for (const entry of result.writes) {
+    if (entry.json === null) {
+      console.log(`${dryRun ? "would remove" : "removed"}: ${entry.path}`);
+      continue;
+    }
+
+    console.log(`${dryRun ? "would write" : "wrote"}: ${entry.path}`);
+  }
+
+  for (const entry of result.removedSkills) {
+    console.log(`${dryRun ? "would remove" : "removed"}: ${entry.skills.join(", ")} <- ${entry.targetDir}`);
+  }
+
+  const removedViaWrites = new Set(result.writes.filter((entry) => entry.json === null).map((entry) => entry.path));
+  for (const path of result.deletedFiles) {
+    if (!removedViaWrites.has(path)) {
+      console.log(`${dryRun ? "would remove" : "removed"}: ${path}`);
+    }
+  }
+
+  for (const path of result.deletedDirs) {
+    console.log(`${dryRun ? "would remove empty dir" : "removed empty dir"}: ${path}`);
+  }
+
+  for (const warning of result.warnings) {
+    console.warn(`warning: ${warning}`);
+  }
+}
+
 async function main() {
   const args = parseArgs({
     allowPositionals: true,
@@ -62,6 +111,7 @@ async function main() {
       agents: { type: "string" },
       model: { type: "string" },
       help: { type: "boolean", short: "h" },
+      version: { type: "boolean" },
     },
   });
 
@@ -71,7 +121,54 @@ async function main() {
     return;
   }
 
+  if (args.values.version === true || command === "version") {
+    console.log(`${PACKAGE_NAME} ${PACKAGE_VERSION}`);
+    return;
+  }
+
   if (command !== "install") {
+    if (command === "uninstall") {
+      const dryRun = args.values["dry-run"] === true;
+      const force = args.values.force === true;
+      const interactive = canUseInteractiveTerminal();
+
+      let selectedScope = typeof args.values.scope === "string" ? args.values.scope : undefined;
+      if (selectedScope !== "project" && selectedScope !== "user" && selectedScope !== "both") {
+        selectedScope = undefined;
+      }
+
+      if (selectedScope === undefined && !dryRun && interactive) {
+        selectedScope = await selectUninstallScopeInteractive();
+        if (selectedScope === null) {
+          return;
+        }
+      }
+
+      if (selectedScope === undefined) {
+        throw new Error("uninstall requires --scope=project|user|both in non-interactive environments.");
+      }
+
+      if (!interactive && !force && !dryRun) {
+        throw new Error("Use --force for non-interactive removal");
+      }
+
+      if (interactive && !force && !dryRun) {
+        const answer = await confirmUninstallInteractive({ scope: selectedScope });
+        if (answer !== "yes") {
+          return;
+        }
+      }
+
+      const result = uninstall({
+        scope: selectedScope,
+        cwd: process.cwd(),
+        dryRun,
+        force,
+      });
+      printUninstallResult(result, dryRun);
+      return;
+    }
+
     if (command !== "models") {
       throw new Error(`Unknown command: ${command}`);
     }

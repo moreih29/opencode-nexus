@@ -142,6 +142,66 @@ opencode mcp list
 
 이 세 단계를 생략하면 사용자 환경에서 MCP가 조용히 기동되지 않는 회귀(v0.13.1~v0.13.4에서 반복 발생)가 또 나온다. "spawn이 에러 없이 종료된다" 와 "MCP가 정상 동작한다"는 완전히 다른 조건이라는 점을 기억하라.
 
+## 5-4. uninstall 결과 불변조건 점검
+
+빈 임시 디렉터리에서 install → uninstall --force 수행 후 확인:
+
+- `opencode.json` 파일이 존재하지 않음(완전 빈 객체로 귀결).
+- `.opencode/` 디렉터리가 존재하지 않음.
+
+비-Nexus 엔트리가 섞인 기존 config가 있을 때 install → uninstall --force:
+
+- `plugin[]`에서 `opencode-nexus@*` 엔트리만 제거, 다른 plugin 엔트리는 그대로.
+- `mcp`에서 `nx`만 제거, 다른 mcp 엔트리는 그대로.
+- `default_agent`가 `"lead"`였으면 제거.
+- `agent.build.disable=true`/`agent.plan.disable=true`였으면 해당 leaf 제거, 다른 agent 속성·다른 agent는 그대로.
+- `$schema`는 기본 모드에서 그대로 유지.
+- Nexus 스킬 3개(`nx-auto-plan`, `nx-plan`, `nx-run`) 디렉터리 삭제.
+
+drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 uninstall:
+
+- 기본 모드: Nexus 소유가 명확한 plugin/스킬은 제거되지만 drift된 leaf는 warning과 함께 보존. warning 문구: `left mcp.nx unchanged (use --force to remove)` 같은 install 대칭 형식.
+- `--force`: drift된 leaf도 강제 제거.
+
+비-TTY(non-interactive)에서 `--force` 없이 uninstall 호출:
+
+- exit code != 0, stderr에 `Use --force for non-interactive removal` 포함.
+- 파일/디렉터리 상태 미변경.
+
+두 번 연속 uninstall 실행:
+
+- 두 번째 호출은 에러 없이 exit 0.
+- 출력에 `nothing to remove` 포함.
+
+빈 컨테이너 자동 정리:
+
+- leaf 제거 후 `plugin`이 `[]`, `mcp`가 `{}`, `agent.build`/`agent.plan`이 `{}`, `agent`가 `{}`면 각각 해당 키 제거.
+- `.opencode/skills/` 또는 `.opencode/`가 비면 디렉터리 삭제. 다른 파일이 하나라도 있으면 보존.
+
+### 5-5. cmux 통합 동작 점검
+
+#### 5-5-1. cmux 활성 환경에서 확인 (CMUX_WORKSPACE_ID 설정 + OPENCODE_NEXUS_CMUX 미설정/1)
+
+- `session.idle`(root) → `cmux notify --title "opencode-nexus" --body "Response ready"`와 `cmux clear-status nexus-state` 둘 다 호출된다.
+- `session.status` + `status.type === "busy"`(root) → `cmux set-status nexus-state "Running" --icon bolt --color "#007AFF"`가 호출된다.
+- `session.status` + busy(non-root) → 어떤 cmux 호출도 발생하지 않는다.
+- `tool.execute.before` + `tool === "question"` → `cmux notify --title "opencode-nexus" --body "Waiting for your input"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
+- `permission.ask` hook → `cmux notify --title "opencode-nexus" --body "Permission requested"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
+- `permission.replied`(root) → `cmux clear-status nexus-state`가 호출된다.
+- `session.error`(root) → `cmux log --level error --source nexus -- <요약>`와 `cmux notify --title "opencode-nexus" --body "Session error"`가 모두 호출된다.
+- `session.status` + `status.type === "retry"` → `cmux log --level warning --source nexus -- <메시지>`가 호출되고 pill은 변경되지 않는다.
+
+#### 5-5-2. cmux 비활성 환경에서 확인 (CMUX_WORKSPACE_ID 미설정 또는 OPENCODE_NEXUS_CMUX=0/false)
+
+- `session.idle`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.status` + `status.type === "busy"`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `tool.execute.before` + `tool === "question"`를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `permission.ask` hook을 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `permission.replied`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.error`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.status` + `status.type === "retry"`를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- plugin의 다른 기능(`install`, `models`, `chat.message` 등)에 영향이 없다.
+
 ## 6. 병합 동작 점검
 
 기존 설정 파일이 있을 때도 의도한 키만 바뀌는지 확인한다.
@@ -166,6 +226,9 @@ opencode mcp list
 - 메인 화면에 `Next`, `Done`, `Cancel`이 함께 보이는지 확인
 - provider 선택 -> model 선택 -> 메인 화면 복귀 흐름이 유지되는지 확인
 - direct mode로 `lead`, `general`, `explore` 모델 override가 실제 파일에 기록되는지 확인
+- uninstall 인터랙티브 실행 시 `--scope` 미지정이면 scope 선택 화면이 project/user 두 옵션으로 먼저 뜨는지(install과 동일 패턴)
+- `--force` 없을 때 TTY에서 `Remove opencode-nexus config from <scope>?` 확인 프롬프트가 기본값 "Cancel"(no)로 뜨는지
+- `--scope=both` 호출 시 확인 프롬프트와 dry-run 헤더에 `project AND user`가 명시되는지
 
 UI를 변경한 릴리즈라면 `expect` 같은 도구로 첫 화면 캡처까지 남기는 것이 좋다.
 

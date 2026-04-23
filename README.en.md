@@ -49,7 +49,9 @@ bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
-To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.14.0`).
+To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.15.0`).
+
+Check the installed CLI version with `opencode-nexus --version` or `opencode-nexus version`.
 
 ## What `install` does
 
@@ -64,12 +66,12 @@ It then applies the following:
 - copies Nexus skills into `.opencode/skills/`
 - pins the plugin to the exact currently running CLI version
 
-`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.14.0`, it writes:
+`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.15.0`, it writes:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.14.0"],
+  "plugin": ["opencode-nexus@0.15.0"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -139,12 +141,65 @@ For automation or scripting, direct mode is available.
 opencode-nexus models --scope=project --agents=lead,general,explore --model=openai/gpt-5.4
 ```
 
+## Uninstall
+
+To revert the Nexus configuration that was installed, use the `uninstall` command.
+
+```bash
+opencode-nexus uninstall --scope=project
+```
+
+Supported scopes are `project`, `user`, and `both`. The description in the `Scope` section applies to uninstall as well.
+
+In an interactive terminal, omitting `--scope` shows the same scope picker as install. Without `--force`, a confirmation prompt appears: `Remove opencode-nexus config from <scope>?`, defaulting to "Cancel" (no).
+
+In non-TTY environments (CI or scripts), `--force` is required. Without it the command exits with the error `Use --force for non-interactive removal`.
+
+```bash
+opencode-nexus uninstall --scope=project --force
+```
+
+Pass `--dry-run` to print the removal plan without making any actual changes (mirrors install's `--dry-run`).
+
+```bash
+opencode-nexus uninstall --scope=project --dry-run
+```
+
+### What is reverted
+
+Uninstall removes only the following items:
+
+- The `opencode-nexus@*` entry from the `plugin` array (pin)
+- The `mcp.nx` server registration
+- `default_agent` when it is `"lead"`
+- `agent.build.disable` and `agent.plan.disable` when they are `true`
+- Copied Nexus skill directories under `.opencode/skills/`
+  - `nx-auto-plan`
+  - `nx-plan`
+  - `nx-run`
+
+### What is preserved
+
+Other `plugin` entries you added manually, other `mcp` server registrations, other `agent` properties (such as model overrides), and `$schema` are kept intact in the default mode.
+
+### Drift handling
+
+If you changed `mcp.nx.command` or `default_agent` after installation (drift), the default mode prints a warning and preserves the drifted value. With `--force`, drifted values are also removed.
+
+### Idempotency
+
+Uninstall is safe to run twice. When there is nothing left to remove, it exits successfully (exit 0) with the message `nothing to remove for scope: ... (no opencode-nexus markers found)`.
+
+### Empty-container cleanup
+
+After leaf removal, if the `plugin` array becomes empty or the `mcp` object becomes empty, the key itself is removed. If `agent.build` or `agent.plan` becomes empty, the parent `agent` key is cleaned up as well. If `opencode.json` becomes a completely empty object, the file itself is deleted. Parent skill directories (`.opencode/skills/`, `.opencode/`) are also removed when empty.
+
 ## cmux integration (desktop notifications)
 
 If you run OpenCode inside the [cmux](https://github.com/coder/mux) desktop app, the Nexus plugin automatically posts native OS notifications at two lifecycle points:
 
 - **Response ready**: Lead finishes a turn and the session returns to idle waiting for your input.
-- **Waiting for input**: Lead or any subagent invokes the `question` tool.
+- **Waiting for your input**: Lead or any subagent invokes the `question` tool.
 
 The integration activates only when cmux's `CMUX_WORKSPACE_ID` env var is present (cmux injects it automatically in its terminals). Outside cmux the notification code is a no-op, so other environments are unaffected.
 
@@ -155,6 +210,27 @@ export OPENCODE_NEXUS_CMUX=0
 ```
 
 When cmux is not installed, or when the env var is absent, all notify calls fall back silently and the rest of the plugin continues to work.
+
+### Sidebar status
+
+The cmux sidebar displays a status pill alongside the notifications.
+
+- `Running` — `bolt` icon, blue (`#007AFF`). When the agent is actively working.
+- `Needs Input` — `bell` icon, blue. Whenever the agent is waiting for user input (both the `question` tool and permission requests).
+
+Status is tracked for the root session only (subagent states are excluded, same as the existing `session.idle` policy).
+
+### Permission notification
+
+When the agent requests permission, a `"Permission requested"` toast is shown and the sidebar pill switches to `Needs Input`.
+
+### Error log · notification
+
+When `session.error` occurs, the sidebar logs it at the `error` level (`cmux log --level error --source nexus`) and shows a `"Session error"` toast.
+
+Retries (`session.status: retry`) are logged to the sidebar at the `warning` level without a toast (minimizing noise).
+
+The new status indicators and notifications are also disabled by the same `OPENCODE_NEXUS_CMUX` flag.
 
 ## Upgrade
 

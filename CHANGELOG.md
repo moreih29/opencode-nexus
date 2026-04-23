@@ -2,6 +2,55 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.15.0] — 2026-04-23
+
+### 추가됨
+
+**CLI 확장**
+
+- **`opencode-nexus uninstall [--scope=project|user|both] [--dry-run] [--force]`** — install이 건든 설정을 되돌리는 신규 서브커맨드. 제거 범위는 "namespace 기반 확실한 소유는 항상 제거 / provenance 불명 leaf는 정확 일치 또는 `--force`에서만 제거 / `$schema`는 최보수 처리(기본 모드에서 건드리지 않음)" 3단계 경계:
+  - 항상 제거: `plugin[]`의 `opencode-nexus`/`opencode-nexus@*` 엔트리, Nexus 스킬 3개 디렉터리(`nx-auto-plan`, `nx-plan`, `nx-run`).
+  - 정확 일치일 때만 제거: `mcp.nx`(구조적 동등성), `default_agent === "lead"`, `agent.build.disable === true`, `agent.plan.disable === true`. drift 값은 warning 후 보존, `--force`로만 강제 제거.
+  - 빈 컨테이너 cleanup(`plugin: []`, `mcp: {}`, `agent.build: {}`, `agent: {}`), 완전 빈 `opencode.json` 삭제, `.opencode/skills/`·`.opencode/` 비었을 때만 재귀 삭제.
+  - 비-Nexus 엔트리, `agent.*.model` 같은 사용자 커스터마이즈는 모두 보존.
+  - 멱등: 두 번 실행해도 안전, 이미 제거된 상태는 `nothing to remove for scope: <scope>` 출력 후 exit 0.
+  - 비-TTY는 확인 프롬프트를 띄울 수 없으므로 `--force` 필수(없으면 `Use --force for non-interactive removal` 에러).
+  - `--dry-run`은 `would remove:` 형식으로 계획만 출력.
+- **`opencode-nexus --version` flag와 `opencode-nexus version` 서브커맨드** — 출력은 `opencode-nexus <version>` 한 줄. short flag(-v/-V)는 향후 `--verbose` 네이밍 공간 보존을 위해 이번에는 도입하지 않음.
+
+**cmux 통합 확장**
+
+- **사이드바 상태 pill** — 기존 토스트 알림에 더해 cmux 사이드바의 `cmux set-status` API로 작업 상태를 `nexus-state` pill에 표시. 상태머신: 
+  - root session이 busy로 전환되면 `Running` (bolt 아이콘, `#007AFF` iOS system blue).
+  - `question` 툴 호출 또는 `permission.ask` hook 시 `Needs Input` (bell 아이콘, 동일 파란색).
+  - `session.idle`, `session.deleted`, `session.error`, `permission.replied`에서 pill clear(특히 permission.replied는 deny/cancel 경로에서 stale pill 방지를 위한 명시적 clear).
+- **Permission 알림** — `"permission.ask"` hook 신규. 권한 요청 시 "Permission requested" 토스트 + Needs Input pill 자동 표시. output은 건드리지 않음(사용자 동의/거부 흐름 가로채지 않음).
+- **Error 로그·알림** — `session.error` 이벤트에서 `cmux log --level error --source nexus <1줄 요약>` + "Session error" 토스트. 메시지 요약은 `error.message || name || type || code || "unknown"` 순 fallback. `session.status` retry는 pill 변경 없이 `cmux log --level warning`만 기록(recoverable retry는 사이드바 상태를 어지럽히지 않음).
+- **내부 리팩터링** — `cmuxNotify`를 공용 `cmuxSpawn` 헬퍼 위에 얇게 재구성. 모든 cmux 호출이 동일한 fire-and-forget + 가드 경로를 통과.
+
+### 변경됨
+
+- README.en.md의 `"Waiting for input"` → `"Waiting for your input"`로 수정(실제 notify body와 일치).
+- 릴리즈 체크리스트(`.nexus/context/releasing.md`)에 `§5-4 uninstall 결과 불변조건 점검`과 `§5-5 cmux 통합 동작 점검`(cmux 활성/비활성 두 축) 섹션 추가, `§7` UX 점검에 uninstall interactive 체크 3항목 추가.
+
+### 업스트림
+
+- `@moreih29/nexus-core` 버전 변경 없음(0.19.2 유지).
+
+### 사용자 영향
+
+- **기존 설치본에 영향 없음, breaking change 없음.** 기존 `install`/`models` 명령 동작은 regression 없이 동일.
+- `uninstall` 명령은 기본적으로 "우리가 건든 것만" 엄격히 되돌리므로 사용자가 `mcp.nx`/`default_agent` 등을 수정해뒀다면 기본 모드에서는 warning과 함께 보존됨. 강제 제거는 `--force`.
+- cmux 사용자: 자동으로 사이드바 pill과 permission/error 알림이 활성화됨. 비-cmux 환경 또는 `OPENCODE_NEXUS_CMUX=0` 설정 시 모든 cmux 호출이 silent no-op(기존 동작 보존).
+- 비-TTY 환경에서 `uninstall`을 쓰는 스크립트는 `--force` 플래그 추가 필요.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS — 기존 install/models + 신규 uninstall 시나리오 A·B·C·D + version 시나리오 E + cmux hook 시나리오 cmux-a~g 포함 총 91개 assert 통과.
+- 릴리즈 체크리스트 §5-4(uninstall 불변조건), §5-5(cmux 통합 동작) 수동 재현 PASS.
+- cmux shim 기반 hook 호출 검증 — permission.ask / session.status busy(root·non-root) / permission.replied / session.error / session.idle / cmux disabled env 모든 케이스 기대 동작 확인.
+
 ## [0.14.0] — 2026-04-22
 
 ### 추가됨
