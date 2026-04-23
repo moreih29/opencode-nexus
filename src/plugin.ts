@@ -180,6 +180,14 @@ function extractErrorSummary(err: unknown): string {
   return "unknown";
 }
 
+function isAbortError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const record = err as { name?: unknown; message?: unknown };
+  if (record.name === "MessageAbortedError") return true;
+  if (typeof record.message === "string" && /aborted/i.test(record.message)) return true;
+  return false;
+}
+
 // If the assistant response opens with a `[Pre-check]` scaffold block (the
 // default opening introduced by nexus-core 0.20.0), skip past it so the
 // preview shows the actual body instead of the meta checklist. A blank line
@@ -368,12 +376,26 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         const sessionID = event.properties.sessionID;
         if (sessionID && !rootSessions.has(sessionID)) return;
 
+        if (isAbortError(event.properties.error)) {
+          // User interrupt aborts are a turn-boundary outcome, not a fatal
+          // system error: we move the pill to Needs Input (instead of logging
+          // and notifying an error) so UX matches "assistant stopped, your
+          // turn". Per empirical-cmux-pill-clear-paths lesson 1 (set-clear
+          // pair discipline), this path intentionally sets status and does not
+          // clear immediately.
+          cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
+          if (typeof sessionID === "string") {
+            rootSessionLastText.delete(sessionID);
+            assistantTurnActive.delete(sessionID);
+          }
+          return;
+        }
+
         const summary = extractErrorSummary(event.properties.error);
         cmuxLog("error", LOG_SOURCE, summary);
         cmuxNotify("opencode-nexus", "Session error");
-        // Clear the pill so a prior Running state does not linger after an
-        // abort (e.g. MessageAbortedError) or any other fatal error where
-        // session.idle may never fire.
+        // Clear the pill so a prior Running state does not linger after a
+        // non-abort fatal error where session.idle may never fire.
         cmuxClearStatus(PILL_KEY);
         return;
       }

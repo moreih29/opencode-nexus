@@ -2,6 +2,27 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.16.3] — 2026-04-23
+
+### 업스트림
+
+- `@opencode-ai/plugin` 1.4.9 → 1.14.21. 업스트림 릴리즈 workflow 자동화 이슈(GitHub [#23419](https://github.com/anomalyco/opencode/issues/23419))로 1.4.17 → 1.14.17 숫자 점프가 있었으나 실질 변경 없는 renumbering(tarball byte-identical)임을 확인. hook signature는 전 구간 동일.
+
+### 변경됨
+
+- `src/plugin.ts`의 `session.error` hook에서 `MessageAbortedError` 분기 추가. 사용자 인터럽트에 의한 turn abort는 더 이상 "Session error" 토스트·error 로그로 노출되지 않고 `Needs Input` pill로 전환되어 응답 완료와 동일한 UX로 흡수. 기타 `session.error`는 기존 동작(log error + notify + clear-status) 유지.
+
+### 사용자 영향
+
+- 기존 설치본에 breaking 없음. cmux 통합 사용자는 인터럽트 시 알림 noise 감소 체감.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS (기존 + 신규 cmux-r/s 포함 18개 시나리오, cmux-h는 cmux-r로 역할 이관돼 제거)
+- `npm pack --dry-run` 정상
+- releasing.md §5-1, §5-5-1 수동 체크 PASS
+
 ## [0.16.2] — 2026-04-23
 
 ### 수정됨

@@ -477,33 +477,7 @@ async function main() {
       `cmux-g: session.idle must set Needs Input pill with bell.fill icon (so sidebar reflects the user's turn), got ${JSON.stringify(callsG)}`,
     );
 
-    // cmux-h: session.error on a root session must also clear the status pill
-    // in addition to writing the error log and Session error notification. This
-    // covers MessageAbortedError cases where session.idle never fires but the
-    // pill was previously set to "Running" by a session.status busy event.
-    resetCmuxLog(logFile);
-    await cmuxHooks.event({
-      event: {
-        type: "session.error",
-        properties: {
-          sessionID: rootSessionID,
-          error: { name: "MessageAbortedError", data: { message: "aborted" } },
-        },
-      },
-    });
-    const callsH = await waitForCmuxCalls(logFile, 3);
-    assert(
-      callsH.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error"),
-      `cmux-h: session.error must write error log, got ${JSON.stringify(callsH)}`,
-    );
-    assert(
-      callsH.some((call) => call[0] === "notify" && call[3] === "--body" && call[4] === "Session error"),
-      `cmux-h: session.error must notify Session error, got ${JSON.stringify(callsH)}`,
-    );
-    assert(
-      callsH.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
-      `cmux-h: session.error must clear status pill, got ${JSON.stringify(callsH)}`,
-    );
+    // cmux-h removed in v0.16.3 — see cmux-r below for the new MessageAbortedError UX.
 
     // cmux-i: session.status with status.type === "idle" on a root session must
     // clear the status pill. This backs up session.idle and covers paths where
@@ -887,6 +861,150 @@ async function main() {
     if (originalCmuxPreview === undefined) delete process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW;
     else process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW = originalCmuxPreview;
     rmSync(cmuxTempDir, { recursive: true, force: true });
+  }
+
+  const cmuxScenarioRDir = mkdtempSync(join(tmpdir(), "opencode-nexus-cmux-r-"));
+  const originalPathR = process.env.PATH;
+  const originalWorkspaceIDR = process.env.CMUX_WORKSPACE_ID;
+  const originalCmuxTestLogR = process.env.CMUX_TEST_LOG;
+  const originalCmuxDisableR = process.env.OPENCODE_NEXUS_CMUX;
+  try {
+    const { binDir, logFile } = installCmuxShim(cmuxScenarioRDir);
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+    process.env.CMUX_WORKSPACE_ID = "test-workspace-r";
+    process.env.CMUX_TEST_LOG = logFile;
+    delete process.env.OPENCODE_NEXUS_CMUX;
+
+    const cmuxHooksR = await pluginModule.default({ directory: process.cwd() });
+    const rootSessionIDR = "root-session-r";
+    await cmuxHooksR.event({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: rootSessionIDR,
+            parentID: undefined,
+          },
+        },
+      },
+    });
+
+    resetCmuxLog(logFile);
+    await cmuxHooksR.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionIDR,
+          status: { type: "busy" },
+        },
+      },
+    });
+    await cmuxHooksR.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: rootSessionIDR,
+          error: { name: "MessageAbortedError", message: "Request aborted" },
+        },
+      },
+    });
+    const callsR = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsR.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running" && call[3] === "--icon" && call[4] === "bolt" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-r: pre-abort busy must set Running pill, got ${JSON.stringify(callsR)}`,
+    );
+    assert(
+      callsR.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Needs Input" && call[3] === "--icon" && call[4] === "bell.fill" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-r: MessageAbortedError must switch pill to Needs Input, got ${JSON.stringify(callsR)}`,
+    );
+    assert(
+      !callsR.some((call) => call[0] === "notify" && call[1] === "--title" && call[2] === "opencode-nexus" && call[3] === "--body" && call[4] === "Session error"),
+      `cmux-r: MessageAbortedError must not notify Session error, got ${JSON.stringify(callsR)}`,
+    );
+    assert(
+      !callsR.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error" && call[3] === "--source" && call[4] === "nexus"),
+      `cmux-r: MessageAbortedError must not write error log, got ${JSON.stringify(callsR)}`,
+    );
+  } finally {
+    if (originalPathR === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPathR;
+    if (originalWorkspaceIDR === undefined) delete process.env.CMUX_WORKSPACE_ID;
+    else process.env.CMUX_WORKSPACE_ID = originalWorkspaceIDR;
+    if (originalCmuxTestLogR === undefined) delete process.env.CMUX_TEST_LOG;
+    else process.env.CMUX_TEST_LOG = originalCmuxTestLogR;
+    if (originalCmuxDisableR === undefined) delete process.env.OPENCODE_NEXUS_CMUX;
+    else process.env.OPENCODE_NEXUS_CMUX = originalCmuxDisableR;
+    rmSync(cmuxScenarioRDir, { recursive: true, force: true });
+  }
+
+  const cmuxScenarioSDir = mkdtempSync(join(tmpdir(), "opencode-nexus-cmux-s-"));
+  const originalPathS = process.env.PATH;
+  const originalWorkspaceIDS = process.env.CMUX_WORKSPACE_ID;
+  const originalCmuxTestLogS = process.env.CMUX_TEST_LOG;
+  const originalCmuxDisableS = process.env.OPENCODE_NEXUS_CMUX;
+  try {
+    const { binDir, logFile } = installCmuxShim(cmuxScenarioSDir);
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+    process.env.CMUX_WORKSPACE_ID = "test-workspace-s";
+    process.env.CMUX_TEST_LOG = logFile;
+    delete process.env.OPENCODE_NEXUS_CMUX;
+
+    const cmuxHooksS = await pluginModule.default({ directory: process.cwd() });
+    const rootSessionIDS = "root-session-s";
+    await cmuxHooksS.event({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: rootSessionIDS,
+            parentID: undefined,
+          },
+        },
+      },
+    });
+
+    resetCmuxLog(logFile);
+    await cmuxHooksS.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionIDS,
+          status: { type: "busy" },
+        },
+      },
+    });
+    await cmuxHooksS.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: rootSessionIDS,
+          error: { name: "DatabaseError", message: "connection refused" },
+        },
+      },
+    });
+    const callsS = await waitForCmuxCalls(logFile, 4);
+    assert(
+      callsS.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error" && call[3] === "--source" && call[4] === "nexus"),
+      `cmux-s: non-abort session.error must write error log, got ${JSON.stringify(callsS)}`,
+    );
+    assert(
+      callsS.some((call) => call[0] === "notify" && call[1] === "--title" && call[2] === "opencode-nexus" && call[3] === "--body" && call[4] === "Session error"),
+      `cmux-s: non-abort session.error must notify Session error, got ${JSON.stringify(callsS)}`,
+    );
+    assert(
+      callsS.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
+      `cmux-s: non-abort session.error must clear status pill, got ${JSON.stringify(callsS)}`,
+    );
+  } finally {
+    if (originalPathS === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPathS;
+    if (originalWorkspaceIDS === undefined) delete process.env.CMUX_WORKSPACE_ID;
+    else process.env.CMUX_WORKSPACE_ID = originalWorkspaceIDS;
+    if (originalCmuxTestLogS === undefined) delete process.env.CMUX_TEST_LOG;
+    else process.env.CMUX_TEST_LOG = originalCmuxTestLogS;
+    if (originalCmuxDisableS === undefined) delete process.env.OPENCODE_NEXUS_CMUX;
+    else process.env.OPENCODE_NEXUS_CMUX = originalCmuxDisableS;
+    rmSync(cmuxScenarioSDir, { recursive: true, force: true });
   }
 
   if (failures.length > 0) {

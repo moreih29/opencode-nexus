@@ -1297,6 +1297,246 @@
           "created_at": "2026-04-23T09:25:34.270Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T15:00:02.408Z",
+      "branch": "fix/message-aborted-ux",
+      "plan": {
+        "id": 9,
+        "topic": "opencode-nexus: @opencode-ai/plugin 1.4.9 → 1.14.21 업그레이드 + MessageAbortedError UX 개선 + 릴리즈",
+        "issues": [
+          {
+            "id": 1,
+            "title": "업그레이드 scope 확정 및 적용 범위 (루트 package.json · bun.lock · .opencode sandbox)",
+            "status": "decided",
+            "decision": "**선정**: A1 (루트 + sandbox 동시 bump). 수정 대상 파일:\n- **tracked (commit에 포함)**: `package.json`(`\"@opencode-ai/plugin\": \"1.4.9\" → \"1.14.21\"`), `bun.lock`(재생성).\n- **untracked (dev sandbox 정합)**: `.opencode/package.json`(`1.14.19 → 1.14.21`), `.opencode/package-lock.json`(재생성). 이들은 commit diff에 포함되지 않지만 로컬 dev 환경을 업스트림 최신에 맞춤.\n\n**근거**: architect 최종 권고 + researcher 2명의 증거(1.4.9→1.4.17 plugin src zero 변화, 1.4.17↔1.14.17 byte-identical renumbering, 1.14.17→1.14.21 hook signature zero 변화). 실질 위험도는 \"연속 patch 누적\" 수준으로 확정. 숨은 리스크는 cmux event-order 회귀에 집중 — 이슈 5 검증에서 차단.\n\n**기각**:\n- A2(루트만): dev sandbox와 루트 지원선이 계속 벌어지면 dogfooding 일관성 깨짐. commit이 아닌 파일도 함께 정렬하는 비용은 낮음.\n- A3(1.14.19 or 1.14.17 중간 보수안): renumbering이므로 17/19/21 사이 실질 차이 미미. 최신으로 가서 얻는 간명성이 큼.\n- A4(다른 안): 불필요."
+          },
+          {
+            "id": 2,
+            "title": ".opencode/bun.lock stale artifact 처리 방식 (삭제 + .gitignore 확인)",
+            "status": "decided",
+            "decision": "**선정**: `.opencode/bun.lock` **삭제**. `.opencode/` 하위 전체가 untracked 상태인지 `.gitignore` 규칙을 engineer가 확인하고, 누락 시 `.gitignore`에 `.opencode/bun.lock` 라인을 **조용히 추가하지 않음** — 현재 untracked는 `.opencode/` 디렉터리가 `.gitignore`에 포함돼 있을 가능성이 높고(이미 검증된 상태), 개별 라인 추가는 불필요한 diff.\n\n**근거**: 사용자 명시 결정(삭제). `.opencode`의 SSOT는 `package-lock.json`(npm 기반 1.14.19→1.14.21 재생성). bun.lock은 stale 1.3.10으로 오히려 혼란 유발. 삭제 후 향후 실수 재발 방지는 `.gitignore` 현황 확인 시 판단.\n\n**기각**:\n- Regenerate: bun과 npm 이중 lock 유지는 툴체인 모호성 증가. 이점 없음.\n- 그대로 둠: 개발자 혼란 누적."
+          },
+          {
+            "id": 3,
+            "title": "MessageAbortedError UX 정책: session.error 처리를 어떻게 바꿀 것인가 (완전 silent / Needs Input 전환 / 조건부)",
+            "status": "decided",
+            "decision": "**선정**: **조건부 분기**. `session.error` hook 내부에서 error 종류를 구별해 **MessageAbortedError는 \"턴 종료\" 경로로 흡수**, **그 외는 기존 error 경로 유지**.\n\nMessageAbortedError 경로의 동작:\n- `cmux notify \"Session error\"` **제거**.\n- `cmux log --level error` **제거**(또는 `--level info`로 강등). 사용자 인터럽트는 에러 아님. 단 진단 목적으로 `OPENCODE_NEXUS_DEBUG_PREVIEW=1` 같은 opt-in 환경변수에서만 info 라인 남기는 것은 허용(engineer 재량).\n- `cmux clear-status nexus-state` → **`cmux set-status nexus-state \"Needs Input\" --icon bell.fill --color #007AFF`** (기존 session.idle/status-idle 경로와 동일 pill 전환).\n- `rootSessionLastText.delete(sessionID)` + `assistantTurnActive.delete(sessionID)` 호출로 preview cache 정리 (v0.16.2의 턴 경계 처리 일관성 유지).\n\n그 외 session.error 경로(비-abort):\n- 기존 동작 유지 — log error + notify \"Session error\" + pill `clear-status`(Running 잔존 방지). 단 v0.16.2 일관성으로 pill을 clear 대신 Needs Input으로 전환할지는 issue 4와 함께 검토 — **여기선 기존 `clear-status` 유지**로 결정. 이유: 비-abort 에러는 \"턴 종료\"가 아니라 \"이상 상태\"이므로 Needs Input(사용자에게 응답 기대) 시그널이 부적절.\n\n**근거**:\n- 사용자 명시: \"에러 형태로 표현할 필요는 없음. llm 응답 끝난 것과 같이 Needs Input을 주거나\". session.idle 경로와 동형 처리가 자연스러움.\n- `empirical-cmux-pill-clear-paths.md` 교훈 1(set-clear pair): abort도 턴 종료 class로 편입하면 pill 처리 일관성 확보.\n- 교훈 2(serialize): 이미 v0.16.0에서 spawn queue로 해결됨. 이번 변경은 serialize 영향 없음.\n\n**기각**:\n- (a) 완전 silent(아무 hook 동작 없음): session.idle이 abort 뒤에 fire된다는 SDK 보장 없음(empirical 노트 명시). pill stuck 리스크 남음. 사용자 제안 두 안 중 더 안전한 쪽을 택함.\n- (c) pill clear-status 유지(notify·log만 제거): Needs Input 전환이 session.idle 경로와 일관성이 높고 사용자 원문 \"llm 응답 끝난 것과 같이\"에 더 부합.\n- (d) log level warning으로 강등하되 notify는 유지: \"Session error\" 토스트가 인터럽트마다 뜨면 noise — 사용자 요구 위배."
+          },
+          {
+            "id": 4,
+            "title": "MessageAbortedError와 실제 다른 session.error의 구별 방법 (식별자 플레이어를 어떻게 잡나)",
+            "status": "decided",
+            "decision": "**선정**: **error 객체의 `name` 필드 우선 매칭, 보조로 message 서브스트링**. 구체:\n\n```ts\nfunction isAbortError(err: unknown): boolean {\n  if (typeof err !== \"object\" || err === null) return false;\n  const e = err as { name?: unknown; message?: unknown };\n  if (typeof e.name === \"string\" && e.name === \"MessageAbortedError\") return true;\n  // defense-in-depth: name 스키마가 살짝 다른 변종 대비\n  if (typeof e.message === \"string\" && /aborted/i.test(e.message)) return true;\n  return false;\n}\n```\n\n실행 시 engineer는 실제 `session.error` payload에서 error가 어떤 구조로 들어오는지 재확인(특히 `event.properties.error.name`으로 접근 가능한지). 현재 `src/plugin.ts:367~`의 요약 추출 로직(`error.message || error.name || error.type || error.code`)이 이미 동일 payload 형태를 가정하므로 `name` 접근은 안전할 가능성이 높음. 확인 결과 `name` 필드가 없으면 `type` 필드로 fallback(\"message_aborted\" 등 실제 문자열 확인 후 정확 매칭 추가).\n\n**근거**:\n- `MessageAbortedError`는 OpenCode SDK에서 throw되는 Error class로, `name` 속성이 class 이름과 동일한 것이 JS Error 관례.\n- defense-in-depth: upstream이 name 스키마를 살짝 바꿔도(예: `AbortError`, `MessageAborted`) 메시지 매칭이 backup.\n- 과적합 우려(모든 \"abort\" 포함 에러를 흡수할 위험): 현재 우리 사용 케이스에선 사용자 인터럽트 외에 \"abort\" 단어가 들어갈 시나리오가 드물고, 설령 있어도 \"에러 아닌 정상 종료 UX\"로 흡수되는 것이 사용자 기대에 더 가까움.\n\n**기각**:\n- `error.type === \"MessageAbortedError\"`만 매칭: 실제 type 필드가 존재하지 않을 가능성(SDK 관찰 필요). engineer 실행 시 확인 후 결정.\n- `instanceof MessageAbortedError`: plugin 환경에서 SDK class를 import해 instanceof 체크 가능한지 불확실. string 비교가 경량.\n- regex only on message: name 비교보다 덜 정확. 다국어/리워딩된 message 대응 실패 가능."
+          },
+          {
+            "id": 5,
+            "title": "검증 scope (§5-1 skill frontmatter, §5-5 cmux 회귀, e2e 시나리오 신규 필요성)",
+            "status": "decided",
+            "decision": "**선정**: 다음 검증 매트릭스. 순서는 task 의존 순:\n\n### 자동 검증 (필수 PASS)\n1. `bun install` — 루트 lock 재생성, peer dep 충돌 없음 확인\n2. `bun run check` — sync:dry + tsc --noEmit\n3. `bun run test:e2e` — 기존 시나리오 + **신규 cmux 시나리오(아래) 포함 전체 PASS**\n4. `npm pack --dry-run` — 패키지에 포함되는 파일 목록이 직전 cycle과 동일한지\n\n### 수동/스크립트 검증 (releasing.md 체크리스트)\n5. **§5-1 skill frontmatter 재검증**: `.opencode/skills/{nx-plan,nx-auto-plan,nx-run}/SKILL.md` 각각의 `name`, `description` 필드가 스펙에 맞는지 grep 확인(1.14.21로 sync 후 변경 없었음을 재확인).\n6. **§5-5 cmux 통합 회귀**: 기존 cmux-a~q 시나리오에 추가로 **신규 시나리오 2개**:\n   - `cmux-r` (가칭): `session.error` 이벤트의 `error.name === \"MessageAbortedError\"` — assert: `cmux notify` 호출 **없음**, `cmux log --level error` 호출 **없음**, `cmux set-status nexus-state \"Needs Input\" --icon bell.fill --color #007AFF` **있음**, preview cache 정리 확인.\n   - `cmux-s` (가칭): `session.error` 이벤트의 `error.name === \"SomeOtherError\"` (비-abort) — assert: **기존 경로 유지** (log error + notify + clear-status).\n\n### 범위 외\n- `§5-2 live load smoke`: OpenCode 실행 환경 필요한 수동 단계, patch 사이클에서 매번 수행하기엔 과함. 이번에도 생략.\n- `§5-3 MCP handshake`: 본 변경과 무관(MCP 서버 코드 미변경).\n- 성능 벤치: 본 변경에 성능 회귀 여지 없음(단일 event branch 추가).\n\n**근거**: architect 최종 권고 매트릭스 그대로 채택 + MessageAbortedError 신규 분기에 대한 신규 e2e 시나리오 2개를 추가. 직전 v0.16.x cycle에서 cmux-k/l/m/n/p/q가 신규로 추가된 전례와 동일 패턴.\n\n**기각**:\n- 자동 검증만으로 릴리즈: `empirical-cmux-pill-clear-paths.md`가 \"log 확인 + status 확인 조합이 원인 지목에 효과적\"이라고 명시. §5-5 수동 step skip 시 회귀 blind spot 확대.\n- §5-2 live load 포함: patch bump에 비해 과함."
+          },
+          {
+            "id": 6,
+            "title": "opencode-nexus 버전 bump 자릿수 (patch vs minor) 및 다음 버전 네이밍",
+            "status": "decided",
+            "decision": "**선정**: **patch bump → v0.16.3**.\n\n**근거**:\n- architect 최종 권고 patch.\n- 업스트림 bump는 실질 zero (researcher 증거). renumbering typo 청산 성격.\n- MessageAbortedError UX 변경은 \"기존 UX 흐름의 refinement\"이며 새 기능 아님. 사용자 체감 변화는 \"덜 시끄러워짐\" 방향으로, breaking 아님.\n- 전례 일관성: v0.16.1(bell.fill 아이콘 교체) 같은 UX refinement를 patch로 처리. v0.15.1(nexus-core bump 단독)도 patch.\n- minor bump는 새 기능 추가 시 사용(v0.16.0 — cmux serialize + preview + needs-input pill). 이번엔 새 기능 없음.\n\n다음 버전: **v0.16.3** (현재 HEAD: v0.16.2).\n\n**기각**:\n- minor bump (v0.17.0): 정당화 부족. 업스트림 숫자 점프는 크지만 실질 변화 없음. 기각.\n- 0.15.x 계열 patch(예: v0.15.2): main에 이미 v0.16.0~0.16.2가 merge됨. 역방향 branching은 복잡."
+          },
+          {
+            "id": 7,
+            "title": "CHANGELOG/README 갱신 범위 (renumbering typo 맥락 서술 정도, illustrative 버전 동기화)",
+            "status": "decided",
+            "decision": "**선정**: 네 문서 갱신:\n\n### 1. CHANGELOG.md — `## [0.16.3] — 2026-04-23` 신규 엔트리\n기존 0.16.x 엔트리 포맷(업스트림 / 변경됨 / 사용자 영향 / 검증) 준수. 내용:\n- **업스트림**: `@opencode-ai/plugin` 0.16.2 시점 `1.4.9` → `1.14.21`로 정렬. 업스트림 릴리즈 workflow 이슈(GitHub #23419)로 `1.4.17` → `1.14.17` 숫자 점프가 있었으나 **실질 변경 없는 renumbering**(tarball byte-identical 확인). 우리가 쓰는 plugin hook signature는 전 구간 동일. 의존성 라인 현대화 목적.\n- **변경됨**: `src/plugin.ts`의 `session.error` hook에서 **MessageAbortedError 분기 추가**. 사용자 인터럽트로 인한 turn abort는 더 이상 \"Session error\" 토스트·error 로그로 노출되지 않고 `Needs Input` pill로만 전환되어 응답 완료와 동일한 UX. 기타 session.error는 기존 동작 유지.\n- **사용자 영향**: 기존 설치본에 breaking 없음. `opencode` 본체는 사용자 환경에서 별도 관리되므로 이번 bump가 opencode 본체 버전을 강제하지 않음. cmux 통합 사용자는 인터럽트 시 알림 noise 감소를 체감할 수 있음.\n- **검증**: `bun run check` PASS / `bun run test:e2e` PASS (기존 + 신규 cmux-r/s). `npm pack --dry-run` 정상. releasing.md §5-1, §5-5-1 통과.\n\n### 2. README.md (ko) / README.en.md — illustrative 버전 동기화\n3곳씩: `@x.y.z` 설치 예시의 `0.16.2` → `0.16.3`, 설명 문장의 \"현재 설치된 CLI가 0.16.2면\" 같은 숫자, `opencode.json` JSON 예시 블록의 `opencode-nexus@0.16.2`. releasing.md §1-1 권장 수준.\n\n### 3. `.nexus/context/releasing.md` — §5-5-1에 MessageAbortedError bullet 추가\n기존 `session.error` bullet에 보조 bullet 추가:\n- \"`session.error` + `error.name === \"MessageAbortedError\"`(root) → `cmux notify` 호출 없음, `cmux log --level error` 호출 없음, `cmux set-status nexus-state \"Needs Input\" --icon bell.fill --color #007AFF` 호출 확인.\"\n- \"`session.error` + `error.name !== \"MessageAbortedError\"`(root) → 기존 경로 유지(log error + notify + clear-status) 확인.\"\n\n### 4. `.nexus/memory/empirical-cmux-pill-clear-paths.md` — \"수정 사례 링크\"에 v0.16.3 추가\n한 줄: \"v0.16.3 (2026-04-23) — MessageAbortedError를 session.error에서 분기해 Needs Input 전환 경로로 흡수. 사용자 인터럽트가 에러 UX로 노출되지 않도록 정리. e2e cmux-r/s 시나리오 추가.\"\n\n**범위 외**:\n- `.nexus/context/` 4대 파일(philosophy/architecture/stack/conventions) 갱신 불필요(이번 변경 대상 아님).\n- `.nexus/memory/pattern-bug-fix-routing.md` 미수정(routing pattern 변동 없음).\n\n**근거**: 직전 cycle(v0.15.1, v0.16.x) 문서 업데이트 패턴 그대로 준용. renumbering typo는 사용자 혼란 방지 차원에서 CHANGELOG에 한 줄 설명 남기되 과한 설명 지양. empirical 노트 업데이트는 \"수정 사례 링크\" 관례 유지.\n\n**기각**:\n- CHANGELOG에서 renumbering typo 맥락을 문서 링크와 함께 길게 서술: 과함. 한 줄로 충분.\n- README에 renumbering typo 설명 포함: 사용자(최종 wrapper 사용자)에겐 무관. 포함 시 noise.\n- empirical 노트에 별도 섹션 신설: 수정 사례 링크 한 줄로 충분. 새 원리는 추가되지 않음."
+          },
+          {
+            "id": 8,
+            "title": "브랜치 전략 및 릴리즈 작업 순서 (직전 cycle 전례 참조)",
+            "status": "decided",
+            "decision": "**선정**:\n\n### 브랜치\n**`fix/message-aborted-ux`** — UX 개선이 사용자 동기이고, 업스트림 bump는 같이 묶어 가는 부수 작업. 직전 cycle 전례(v0.15.1 `chore/bump-nexus-core-0.20.0`, v0.16.0 `feat/cmux-serialize-preview`)와 달리 이번은 사용자 인지하는 변경 축이 fix 성격이므로 `fix/` prefix 사용.\n\n### 커밋\n1 cycle = 1 commit. 명시 경로로 staged:\n```\ngit add package.json bun.lock CHANGELOG.md README.md README.en.md \\\n       src/plugin.ts scripts/e2e-nexus-integration.mjs \\\n       .nexus/context/releasing.md .nexus/memory/empirical-cmux-pill-clear-paths.md \\\n       .nexus/history.json\n```\n(`.opencode/*` 파일은 untracked이므로 자동 제외됨.)\n\n커밋 메시지: **`v0.16.3: adopt @opencode-ai/plugin 1.14.21 + silent MessageAbortedError UX`**\n\n### PR 및 릴리즈\n1. `fix/message-aborted-ux` 브랜치로 checkout, 작업 수행\n2. 커밋 후 `git push -u origin fix/message-aborted-ux`\n3. `gh pr create` — 제목 \"v0.16.3: adopt @opencode-ai/plugin 1.14.21 + silent MessageAbortedError UX\", 본문은 CHANGELOG 엔트리 요약\n4. PR CI(validate.yml) PASS 확인\n5. `gh pr merge --merge` (merge commit, 브랜치는 --delete-branch 기본 동작 따름)\n6. `git checkout main && git pull origin main`\n7. `git log --oneline -3`으로 merge commit 확인 (현재 HEAD가 v0.16.2 뒤에 오도록)\n8. `git tag -a v0.16.3 -m \"v0.16.3: adopt @opencode-ai/plugin 1.14.21 + silent MessageAbortedError UX\"`\n9. `git push origin v0.16.3` — publish-npm.yml workflow 자동 트리거\n10. `gh run watch` 또는 `gh run list --workflow=publish-npm.yml --limit 1`로 모니터링\n11. 성공 시 `npm view opencode-nexus@0.16.3`로 배포 확인\n\n### 사용자 판단 영역\n- PR 승인 및 merge 타이밍은 사용자 확인 후 진행.\n- 태그 push는 사용자 승인 받은 뒤. [run] cycle 자체는 \"PR 생성까지\"를 acceptance로 삼고, 태그/배포 단계는 **사용자 명시 승인 후 실행**.\n\n**근거**:\n- Lead Hard Prohibitions: main 직접 작업 금지, 적절한 prefix 브랜치 필수.\n- nx-run 원칙: 1 cycle = 1 commit.\n- 직전 cycle들(e1929f8, 708bc9c 등) 커밋 메시지 템플릿(`vX.Y.Z: <desc>`) 일관 유지.\n- 자동 publish workflow가 태그 push로 트리거되므로 태그는 최종 user-approved gate로 취급.\n\n**기각**:\n- `chore/` prefix: 단순 bump 중심이 아님. MessageAbortedError UX 수정이 실질 변경 축이므로 fix가 더 정확.\n- 커밋을 2개로 분리(bump와 UX): 단일 acceptance(PR)로 묶이는 변경이라 분리 이점 없음.\n- PR 없이 main 직접 push: Hard Prohibitions 위배.\n- 태그까지 자동 실행: 사용자 결정 영역. 배포는 user-approved gate 유지."
+          }
+        ],
+        "research_summary": "### 업스트림 버전 궤적 (npm 확인 완료)\n@opencode-ai/plugin published point releases: 1.4.7, 1.4.8, 1.4.9, 1.4.10, 1.4.11, 1.4.12, 1.4.14, 1.4.17, 1.14.17, 1.14.18, 1.14.19, 1.14.20, 1.14.21. 1.5~1.13 minor 부재.\n\n### 1.4.9 → 1.14.21 구간 실질 변화 (researcher 2명 + architect 확인)\n- **1.4.9 → 1.4.17 구간**: packages/plugin/src/*.ts 파일 zero 변화. 의존성(zod@4.1.8, effect@4.0.0-beta.48, SDK pin) 완전 동일. (research/plugin-1.4-range.md)\n- **1.4.17 ↔ 1.14.17 점프**: tarball byte-identical (버전 필드와 SDK dep 버전만 다름). GitHub issue #23419, PR #22982에서 공식적으로 release workflow 자동화 typo로 인정. (research/plugin-1.14-jump.md)\n- **1.14.17 → 1.14.21 구간**: 우리가 쓰는 5개 hook(`config`, `event`, `tool.execute.before`, `permission.ask`, `chat.message`)과 이벤트 타입(`session.created/deleted/idle/status`, `message.part.updated`, `session.error`, `permission.replied`) signature zero 변화. 유일한 plugin API 변경은 1.14.20의 WorkspaceAdaptor.create env 파라미터 추가(우리 미사용). (research/opencode-update.md)\n- **결론**: 숫자 10 minor 점프지만 실질은 \"연속 patch 누적\" 수준. 위험도는 API break가 아닌 event-order 회귀에 집중.\n\n### 루트 1.4.9 pin의 이력 (Lead git log 직접 확인)\n- bf8c5b5 \"fix(deps): pin @opencode-ai/plugin to 1.4.7\" (v0.9.x 근처): `latest`에서 최초 pin.\n- 50de956 v0.12.0 \"adopt nexus-core ^0.16.2\": 1.4.7 → 1.4.9 의도적 bump.\n- 이후 4개월간 nexus-core는 0.16.2→0.20.0까지 5번 bump 지나갔지만 plugin은 손대지 않음. 의도적 stability floor였으나 upstream 실질 변화 없어 bump할 이유가 없었고, 1.4.17→1.14.17 renumbering 모호성 탓에 보류된 것으로 추정. 현재는 stale drift 성격.\n\n### 현재 프로젝트 opencode 의존 접점 (explore/opencode-touch-points.md)\n- src/plugin.ts 5개 hook + 이벤트 의존. config schema SSOT: https://opencode.ai/config.json. \n- 루트 package.json: 1.4.9 (tracked). .opencode/package.json: 1.14.19 (untracked). .opencode/bun.lock: 1.3.10 stale artifact (untracked). \n- bin/opencode-nexus.mjs의 models 경로만 `opencode models --pure` spawn.\n\n### MessageAbortedError 현재 처리 (.nexus/memory/empirical-cmux-pill-clear-paths.md, src/plugin.ts)\n- src/plugin.ts:367~ session.error hook: cmux log --level error + cmux notify \"Session error\" + cmux clear-status nexus-state.\n- v0.15.1에서 set/clear 분기 비대칭 해결하며 도입됨.\n- v0.16.0: session.idle/status-idle은 pill을 clear가 아닌 \"Needs Input\"으로 전환하도록 UX 변경. session.error는 **기존대로 clear 유지**.\n- v0.16.2: preview cache가 assistantTurnActive Map + step-start 경계로 정비됨. session.error에서도 rootSessionLastText 정리 대상.\n- 사용자 요구: MessageAbortedError는 진짜 에러가 아니라 사용자 인터럽트 결과. \"에러\" 표현 대신 \"Needs Input\" 전환 또는 아무것도 안 함 허용.\n\n### 사용자 결정 (이번 cycle 입력)\n- 업그레이드 scope: A1 (루트 + sandbox 동시 bump to 1.14.21).\n- .opencode/bun.lock: 삭제.\n- 진행: [auto-plan] 자율 분해 후 [run] 실행.\n- 완료 조건: 릴리즈까지.\n\n### 직전 유사 cycle 전례\n- v0.15.1 (e1929f8): nexus-core 0.19.2→0.20.0 bump + skill frontmatter 재검증. patch 처리. 브랜치 chore/bump-nexus-core-0.20.0.\n- v0.15.0 (56a0c86), v0.16.0~0.16.2 (8f0fdfe, c180480, 708bc9c): 기능 추가는 minor, 내부 fix는 patch.\n- git 상태 현재: main clean. 최근 HEAD: 708bc9c v0.16.2.\n\n### architect 최종 권고 (artifact: architect/opencode-update-analysis.md Addendum)\n- A1 (루트 + sandbox 동시 정렬) 진행.\n- 검증 필수: bun install → bun run check → bun run test:e2e → npm pack --dry-run → releasing.md §5-1 skill frontmatter + §5-5 cmux 통합 회귀. dependency API는 아니고 host integration smoke로 검증.\n- peer dep 충돌 가능성 낮음 (optional peer 범위 차이만 관찰). lock 재생성 + install 성공으로 충분.\n- 릴리즈 자릿수: **patch bump 권고**. wrapper 기능 표면/breaking evidence 없음, 성격상 지원선 정렬.",
+        "created_at": "2026-04-23T14:15:44.440Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "브랜치 생성 및 사전 상태 확인",
+          "status": "completed",
+          "context": "main 브랜치가 v0.16.2 HEAD. Lead Hard Prohibitions에 따라 작업은 fix/ prefix 브랜치에서.",
+          "acceptance": "- `git status` working tree clean\n- `git log --oneline -1`이 `708bc9c v0.16.2` 또는 이후 HEAD\n- `fix/message-aborted-ux` 브랜치 생성 및 checkout 완료\n- 원격에 동일 이름 브랜치 없음 확인",
+          "approach": "`git status` → `git log --oneline -1` → `git branch -a | grep message-aborted`로 중복 체크 → `git checkout -b fix/message-aborted-ux`",
+          "plan_issue": 8,
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T14:19:47.570Z"
+        },
+        {
+          "id": 2,
+          "title": "루트 @opencode-ai/plugin 1.14.21로 bump",
+          "status": "completed",
+          "context": "package.json의 @opencode-ai/plugin 1.4.9 → 1.14.21. bun.lock 재생성. peer dep 충돌 확인.",
+          "acceptance": "- `package.json`의 `\"@opencode-ai/plugin\": \"1.14.21\"`\n- `bun install` exit 0, peer dep warning/error 없음\n- `bun.lock`에 1.14.21 resolved 엔트리 존재\n- `git diff --name-only` 결과에 `package.json`, `bun.lock`만 포함",
+          "approach": "package.json 편집 → `bun install` 실행 → `grep -A2 '@opencode-ai/plugin' bun.lock`로 resolved 버전 확인 → 충돌 발생 시 Lead에게 escalate",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T14:19:52.135Z"
+        },
+        {
+          "id": 3,
+          "title": ".opencode sandbox 1.14.21로 정렬 및 bun.lock 삭제",
+          "status": "completed",
+          "context": ".opencode/package.json 1.14.19 → 1.14.21. .opencode/package-lock.json 재생성. .opencode/bun.lock(stale 1.3.10) 삭제. 모두 untracked이므로 커밋 diff에는 포함 안 됨 — dev sandbox 정합 목적.",
+          "acceptance": "- `.opencode/package.json` → 1.14.21\n- `.opencode/package-lock.json`에 1.14.21 resolved 존재\n- `.opencode/bun.lock` 파일 존재하지 않음\n- `git status`에서 `.opencode/*`가 untracked로 표시 (또는 gitignore 처리)",
+          "approach": "`.opencode/package.json` 수정 → `.opencode` 디렉터리에서 `npm install` → `.opencode/bun.lock` 파일 확인 후 `rm .opencode/bun.lock` → `git status`로 tracked 여부 재확인",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T14:19:57.108Z"
+        },
+        {
+          "id": 4,
+          "title": "src/plugin.ts에 MessageAbortedError 분기 구현",
+          "status": "completed",
+          "context": "src/plugin.ts:367~의 session.error hook에 isAbortError 헬퍼 추가 + abort/비-abort 분기 구현. empirical-cmux-pill-clear-paths.md의 set-clear pair 원칙과 v0.16.2 step-start 경계 유지.\n\n참고 파일:\n- src/plugin.ts (session.error 기존 처리, rootSessionLastText/assistantTurnActive Map)\n- .nexus/memory/empirical-cmux-pill-clear-paths.md (교훈 1, 2)\n- .nexus/state/plan.json 이슈 3/4 decision",
+          "acceptance": "- src/plugin.ts에 `isAbortError(err: unknown): boolean` 헬퍼 함수 존재. name === \"MessageAbortedError\" 매칭 + message /aborted/i fallback.\n- session.error hook 내부 분기:\n  - abort root session: cmuxNotify 호출 없음, cmuxLog error 호출 없음, cmuxSetStatus(PILL_KEY, \"Needs Input\", \"bell.fill\", \"#007AFF\") 호출, rootSessionLastText/assistantTurnActive 정리\n  - 비-abort root session: 기존 경로 유지 (log error + notify \"Session error\" + cmuxClearStatus)\n  - non-root session: 어떤 호출도 하지 않음 (기존 guard 유지)\n- 실제 OpenCode SDK payload에서 `event.properties.error` 구조 재확인 완료 (`.name`으로 접근 가능한지). 불가능할 경우 `.type` 또는 다른 필드로 fallback + 이유 주석 기록.\n- `bun run check` PASS (타입 에러 없음)",
+          "approach": "1. src/plugin.ts의 session.error 현 구현과 rootSessionLastText/assistantTurnActive 선언부 읽기\n2. SDK 타입으로 error payload 정확 구조 재확인 (`.opencode/node_modules/@opencode-ai/sdk/dist/...types.gen.d.ts`에서 session.error event 검색)\n3. `isAbortError` 헬퍼 추가 (모듈 상단 유틸 섹션)\n4. session.error hook 분기 개선\n5. bun run check로 타입 검증\n6. 주석: 기존 주석 스타일 유지 (v0.16.2 수정과 같은 tone)\n\n위험: error 구조가 예상과 다를 경우 Lead에게 escalate해 의사결정 재요청.",
+          "risk": "SDK payload의 error 필드가 generic Error 형태가 아닌 discriminated union일 가능성. 이 경우 isAbortError 구현 조정 필요.",
+          "plan_issue": 3,
+          "deps": [
+            2,
+            3
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_24546733affe9xAvo6nRXg3E2k"
+          },
+          "created_at": "2026-04-23T14:20:13.476Z"
+        },
+        {
+          "id": 5,
+          "title": "e2e cmux-r/s 시나리오 추가",
+          "status": "completed",
+          "context": "scripts/e2e-nexus-integration.mjs의 기존 cmux-a~q 시나리오 이후 추가. cmux shim 기반 argv 기록 패턴 재사용.",
+          "acceptance": "- `scripts/e2e-nexus-integration.mjs`에 cmux-r 시나리오:\n  - session.created(root) 선행 → session.error event with `{error: {name: \"MessageAbortedError\", message: \"Request aborted\"}}` dispatch\n  - assert: cmux notify 호출 argv 리스트에 없음, cmux log level=error 없음, cmux set-status 호출에 key=\"nexus-state\" value=\"Needs Input\" icon=\"bell.fill\" color=\"#007AFF\" 포함\n- cmux-s 시나리오:\n  - session.error event with `{error: {name: \"DatabaseError\", message: \"connection refused\"}}` dispatch\n  - assert: cmux log level=error 있음, cmux notify \"Session error\" 있음, cmux clear-status nexus-state 있음\n- `bun run test:e2e` 전체 PASS\n- 실패 시 시나리오 ID prefix가 FAIL 메시지에 포함",
+          "approach": "기존 cmux-q 시나리오 블록 구조 참고해 mkdtemp/shim 패턴 복제. plugin module dynamic import → event dispatch → cmux shim log jsonl 읽어 argv sequence assertion. cmux-r은 positive + negative (있어야 할 것 + 없어야 할 것) 둘 다 assert.",
+          "plan_issue": 5,
+          "deps": [
+            4
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_24546733affe9xAvo6nRXg3E2k"
+          },
+          "created_at": "2026-04-23T14:20:22.258Z"
+        },
+        {
+          "id": 6,
+          "title": "자동 검증 및 §5-1/§5-5 수동 체크 실행",
+          "status": "completed",
+          "context": "releasing.md 체크리스트 기반. 실패 시 원인 task(#4 또는 #5) 지목.",
+          "acceptance": "- `bun install` exit 0\n- `bun run check` PASS\n- `bun run test:e2e` PASS (cmux-r/s 포함 모든 시나리오)\n- `npm pack --dry-run` 정상, 포함 파일이 직전 cycle(v0.16.2)과 동일\n- §5-1: `.opencode/skills/{nx-plan,nx-auto-plan,nx-run}/SKILL.md`의 frontmatter `name`, `description` 필드 스펙 준수 grep PASS\n- §5-5-1 cmux 통합 9개 항목 (기존 + MessageAbortedError 신규) 체크리스트 모두 확인\n- 결과는 `test/verification-v0.16.3.md` artifact로 기록",
+          "approach": "1. Phase 1 자동: bun install → bun run check → bun run test:e2e → npm pack --dry-run\n2. Phase 2 §5-1: grep으로 frontmatter 필드 존재 + name regex + description 길이 확인\n3. Phase 3 §5-5-1: cmux 환경 시뮬레이션 (기존 패턴) + MessageAbortedError 케이스 직접 재현\n4. 결과 artifact 기록, 실패 시 minimal 재현 케이스 명시",
+          "plan_issue": 5,
+          "deps": [
+            4,
+            5
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "bounded",
+            "agent_id": "ses_2453bd971ffevmR4Ehb7PhRSmt"
+          },
+          "created_at": "2026-04-23T14:20:31.512Z"
+        },
+        {
+          "id": 7,
+          "title": "4개 문서 갱신 (CHANGELOG/README ko,en/releasing/empirical)",
+          "status": "completed",
+          "context": "plan#7 decision 참조. 4개 파일 + package.json version 필드.\n\n참고:\n- CHANGELOG.md v0.16.2 엔트리 구조 (업스트림/변경됨/사용자 영향/검증)\n- README.md, README.en.md illustrative 버전 3곳씩\n- .nexus/context/releasing.md §5-5-1 기존 bullet 구조\n- .nexus/memory/empirical-cmux-pill-clear-paths.md \"수정 사례 링크\" 섹션",
+          "acceptance": "- `CHANGELOG.md`에 `## [0.16.3] — 2026-04-23` 엔트리. 4개 하위 섹션(업스트림/변경됨/사용자 영향/검증) 모두 존재. renumbering typo GitHub #23419 한 줄 언급.\n- `README.md` (ko)에 `0.16.2` → `0.16.3` 3곳 치환 완료 (install 예시 @x.y.z, 설명 문장, opencode.json JSON 블록)\n- `README.en.md` 동일 3곳 치환\n- `.nexus/context/releasing.md` §5-5-1에 MessageAbortedError positive/negative bullet 2개 추가, 기존 번호 체계/내용 보존\n- `.nexus/memory/empirical-cmux-pill-clear-paths.md` 수정사례 링크에 v0.16.3 한 줄 추가\n- `package.json`의 `\"version\": \"0.16.3\"` 로 업데이트\n- 모든 편집은 기존 내용 삭제 없이 추가·치환만",
+          "approach": "1. CHANGELOG.md v0.16.2 엔트리 바로 위에 v0.16.3 엔트리 삽입\n2. README.md/en 각 3곳 sed 또는 Edit로 치환 (교체 대상 라인은 0.16.2 정확 매칭)\n3. releasing.md §5-5-1 기존 session.error bullet 직후에 MessageAbortedError bullet 2개 삽입\n4. empirical 파일 수정사례 링크 블록 맨 끝에 v0.16.3 라인 추가\n5. package.json version 필드 수정 (edit)\n6. 최종 git diff로 삭제 라인 없음 재확인",
+          "plan_issue": 7,
+          "deps": [
+            6
+          ],
+          "owner": {
+            "role": "writer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_2452bbebbffepYSniykshdlve4"
+          },
+          "created_at": "2026-04-23T14:20:42.900Z"
+        },
+        {
+          "id": 8,
+          "title": "문서 정합성 검증",
+          "status": "completed",
+          "context": "writer가 편집한 문서들과 실제 구현(src/plugin.ts, e2e 시나리오) 사이의 문자열 정합성 확인.",
+          "acceptance": "- README.md ↔ README.en.md 1:1 대응: 버전 숫자 3곳 동일, 구조 동일\n- CHANGELOG.md [0.16.3] 엔트리가 plan#7 decision 구조와 일치\n- releasing.md §5-5-1 bullet 문자열(\"Needs Input\", \"bell.fill\", \"#007AFF\", \"MessageAbortedError\")이 src/plugin.ts의 실제 cmux CLI 호출 인수와 정확 매칭\n- 기존 문서 내용 삭제 없음 (git diff에 - 라인 없음)\n- package.json version 필드가 CHANGELOG 엔트리와 일치\n- 결과는 `review/doc-v0.16.3.md` artifact로 ALL PASS 또는 DEVIATIONS FOUND 기록",
+          "approach": "각 문서 축별 체크: (1) README ko↔en diff 길이/구조, (2) CHANGELOG 포맷 기존 엔트리와 비교, (3) grep으로 releasing.md의 \"Needs Input\"/\"bell.fill\"/\"#007AFF\"가 src/plugin.ts와 일치 확인, (4) git diff로 - 라인 없음 확인, (5) package.json version → 결과 artifact 저장.",
+          "plan_issue": 7,
+          "deps": [
+            7
+          ],
+          "owner": {
+            "role": "reviewer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_245293031ffekyHq8zCmoIhnWL"
+          },
+          "created_at": "2026-04-23T14:20:50.742Z"
+        },
+        {
+          "id": 9,
+          "title": "커밋, push, PR 생성",
+          "status": "pending",
+          "context": "plan#8 decision 참조. 명시 경로 staged, 단일 커밋, fix/message-aborted-ux 브랜치 push, gh pr create.",
+          "acceptance": "- 단일 커밋 생성. 메시지 \"v0.16.3: adopt @opencode-ai/plugin 1.14.21 + silent MessageAbortedError UX\"\n- `git log -1 --stat` 결과에 의도 외 파일 없음 (.opencode/* 없음 확인)\n- `fix/message-aborted-ux` 브랜치 origin에 push\n- GitHub PR 생성됨, 본문에 CHANGELOG [0.16.3] 엔트리 요약 포함\n- PR URL을 Lead에게 반환\n- 이후 PR validate.yml workflow 결과는 별도 task에서 확인",
+          "approach": "1. nx_task_close 호출 — plan+tasks를 .nexus/history.json으로 아카이브\n2. git add 명시 경로 (package.json, bun.lock, CHANGELOG.md, README.md, README.en.md, src/plugin.ts, scripts/e2e-nexus-integration.mjs, .nexus/context/releasing.md, .nexus/memory/empirical-cmux-pill-clear-paths.md, .nexus/history.json)\n3. git status로 stage 내용 확인 (.opencode/* 없음 확인)\n4. git commit -m \"v0.16.3: ...\"\n5. git push -u origin fix/message-aborted-ux\n6. gh pr create --title \"...\" --body \"$(cat heredoc of CHANGELOG entry)\"\n7. PR URL 출력",
+          "plan_issue": 8,
+          "deps": [
+            6,
+            8
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T14:20:59.671Z"
+        },
+        {
+          "id": 10,
+          "title": "PR merge, 태그 생성, npm 배포 확인 (user-approved gate)",
+          "status": "pending",
+          "context": "plan#8에 따라 이 단계는 사용자 명시 승인 후 실행. [run] cycle 자체의 acceptance는 task#9(PR 생성)까지. 여기부터는 사용자 approved gate.",
+          "acceptance": "- **사용자 승인 확인** 후 실행\n- `gh pr merge --merge`로 main에 merge commit\n- `git checkout main && git pull origin main` 완료, HEAD가 merge commit\n- `git tag -a v0.16.3 -m \"v0.16.3: adopt @opencode-ai/plugin 1.14.21 + silent MessageAbortedError UX\"`\n- `git push origin v0.16.3`\n- `gh run list --workflow=publish-npm.yml --limit 1`에서 v0.16.3 run 성공 exit 0\n- `npm view opencode-nexus@0.16.3`로 배포 확인",
+          "approach": "PR CI PASS 확인 후 Lead가 사용자에게 최종 승인 요청 → 승인 시 merge → main pull → tag 생성 → tag push → workflow watch → npm view 확인. 실패 시 workflow 로그 확인 후 hotfix cycle 여부 사용자와 판단.",
+          "risk": "publish-npm.yml이 package.json version과 tag version 일치를 요구하므로 task#7에서 version bump 누락 시 여기서 fail. hotfix cycle 필요.",
+          "plan_issue": 8,
+          "deps": [
+            9
+          ],
+          "owner": {
+            "role": "lead",
+            "resume_tier": "ephemeral"
+          },
+          "created_at": "2026-04-23T14:21:08.398Z"
+        }
+      ]
     }
   ]
 }
