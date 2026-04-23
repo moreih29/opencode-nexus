@@ -2,6 +2,39 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.16.0] — 2026-04-23
+
+### 추가됨
+
+- **`session.idle` 알림 body 응답 미리보기** — 응답 완료 알림의 본문이 기존 고정 `"Response ready"` 대신 응답 텍스트의 첫 100자(초과 시 `…` 말줄임표 추가, 공백은 단일 space로 collapse)로 변경. nexus-core 0.20.0이 Lead 응답에 기본 삽입하는 `[Pre-check]` scaffold 블록은 자동 skip되어 본문이 노출됨.
+- **`OPENCODE_NEXUS_NOTIFY_PREVIEW` opt-out 환경 변수** — 응답 내용이 OS notification center에 노출되는 것이 우려되는 사용자는 shell 환경에 `OPENCODE_NEXUS_NOTIFY_PREVIEW=0` (또는 `false`)를 설정해 기존 `"Response ready"` 고정 body로 되돌릴 수 있다.
+- **응답 완료 시 `Needs Input` pill 유지** — 기존에는 응답 완료(`session.idle` 또는 `session.status` idle variant) 시 pill을 완전히 clear(사이드바에서 뱃지 사라짐)했으나, 이제 `Needs Input` pill(종 아이콘, 파란색)로 전환해 사이드바에 "사용자의 차례" 신호가 남도록 변경. 사용자가 다음 입력 시 `session.status busy`가 fire되면 자동으로 `Running` pill로 덮어쓰기된다. `session.error` / `session.deleted` / `permission.replied` 경로는 기존대로 pill clear 유지(에러·세션 종료·권한 응답 완료는 "사용자 차례" 의미가 아니므로).
+
+### 수정됨
+
+- **cmux pill stuck 근본 원인 해결** — 기존 `cmuxSpawn`이 `detached: true` + `unref()` fire-and-forget 구조로 cmux CLI를 호출했는데, Node `child_process.spawn`을 연속으로 쏘면 OS 병렬 fork 스케줄링 때문에 자식 프로세스들이 cmux Unix socket에 도달하는 순서가 plugin 의도 순서와 뒤바뀔 수 있었음. 이로 인해 `session.status busy` 직후 `session.idle`이 fire되면 `set-status`가 `clear-status` 뒤에 socket에 도달해 pill이 `Running`으로 stuck되는 현상이 발생. 이를 module-level promise queue로 serialize해 각 cmux spawn이 이전 child의 `exit`/`error` 이벤트까지 기다린 후 다음 spawn을 시작하도록 변경. 호출자 API는 그대로 fire-and-forget 유지.
+
+### 사용자 영향
+
+- **breaking change 없음.** 기존 trigger 태그와 MCP 인터페이스 모두 동일 동작. `install`/`models`/`uninstall` CLI 변경 없음.
+- **응답 완료 알림이 응답 내용 첫 부분을 보여줌.** 민감 내용 노출이 우려되면 `export OPENCODE_NEXUS_NOTIFY_PREVIEW=0`으로 opt-out.
+- **응답 완료 후 사이드바 pill이 `Needs Input`으로 유지됨.** 사용자가 다음 입력을 보낼 때까지 사이드바에 시각적 cue가 남는다. 기존처럼 pill이 완전히 사라지지 않는다. 불편하다면 pill 자체를 없앨 방법은 현재 opt-out 플래그로 제공되지 않으므로(향후 도입 고려), 기존 `Response ready` 고정 body를 쓰더라도 pill은 동일하게 `Needs Input` 유지된다.
+- **pill stuck 해결.** 정상 완료·abort·error 모든 경로에서 pill이 의도된 상태(완료 = `Needs Input`, 에러 = clear)로 올바르게 전환됨. 기존 v0.15.x에서 `Running`으로 stuck된 pill이 남아 있다면 `cmux clear-status nexus-state --workspace <ref>`로 수동 정리 가능.
+- 설정 재적용/재설치 불필요. `opencode-nexus install`이 기존 `opencode.json` plugin entry를 0.16.0으로 자동 pin 갱신.
+
+### 검증
+
+- `bun run check` PASS (sync:dry + tsc --noEmit 0 errors).
+- `bun run test:e2e` PASS — "All integration checks passed." 기존 install/models/uninstall + cmux hook scenario `a~j` + 신규 `k/l/m/n/o/p` 6개 모두 통과.
+  - **cmux-k**: 10회 `session.status` busy/idle 연속 발행 후 마지막 로그 엔트리가 `set-status Needs Input`임을 assert(serialize 보장). race 재현 시 `Running`이 마지막이 되어 assertion이 실패.
+  - **cmux-l**: `message.part.updated` text 후 `session.idle` → notify body에 해당 text 포함, `"Response ready"` 아님.
+  - **cmux-m**: `[Pre-check]` 블록 + 본문 text → notify body에 `[Pre-check]` 미포함, 본문 포함.
+  - **cmux-n**: `OPENCODE_NEXUS_NOTIFY_PREVIEW=0` + preview 가능 text → notify body === `"Response ready"` (opt-out 강제).
+  - **cmux-o**: message.part.updated 없이 session.idle → fallback body === `"Response ready"`.
+  - **cmux-p**: prior turn text 캐싱된 상태에서 `session.status busy` 후 session.idle → 이전 text 누출 없이 fallback body.
+- `npm pack --dry-run` 결과 정상 — 27 files, 72.6 kB, 0.16.0, 필수 경로 포함·금지 경로 제외.
+- race 재현 직접 실험 — `node -e`로 Node child_process.spawn 연쇄 호출 10×2 쏴서 `race-test=Running` stuck 재현 성공 → serialize 적용 후 동일 패턴에서 clear로 귀결 확인.
+
 ## [0.15.1] — 2026-04-23
 
 ### 업스트림
@@ -32,8 +65,9 @@
 
 - `bun run check` PASS (sync:dry + tsc --noEmit 0 errors).
 - `bun run test:e2e` PASS — "All integration checks passed." 기존 install/models/uninstall + cmux hook 시나리오 a~g + 신규 h/i/j 모두 통과.
-  - **cmux-h**: `session.error`(root) → `log` + `notify` + `clear-status` 3개 모두 호출 assert.
-  - **cmux-i**: `session.status` + `status.type === "idle"`(root) → `clear-status` 호출 assert.
+  - **cmux-g**: `session.idle`(root) → `notify "Response ready..."` + `set-status Needs Input` 호출 assert.
+  - **cmux-h**: `session.error`(root) → `log` + `notify` + `clear-status` 3개 모두 호출 assert(에러는 여전히 pill clear).
+  - **cmux-i**: `session.status` + `status.type === "idle"`(root) → `set-status Needs Input` 호출 assert.
   - **cmux-j**: `session.error`(non-root) → cmux 호출 0건 assert(non-root guard regression 회귀 보험).
 - `npm pack --dry-run` 결과 정상 — 27 files, 70.8 kB, `README.md`/`LICENSE`/`package.json`/`bin/`/`lib/`/`src/`/`skills/` 포함, `.github/` 미포함.
 - `.opencode/skills/{nx-plan,nx-auto-plan,nx-run}/SKILL.md` frontmatter 정적 검증 PASS — `name` 디렉터리명 일치, `description` 1~1024자 범위, OpenCode regex `^[a-z0-9]+(-[a-z0-9]+)*$` 만족.

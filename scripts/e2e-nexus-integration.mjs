@@ -331,6 +331,7 @@ async function main() {
   const originalWorkspaceID = process.env.CMUX_WORKSPACE_ID;
   const originalCmuxTestLog = process.env.CMUX_TEST_LOG;
   const originalCmuxDisable = process.env.OPENCODE_NEXUS_CMUX;
+  const originalCmuxPreview = process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW;
 
   try {
     const { binDir, logFile } = installCmuxShim(cmuxTempDir);
@@ -463,8 +464,17 @@ async function main() {
       `cmux-g: session.idle must keep Response ready notify, got ${JSON.stringify(callsG)}`,
     );
     assert(
-      callsG.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
-      `cmux-g: session.idle must clear status pill, got ${JSON.stringify(callsG)}`,
+      callsG.some(
+        (call) =>
+          call[0] === "set-status" &&
+          call[1] === "nexus-state" &&
+          call[2] === "Needs Input" &&
+          call[3] === "--icon" &&
+          call[4] === "bell" &&
+          call[5] === "--color" &&
+          call[6] === "#007AFF",
+      ),
+      `cmux-g: session.idle must set Needs Input pill (so sidebar reflects the user's turn), got ${JSON.stringify(callsG)}`,
     );
 
     // cmux-h: session.error on a root session must also clear the status pill
@@ -511,8 +521,17 @@ async function main() {
     });
     const callsI = await waitForCmuxCalls(logFile, 1);
     assert(
-      callsI.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
-      `cmux-i: session.status idle must clear status pill, got ${JSON.stringify(callsI)}`,
+      callsI.some(
+        (call) =>
+          call[0] === "set-status" &&
+          call[1] === "nexus-state" &&
+          call[2] === "Needs Input" &&
+          call[3] === "--icon" &&
+          call[4] === "bell" &&
+          call[5] === "--color" &&
+          call[6] === "#007AFF",
+      ),
+      `cmux-i: session.status idle must set Needs Input pill (backup path when session.idle does not fire), got ${JSON.stringify(callsI)}`,
     );
 
     // cmux-j: session.error on a non-root session must not spawn any cmux
@@ -533,6 +552,226 @@ async function main() {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 150));
     const callsJ = readCmuxCalls(logFile);
     assert(callsJ.length === 0, `cmux-j: non-root session.error must not spawn cmux, got ${JSON.stringify(callsJ)}`);
+
+    // cmux-k: cmuxSpawn must serialize cmux CLI invocations so that when set
+    // and clear commands are issued rapidly, the final cmux server state
+    // matches the last command the plugin emitted. Previously fire-and-forget
+    // detached spawns could let `set-status` land after `clear-status` due to
+    // OS fork scheduling, leaving the pill stuck. We emit busy/idle pairs 10
+    // times and assert the last logged cmux call is clear-status.
+    resetCmuxLog(logFile);
+    for (let i = 0; i < 10; i++) {
+      await cmuxHooks.event({
+        event: {
+          type: "session.status",
+          properties: { sessionID: rootSessionID, status: { type: "busy" } },
+        },
+      });
+      await cmuxHooks.event({
+        event: {
+          type: "session.status",
+          properties: { sessionID: rootSessionID, status: { type: "idle" } },
+        },
+      });
+    }
+    const callsK = await waitForCmuxCalls(logFile, 20, 3000);
+    assert(callsK.length >= 20, `cmux-k: expected >= 20 serialized cmux calls, got ${callsK.length}`);
+    const lastK = callsK[callsK.length - 1];
+    // With session.status idle now transitioning the pill to Needs Input
+    // (not clear), the last cmux call in a busy→idle ping-pong must be
+    // set-status Needs Input. A race would have left the final Running set
+    // after the last clear/idle-set, so checking Needs Input as the last
+    // entry continues to prove serialize ordering.
+    assert(
+      lastK[0] === "set-status" &&
+        lastK[1] === "nexus-state" &&
+        lastK[2] === "Needs Input",
+      `cmux-k: last serialized call must be set-status Needs Input (race would put Running last), got ${JSON.stringify(lastK)}`,
+    );
+
+    // cmux-l: session.idle notify body must preview the last assistant text
+    // part when OPENCODE_NEXUS_NOTIFY_PREVIEW is not opt-out.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-l",
+            sessionID: rootSessionID,
+            messageID: "msg-l",
+            type: "text",
+            text: "Hello, this is the assistant response body.",
+          },
+        },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: rootSessionID },
+      },
+    });
+    const callsL = await waitForCmuxCalls(logFile, 2);
+    const notifyL = callsL.find((call) => call[0] === "notify");
+    assert(notifyL, `cmux-l: session.idle must fire notify, got ${JSON.stringify(callsL)}`);
+    const bodyL = notifyL[notifyL.indexOf("--body") + 1];
+    assert(
+      bodyL.includes("Hello, this is the assistant response"),
+      `cmux-l: notify body must preview assistant text, got "${bodyL}"`,
+    );
+    assert(
+      bodyL !== "Response ready",
+      `cmux-l: body must not be fallback when preview text is available, got "${bodyL}"`,
+    );
+
+    // cmux-m: When the assistant response opens with a [Pre-check] scaffold
+    // block, the preview must skip the block and show the body that follows.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: rootSessionID, status: { type: "busy" } },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-m",
+            sessionID: rootSessionID,
+            messageID: "msg-m",
+            type: "text",
+            text: "[Pre-check]\n- goal: test preview\n- approach: verify\n\n실제 본문은 여기서 시작합니다.",
+          },
+        },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: rootSessionID },
+      },
+    });
+    const callsM = await waitForCmuxCalls(logFile, 3);
+    const notifyM = callsM.find((call) => call[0] === "notify");
+    assert(notifyM, `cmux-m: session.idle must fire notify, got ${JSON.stringify(callsM)}`);
+    const bodyM = notifyM[notifyM.indexOf("--body") + 1];
+    assert(
+      !bodyM.includes("[Pre-check]"),
+      `cmux-m: Pre-check marker must be stripped from preview, got "${bodyM}"`,
+    );
+    assert(
+      bodyM.includes("실제 본문"),
+      `cmux-m: body after Pre-check block must be previewed, got "${bodyM}"`,
+    );
+
+    // cmux-n: OPENCODE_NEXUS_NOTIFY_PREVIEW=0 must force the fallback body
+    // even when preview text is cached. User-visible opt-out semantics.
+    resetCmuxLog(logFile);
+    process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW = "0";
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: rootSessionID, status: { type: "busy" } },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-n",
+            sessionID: rootSessionID,
+            messageID: "msg-n",
+            type: "text",
+            text: "This sensitive response must NOT leak into the notification.",
+          },
+        },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: rootSessionID },
+      },
+    });
+    const callsN = await waitForCmuxCalls(logFile, 3);
+    delete process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW;
+    const notifyN = callsN.find((call) => call[0] === "notify");
+    assert(notifyN, `cmux-n: session.idle must fire notify, got ${JSON.stringify(callsN)}`);
+    const bodyN = notifyN[notifyN.indexOf("--body") + 1];
+    assert(
+      bodyN === "Response ready",
+      `cmux-n: opt-out flag must force fallback body, got "${bodyN}"`,
+    );
+
+    // cmux-o: Without any message.part.updated text, session.idle must still
+    // emit a notify with the fallback body so the user is not left silent.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: rootSessionID, status: { type: "busy" } },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: rootSessionID },
+      },
+    });
+    const callsO = await waitForCmuxCalls(logFile, 3);
+    const notifyO = callsO.find((call) => call[0] === "notify");
+    assert(notifyO, `cmux-o: session.idle must fire notify even without prior text, got ${JSON.stringify(callsO)}`);
+    const bodyO = notifyO[notifyO.indexOf("--body") + 1];
+    assert(
+      bodyO === "Response ready",
+      `cmux-o: empty-cache fallback must be "Response ready", got "${bodyO}"`,
+    );
+
+    // cmux-p: session.status busy must reset the per-session text cache so
+    // stale text from a prior turn cannot leak into the next turn's preview.
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-p-prior",
+            sessionID: rootSessionID,
+            messageID: "msg-p-prior",
+            type: "text",
+            text: "Previous turn response that must not leak.",
+          },
+        },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: { sessionID: rootSessionID, status: { type: "busy" } },
+      },
+    });
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: rootSessionID },
+      },
+    });
+    const callsP = await waitForCmuxCalls(logFile, 3);
+    const notifyP = callsP.find((call) => call[0] === "notify");
+    assert(notifyP, `cmux-p: session.idle must fire notify, got ${JSON.stringify(callsP)}`);
+    const bodyP = notifyP[notifyP.indexOf("--body") + 1];
+    assert(
+      !bodyP.includes("Previous turn"),
+      `cmux-p: prior turn text must be cleared by busy event, got "${bodyP}"`,
+    );
+    assert(
+      bodyP === "Response ready",
+      `cmux-p: cache-reset fallback must be "Response ready", got "${bodyP}"`,
+    );
   } finally {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
@@ -542,6 +781,8 @@ async function main() {
     else process.env.CMUX_TEST_LOG = originalCmuxTestLog;
     if (originalCmuxDisable === undefined) delete process.env.OPENCODE_NEXUS_CMUX;
     else process.env.OPENCODE_NEXUS_CMUX = originalCmuxDisable;
+    if (originalCmuxPreview === undefined) delete process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW;
+    else process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW = originalCmuxPreview;
     rmSync(cmuxTempDir, { recursive: true, force: true });
   }
 

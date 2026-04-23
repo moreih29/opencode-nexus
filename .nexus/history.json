@@ -871,6 +871,254 @@
           "created_at": "2026-04-23T08:01:37.884Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T08:59:43.811Z",
+      "branch": "feat/cmux-race-fix-and-notify-preview",
+      "plan": {
+        "id": 6,
+        "topic": "v0.16.0: cmux spawn race fix + notify body response preview",
+        "issues": [
+          {
+            "id": 1,
+            "title": "plugin.ts 아키텍처 설계 — cmuxSpawn serialize + response text 캐싱 + Pre-check skip + truncate + opt-out flag 통합 구조",
+            "status": "decided",
+            "decision": "**선정**: plugin.ts를 아래 5개 컴포넌트로 구조화하되 파일 분리 없이 단일 파일에서 관리(기존 규모 대비 단일성 유리).\n\n1. **`cmuxQueue: Promise<void>` (module-level)** + **`cmuxSpawn` 재작성**: `detached:true`/`unref()` 제거, 각 호출이 queue 끝에 append해 이전 child의 `exit`/`error` 이벤트까지 대기 후 다음 spawn. 호출자 입장에선 여전히 fire-and-forget(Promise 체인 반환 안 함).\n\n2. **`rootSessionLastText: Map<string, string>` (plugin-instance 내부)**: rootSessions와 짝. session.status busy 시 delete(새 turn 시작), message.part.updated + text + rootSession 시 set(덮어쓰기), session.idle/session.deleted 시 delete.\n\n3. **`stripPreCheck(text)` helper**: 텍스트가 `[Pre-check]`로 시작(leading whitespace 무시)하면 첫 `\\n\\n`(double newline)까지 건너뛰고 그 뒤 반환. 없으면 원본 반환. 전체가 Pre-check 블록이면 빈 문자열.\n\n4. **`truncateForNotification(text)` helper**: `/\\s+/` 공백 collapse + trim → 100자 이하는 그대로, 초과 시 앞 100자 + `…`(U+2026 ellipsis).\n\n5. **`shouldPreviewResponse()` helper** + **`buildResponseReadyBody(sessionID)`**: opt-out env (`OPENCODE_NEXUS_NOTIFY_PREVIEW ∈ {\"0\",\"false\"}`) 시 `\"Response ready\"` 반환, 아니면 캐시 → stripPreCheck → truncate → 비면 fallback `\"Response ready\"`.\n\n**이벤트 핸들러 변경 지점**:\n- `session.status busy` → `rootSessionLastText.delete(sessionID)` 추가 후 기존 set-status 유지\n- `message.part.updated` 신규 분기: part.type=\"text\" + part.sessionID in rootSessions → set\n- `session.idle` → body를 `buildResponseReadyBody(sessionID)`로 대체, notify + clear 후 캐시 delete\n- `session.deleted`(root) → 캐시 delete 추가(메모리 누수 방지)\n\n**상수 신규**: `RESPONSE_READY_FALLBACK = \"Response ready\"`, `PREVIEW_MAX_LEN = 100`, `PRE_CHECK_MARKER = \"[Pre-check]\"`.\n\n**근거**:\n- cmux race 확정 재현으로 serialize가 유일한 근본 fix.\n- `message.part.updated`가 text part를 개별적으로 전달하고 assistant text는 user text 이후에 들어오므로 \"마지막 덮어쓰기\" 방식이 role 구분 없이도 충분. `session.status busy` 시점 캐시 reset으로 이전 turn의 text가 새 turn에 누출 안 되게 방어.\n- opt-out 기본 ON은 사용자 결정 반영. env 이름은 기존 `OPENCODE_NEXUS_CMUX` 명명 규칙과 일치.\n- 단일 파일 유지는 현재 plugin.ts ~260 lines 규모에서 분리 cost 대비 이득 낮음. 향후 200 lines 이상 추가되면 분리 재고려.\n\n**기각된 대안**:\n1. `message.updated` 사용 — 기각: Message metadata만 전달하고 text parts는 별도라 필요 정보 부족. 결국 parts fetch 추가 필요.\n2. `input.client`로 session messages HTTP 조회 — 기각: session.idle 시점에 추가 I/O, notify 지연. 이벤트 기반이 더 즉각적.\n3. Pre-check 블록 구분을 regex 정교화(`^###` 헤더 기준 등) — 기각: Pre-check 블록 구조는 업스트림(nexus-core)의 Lead spec에 묶여 있고 변동 가능. 첫 `\\n\\n`가 blank line separator로 generic하고 보수적. 실패해도 truncate가 결국 100자로 자름.\n4. queue를 plugin instance 내로 이동 — 기각: cmuxSpawn이 top-level 함수라 module-level 변수가 자연. plugin instance가 여러 번 load되는 경우는 OpenCode 구조상 없음.\n5. serialize 포기하고 spawn 대신 직접 socket write — 기각: cmux socket 프로토콜 의존성 커짐, CLI 추상화가 안정."
+          },
+          {
+            "id": 2,
+            "title": "e2e scenario 확장 범위 — cmux-k(race serialize) / cmux-l(preview) / cmux-m(Pre-check skip) / cmux-n(opt-out) / cmux-o(fallback) 등 신규 항목 관리",
+            "status": "decided",
+            "decision": "**선정**: 5개 신규 scenario 추가. 기존 cmux-a~j는 유지(reserialized cmuxSpawn 호환 확인용 회귀 보험).\n\n- **cmux-k (race serialize)**: loop 10회로 `set-status → await small delay → clear-status` 반복 후 최종 `list-status` 결과가 clear. 이전 `node -e` 실험을 shim 기반으로 재현해 serialize 보장 assertion.\n- **cmux-l (preview happy path)**: message.part.updated(text, rootSession) fire → session.idle → cmux notify body에 **해당 text가 포함**되고 `\"Response ready\"` fallback이 아님을 assert.\n- **cmux-m (Pre-check skip)**: `[Pre-check]\\n항목1\\n항목2\\n\\n본문 시작` 형태 text → notify body에 `[Pre-check]` 문자열 없고 `본문 시작`이 포함됨 assert.\n- **cmux-n (opt-out flag)**: `OPENCODE_NEXUS_NOTIFY_PREVIEW=0` 설정 + text 캐싱된 상태에서 session.idle → body가 정확히 `\"Response ready\"`.\n- **cmux-o (fallback empty/no-cache)**: message.part.updated 없이 session.idle만 fire → body가 `\"Response ready\"`.\n\n**추가로 필요한 회귀 assertion**:\n- **cmux-b 수정**: session.status busy 훅이 `rootSessionLastText.delete`를 호출하는지는 assert 대상이 아니지만, 새 turn 시 캐시 초기화를 증명하려면 cmux-p (prior-text survives busy reset) 같은 scenario로 *이전 turn 텍스트가 새 turn의 fallback에 안 남음*을 확인하면 가장 확실. 단 이건 p 하나 추가 수준이라 cmux-p로 등록.\n\n**총 신규 5개 + 1개(cmux-p) = 6개**. 최종 scenarios: cmux-a~p 16개.\n\n**근거**:\n- race fix는 **동작 변경 없는 serialize**로 기존 scenario 영향 없음. 다만 rapid loop로만 race가 노출되므로 전용 cmux-k 필요.\n- notify body 변화(3종: preview/skip/fallback)는 독립 관심사라 각각 별도 scenario가 clearer.\n- opt-out flag는 env 기반 분기라 cmux-f(disabled mode) 패턴과 유사하지만 목적이 다름: f는 cmux 전체 비활성화, n은 preview만 비활성화. 혼동 방지 위해 별도.\n- cmux-p는 \"캐시 수명 주기\"의 기본 계약(새 turn 시작 시 구 텍스트 누출 없음)을 직접 검증. 단일 assertion이라 저렴.\n\n**기각된 대안**:\n1. 5개 대신 cmux-k에 race + preview를 합쳐 큰 scenario 1개 — 기각: 단일 관심사 원칙 위배, 실패 메시지 모호해짐.\n2. cmux-n/o 통합(opt-out / empty fallback 같은 body) — 기각: 두 경로는 코드 분기가 다름. 통합 시 한 경로 망가져도 다른 분기가 우연히 pass할 위험.\n3. cmux-p 생략 — 기각: `rootSessionLastText.delete`가 session.status busy 분기 안 깊숙이 있어 향후 리팩토링 시 놓치기 쉬움. 명시적 회귀 보험 유용.\n4. scenario naming을 cmux-race/cmux-preview 등 서술적으로 — 기각: 기존 알파벳 naming convention 유지가 일관."
+          },
+          {
+            "id": 3,
+            "title": "CHANGELOG / README / releasing.md 갱신 범위 결정",
+            "status": "decided",
+            "decision": "**선정**: 세 문서 모두 갱신. 각 문서의 역할에 맞는 내용만 배치.\n\n**CHANGELOG.md — `## [0.16.0] — 2026-04-23` 신규 entry**:\n- `### 추가됨`\n  - `session.idle` 알림 body의 응답 미리보기(최대 100자 + `…`, Pre-check 블록 skip, 공백 collapse). `OPENCODE_NEXUS_NOTIFY_PREVIEW=0|false`로 opt-out 가능.\n- `### 수정됨`\n  - `cmuxSpawn`의 race condition 해결. 기존 fire-and-forget detached spawn이 OS 병렬 fork 때문에 `clear-status`가 `set-status`를 덮어쓰지 못해 pill이 Running으로 stuck되던 문제를 promise queue serialize로 해결.\n- `### 사용자 영향`\n  - **응답 완료 알림 내용 변화**: notification body가 고정 `\"Response ready\"`에서 응답 첫 100자로 바뀜. 민감 내용 노출이 우려되면 셸 환경에 `export OPENCODE_NEXUS_NOTIFY_PREVIEW=0`.\n  - **Pill stuck 현상 해결**: 정상 완료·abort·error 모두에서 pill이 확실하게 치워짐. 기존 v0.15.x에 stuck된 pill은 `cmux clear-status nexus-state --workspace <ref>`로 정리 가능.\n  - breaking change 없음. 기존 CLI·설정 동일.\n- `### 검증`\n  - `bun run check` / `bun run test:e2e` / `npm pack --dry-run` PASS\n  - cmux hook scenario a~j + 신규 k/l/m/n/o/p 총 16개 통과\n  - race condition Node-based 직접 재현 실험(race-test pill stuck) → serialize 적용 후 동일 패턴에서 clear로 귀결 확인\n\n**README.md / README.en.md**:\n- illustrative 버전 숫자 `0.15.1` → `0.16.0` 6곳 (§1-1 권장 수준)\n- **선택**: cmux 섹션이 별도 있으면 `OPENCODE_NEXUS_NOTIFY_PREVIEW` env 언급 추가. 없으면 CHANGELOG만으로 충분. 확인 후 판단.\n\n**.nexus/context/releasing.md §5-5-1**:\n- `session.idle`(root) bullet 확장: notify body가 opt-out 모드가 아니면 응답 첫 100자 포함, opt-out 모드면 `\"Response ready\"` 고정.\n- cmux 호출 직렬화(serialize)된 상태로 set→clear 연쇄가 실패하지 않음을 검증 항목으로 추가.\n\n**근거**:\n- CHANGELOG는 사용자 관점 변경 요약 3축(추가/수정/영향) + 검증. 기존 v0.15.1 entry 형식 일치.\n- README illustrative 숫자는 §1-1 권장 수준이라도 drift 축적 방지 위해 같이 업데이트.\n- releasing.md §5-5-1은 다음 minor/patch release에서 회귀 확인 기준이 되므로 serialize + preview 둘 다 반영 필수.\n\n**기각된 대안**:\n1. `### 추가됨` / `### 수정됨` 섹션 병합 — 기각: Keep a Changelog 관행 위배, race fix와 preview는 성격 다름.\n2. README 업데이트 생략 — 기각: illustrative 숫자 drift 누적 방지.\n3. releasing.md 미수정 — 기각: 다음 릴리즈에서 notify body 회귀 잡을 검증 기준 부재."
+          },
+          {
+            "id": 4,
+            "title": ".nexus/memory 관련 기록 배치 — 모두 empirical-cmux-pill-clear-paths.md에 매길지 새 파일 나눌지",
+            "status": "decided",
+            "decision": "**선정**: `empirical-cmux-pill-clear-paths.md` 한 파일을 **race/serialization 교훈 추가로 확장**. notify preview 기능은 별도 memory 없음(단순 feature라 CHANGELOG가 충분).\n\n**기존 파일에 추가할 섹션**:\n\n1. `## 증상 (2026-04-23, v0.15.x)` 아래에 서브섹션 **\"race 경로 — 정상 완료에서의 stuck\"** 추가\n   - 실증: workspace:10(opencode-nexus-test) 로그에서 session.idle 실제 fire됨 + plugin의 cmuxClearStatus 호출됨에도 pill stuck\n   - Node child_process.spawn 기반 직접 재현 실험 (race-test pill stuck) 기록\n\n2. `## 근본 원인`에 서브섹션 **\"spawn race\"** 추가\n   - `cmuxSpawn` detached + unref fire-and-forget 구조가 OS 병렬 fork 스케줄링으로 도달 순서 보장 안 됨\n   - 순차 spawn 간격이 터미널 subshell(~수ms)에선 race 미재현, Node event loop 안(~0ms)에선 재현\n\n3. `## 교훈`에 서브섹션 **\"serialize external CLI spawn chains\"** 추가\n   - 원칙: 외부 CLI를 프로세스 spawn으로 fire-and-forget 호출하는 구조에서, 호출 순서가 의미 있으면(특히 set/clear 같은 덮어쓰기 의미) **반드시 queue로 serialize**. 호출자 입장의 fire-and-forget는 promise chain으로도 유지 가능.\n   - 구현 패턴: `let queue = Promise.resolve(); function spawnSerialized(...) { queue = queue.catch(() => {}).then(() => new Promise(resolve => { const c = spawn(...); c.once(\"exit\", resolve); c.once(\"error\", resolve); })); }`\n\n4. `## 수정 사례 링크`에 v0.16.0 항목 추가\n\n**근거**:\n- 한 파일에 응집: \"cmux pill 관리\"라는 단일 주제 아래 set-clear pair / race / serialize 세 원리가 모두 들어감. 검색·탐색 시 한 곳에 모여 있는 게 발견 친화적.\n- 새 파일 분리는 **\"race vs set-clear pair\"가 다른 도메인이면** 정당화되지만, 둘 다 \"비동기 외부 상태 관리에서 플러그인이 놓치는 것\" 카테고리라 응집.\n- notify preview 기능은 별도 memory 불필요: 구현이 잘 문서화된 CHANGELOG + 코드 주석으로 충분. 장기 교훈 성격 아님.\n\n**기각된 대안**:\n1. 새 파일 `empirical-cmux-spawn-race.md` 생성 — 기각: pill 관리 주제와 분리가 인위적, 파일 수만 늘어남.\n2. `pattern-` prefix로 승격(pattern-external-cli-serialize.md) — 기각: 단일 사례만으로는 pattern 승격 기준 미충족. 다음 유사 사례 관찰 시 `[m:gc]`에서 승격 고려.\n3. 기존 파일 전면 재작성 — 기각: 기존 내용 보존 + 증분 추가가 덜 risky. 파일 내 구조도 섹션 기반이라 확장 용이.\n4. notify preview도 memory에 기록 — 기각: 기능 설계지 장기 교훈 아님."
+          },
+          {
+            "id": 5,
+            "title": "작업 브랜치 / 커밋 전략",
+            "status": "decided",
+            "decision": "**선정**: 브랜치 `feat/cmux-race-fix-and-notify-preview`, 단일 commit, 메시지 `v0.16.0: serialize cmux spawn + response preview in idle notify`.\n\n**근거**:\n- 두 변경은 같은 cmux 영역 + 같은 릴리즈 타겟(v0.16.0) + 같은 코드 경로(plugin.ts cmuxSpawn / session.idle 훅). 단일 commit이 cycle-commit 1:1 원칙에 부합.\n- `feat/` prefix: race fix는 버그이지만 주 변경은 새 feature(preview)이고, 사용자 관점 CHANGELOG에서도 `### 추가됨` 섹션이 먼저. minor bump 릴리즈라 feat prefix가 semver 성격과 일치.\n- 브랜치 이름에 두 변경을 모두 드러냄 — race fix만 묶어서 나중에 확인해야 할 때도 검색 친화적.\n- 기존 전례(`e0aa082 v0.15.1: adopt nexus-core 0.20.0` / `883a0b8 v0.15.1: fix cmux status pill not cleared`) 메시지 포맷 유지.\n\n**커밋 범위**:\n`src/plugin.ts`, `scripts/e2e-nexus-integration.mjs`, `package.json`, `bun.lock`(없음), `CHANGELOG.md`, `README.md`, `README.en.md`, `.nexus/context/releasing.md`, `.nexus/memory/empirical-cmux-pill-clear-paths.md`, `.nexus/history.json`. 명시 경로로 staged, `git add -A` 금지.\n\n**배포 시퀀스**:\npush → PR create → validate workflow → PR merge → main pull → tag v0.16.0 + push → publish-npm workflow → GitHub Release → 브랜치 정리(로컬+원격 삭제). v0.15.1 사이클 전례 그대로.\n\n**기각된 대안**:\n1. `fix/cmux-spawn-race` + `feat/notify-preview` 두 브랜치 분리 — 기각: 사용자 결정 \"v0.16.0 한 번에 묶음\"에 반함.\n2. `chore/v0.16.0` prefix — 기각: feature 추가가 포함되어 chore 범주 아님.\n3. 2 commits 분리(race fix + preview) — 기각: 같은 파일·같은 교훈·같은 릴리즈, 분리하면 PR 리뷰 시 오히려 분리점 추적 cost 증가. 단일 commit이 깔끔."
+          }
+        ],
+        "research_summary": "실증 조사·사용자 결정 확보 완료. (1) workspace:10(opencode-nexus-test) 로그 트레이스로 session.idle이 실제 fire되지만 pill stuck — plugin이 clear를 호출했음에도 set이 뒤늦게 socket 도달하는 race 확정. Node child_process.spawn 연쇄 호출 패턴으로 race 재현 실험 성공(race-test=Running stuck). (2) OpenCode SDK 타입 구조 확인: message.part.updated event의 properties.part가 TextPart 포함 union, TextPart는 sessionID·messageID·text 제공, AssistantMessage는 role='assistant'. 즉 part.type==='text'로 필터 + rootSession guard + 마지막 덮어쓰기 방식으로 assistant text 추출 가능. (3) 사용자 결정: 100자+…로 자름, 기본 ON + OPENCODE_NEXUS_NOTIFY_PREVIEW=0/false opt-out, Pre-check 블록 skip 후 본문 사용, race fix와 preview를 v0.16.0 minor bump에 묶어 배포. (4) 현재 상태: main 브랜치 clean, 이전 v0.15.1 배포 완료·브랜치 정리 완료, workspace:10 pill은 수동 clear 처리 완료.",
+        "created_at": "2026-04-23T08:41:48.040Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "작업 브랜치 전환 및 package.json 버전 bump",
+          "status": "completed",
+          "context": "main 브랜치에 있음. feat/cmux-race-fix-and-notify-preview 생성 + package.json version 0.15.1 → 0.16.0.",
+          "acceptance": "- git branch가 feat/cmux-race-fix-and-notify-preview\n- package.json.version === \"0.16.0\"\n- dependencies @moreih29/nexus-core 버전 유지(0.20.0)\n- bun.lock 변경 없음(의존성 변동 없으므로)",
+          "approach": "git checkout -b feat/cmux-race-fix-and-notify-preview → Edit로 package.json version 수정 → bun install(없음). lockfile 변경 없을 것.",
+          "plan_issue": 5,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:15.128Z"
+        },
+        {
+          "id": 2,
+          "title": "src/plugin.ts 재작성 — cmuxSpawn serialize + notify body 미리보기 구현",
+          "status": "completed",
+          "context": "이슈 1 결정. cmuxQueue module-level, rootSessionLastText Map, stripPreCheck / truncateForNotification / shouldPreviewResponse / buildResponseReadyBody helper, 이벤트 핸들러 확장(message.part.updated 신규, session.status busy에 cache delete 추가, session.idle에 body build + cache delete, session.deleted에 cache delete).",
+          "acceptance": "- cmuxSpawn이 cmuxQueue promise chain에 append하는 구조\n- detached:true / unref() 제거됨\n- message.part.updated event 분기가 존재하고 TextPart + rootSession guard\n- session.status busy 분기 내 rootSessionLastText.delete 호출\n- session.idle 분기가 buildResponseReadyBody 호출\n- stripPreCheck 함수가 [Pre-check]로 시작하면 첫 \\n\\n 이후 반환, 없으면 원본\n- truncateForNotification이 100자 초과 시 잘라 + … 붙이고, 공백 collapse\n- shouldPreviewResponse가 OPENCODE_NEXUS_NOTIFY_PREVIEW=0|false일 때 false\n- bun run check PASS (tsc --noEmit 0 errors)",
+          "approach": "src/plugin.ts를 Edit 몇 건으로 분할 수정. cmuxSpawn 교체 + helper 4개 추가 + event 핸들러 분기 수정 + 상수 신규. 기존 non-cmux 코드(TAG_INSTRUCTIONS, agents merge 등)는 손대지 않음.",
+          "risk": "TextPart의 타입 narrowing에서 TS 오류 가능 — part union의 discriminated union으로 안전하게 접근 필요",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:28.026Z"
+        },
+        {
+          "id": 3,
+          "title": "e2e scenario cmux-k~p 6개 신규 추가",
+          "status": "completed",
+          "context": "이슈 2 결정. cmux-g 다음에 cmux-h/i/j 이어 cmux-k(race), cmux-l(preview), cmux-m(Pre-check skip), cmux-n(opt-out), cmux-o(fallback), cmux-p(busy cache reset) 삽입. shim 기반 argv 로그로 assertion.",
+          "acceptance": "- cmux-k: 10회 set/clear 반복 후 readCmuxCalls 결과의 마지막이 clear-status\n- cmux-l: message.part.updated(text) + session.idle → notify body에 해당 text 단편 포함, \"Response ready\" 아님\n- cmux-m: [Pre-check] 블록 → notify body에 \"[Pre-check]\" 미포함, 본문 포함\n- cmux-n: OPENCODE_NEXUS_NOTIFY_PREVIEW=0 → notify body === \"Response ready\"\n- cmux-o: message.part.updated 없이 session.idle → body === \"Response ready\"\n- cmux-p: busy 이벤트 후 prior text가 fallback에 안 남음 확인\n- test:e2e 실행 시 모든 cmux-a~p 통과",
+          "approach": "scripts/e2e-nexus-integration.mjs의 cmux-j 바로 다음에 6개 scenario 블록 추가. env 변수 set/unset은 기존 try/finally 복원 패턴 유지. cmux-n의 OPENCODE_NEXUS_NOTIFY_PREVIEW 값 set/restore도 try/finally에 포함.",
+          "risk": "cmux-k에서 serialize awaited flush 완료 타이밍과 waitForCmuxCalls timeout 조정 필요 — detached 제거로 실행이 길어질 수 있음",
+          "plan_issue": 2,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:38.407Z"
+        },
+        {
+          "id": 4,
+          "title": "전체 검증 파이프라인 실행 — check + test:e2e + npm pack --dry-run",
+          "status": "completed",
+          "context": "releasing.md §3 필수 게이트. 이번 변경 범위 크므로 assertion 수 명시 확인.",
+          "acceptance": "- bun run check exit 0\n- bun run test:e2e \"All integration checks passed.\" 출력\n- npm pack --dry-run 결과 version 0.16.0, 27 files, README/LICENSE/package.json/bin/lib/src/skills 포함",
+          "approach": "(1) bun run check, (2) bun run test:e2e → 모든 cmux-a~p 통과, (3) npm pack --dry-run → version 0.16.0 + 27 files 확인.",
+          "plan_issue": 1,
+          "deps": [
+            2,
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:43.065Z"
+        },
+        {
+          "id": 5,
+          "title": "CHANGELOG.md 0.16.0 entry 신규 작성",
+          "status": "completed",
+          "context": "이슈 3 결정. [0.16.0] — 2026-04-23 entry를 [0.15.1] 위에 삽입. 추가됨/수정됨/사용자 영향/검증 4축.",
+          "acceptance": "- ## [0.16.0] — 2026-04-23 헤더\n- ### 추가됨: notify body 미리보기 + 100자 + Pre-check skip + OPENCODE_NEXUS_NOTIFY_PREVIEW opt-out\n- ### 수정됨: cmuxSpawn race serialize\n- ### 사용자 영향: notify body 변화, pill stuck 해결, breaking 없음\n- ### 검증: check/test:e2e/npm pack + cmux-a~p 언급 + race 재현 실험\n- 이전 [0.15.1] entry는 보존",
+          "approach": "Edit로 CHANGELOG.md 최상단 [0.15.1] 직전에 [0.16.0] entry 블록 삽입.",
+          "plan_issue": 3,
+          "deps": [
+            4
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:49.277Z"
+        },
+        {
+          "id": 6,
+          "title": "README.md / README.en.md illustrative 버전 0.15.1 → 0.16.0 동기화",
+          "status": "completed",
+          "context": "releasing.md §1-1 권장. 6곳(각 README 3곳씩).",
+          "acceptance": "- README.md와 README.en.md에서 \"0.15.1\" 흔적 0개(install @latest는 유지)\n- 두 파일의 illustrative pin 예시·본문 언급·JSON 블록에 0.16.0 반영",
+          "approach": "grep으로 확인 후 각 라인 Edit. @0.15.1 → @0.16.0, \"0.15.1\" → \"0.16.0\".",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:53.464Z"
+        },
+        {
+          "id": 7,
+          "title": ".nexus/context/releasing.md §5-5-1 보강",
+          "status": "completed",
+          "context": "이슈 3 결정. session.idle(root) bullet 확장(notify body preview 형식) + cmux serialize 검증 bullet 추가.",
+          "acceptance": "- session.idle(root) bullet에 \"notify body가 opt-out 모드가 아니면 응답 첫 100자, opt-out이면 'Response ready'\" 명시\n- 신규 bullet: \"cmux 호출은 promise queue로 serialize되어 set→clear 연쇄가 도달 순서 역전으로 stuck되지 않음\"\n- 기존 bullet 파괴 없음",
+          "approach": "Edit로 §5-5-1의 session.idle(root) bullet 문구 확장 + serialize 검증 bullet 신규 추가.",
+          "plan_issue": 3,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:44:58.618Z"
+        },
+        {
+          "id": 8,
+          "title": ".nexus/memory/empirical-cmux-pill-clear-paths.md race/serialize 섹션 확장",
+          "status": "completed",
+          "context": "이슈 4 결정. 기존 파일에 race 경로/근본 원인/교훈 서브섹션 추가 + v0.16.0 수정 사례 링크.",
+          "acceptance": "- 증상 섹션에 workspace:10 session.idle 실제 fire됨에도 stuck, Node-based 재현 실험 기록\n- 근본 원인 섹션에 spawn race 메커니즘\n- 교훈 섹션에 serialize external CLI spawn chains 원칙 + 구현 패턴 코드 snippet\n- 수정 사례에 v0.16.0 항목\n- 기존 내용 보존",
+          "approach": "Edit로 기존 섹션에 race 서브섹션 3곳(증상/근본 원인/교훈) 추가 + 수정 사례 하단에 v0.16.0 bullet 추가.",
+          "plan_issue": 4,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:45:04.038Z"
+        },
+        {
+          "id": 9,
+          "title": "사이클 마감 + fix/feat commit 생성",
+          "status": "in_progress",
+          "context": "nx_task_close + 단일 commit. 명시 경로 staged. 메시지 \"v0.16.0: serialize cmux spawn + response preview in idle notify\".",
+          "acceptance": "- nx_task_close 성공\n- feat/cmux-race-fix-and-notify-preview 브랜치에 단일 신규 commit\n- git status clean\n- push/PR/tag/release는 후속 배포 단계에서",
+          "approach": "(1) nx_task_close. (2) git add: src/plugin.ts, scripts/e2e-nexus-integration.mjs, package.json, CHANGELOG.md, README.md, README.en.md, .nexus/context/releasing.md, .nexus/memory/empirical-cmux-pill-clear-paths.md, .nexus/history.json. bun.lock은 변경 없으면 포함 안 함. (3) git commit. (4) git status clean 확인.",
+          "plan_issue": 5,
+          "deps": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:45:09.086Z"
+        },
+        {
+          "id": 10,
+          "title": "plugin.ts — session.idle/session.status idle을 Needs Input set으로 변경",
+          "status": "completed",
+          "context": "사용자 결정. 응답 완료 시 pill clear 대신 Needs Input set. session.error/deleted/permission.replied는 그대로 clear 유지.",
+          "acceptance": "- session.idle 훅에서 cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR) 호출\n- session.status type=idle 분기에서도 동일 호출\n- session.error/deleted/permission.replied는 cmuxClearStatus 유지\n- bun run check PASS",
+          "approach": "src/plugin.ts session.idle 분기의 cmuxClearStatus → cmuxSetStatus(NEEDS_INPUT). session.status idle variant도 동일. 주석 업데이트.",
+          "plan_issue": 1,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:56:07.297Z"
+        },
+        {
+          "id": 11,
+          "title": "e2e cmux-g/i/k assertion 업데이트 + 추가 회귀 scenario",
+          "status": "completed",
+          "context": "cmux-g(session.idle clear-status assert → set Needs Input으로), cmux-i(session.status idle clear-status → set Needs Input으로), cmux-k(race 마지막 호출이 clear-status → set-status Needs Input으로) 변경.",
+          "acceptance": "- cmux-g assertion: session.idle 후 set-status Needs Input (bell/파란색) 호출 확인\n- cmux-i assertion: session.status idle 후 set-status Needs Input 호출 확인\n- cmux-k assertion: 10회 busy/idle 반복 후 마지막 로그 엔트리가 set-status Needs Input\n- 기존 cmux-h는 session.error 이후 여전히 clear-status 호출 assert(유지)\n- 전체 test:e2e PASS",
+          "approach": "Edit로 해당 3개 scenario의 assertion 수정. cmux-h(session.error clear-status)는 그대로 유지. bun run test:e2e로 PASS 확인.",
+          "plan_issue": 2,
+          "deps": [
+            10
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:56:12.532Z"
+        },
+        {
+          "id": 12,
+          "title": "CHANGELOG / releasing.md / memory에 Needs Input 전환 반영",
+          "status": "completed",
+          "context": "v0.16.0 entry에 응답 완료 pill Needs Input 전환 추가, releasing.md §5-5-1 bullet 수정, memory 파일에 설계 결정 bullet 추가.",
+          "acceptance": "- CHANGELOG ### 추가됨에 응답 완료 시 Needs Input pill 전환 언급\n- CHANGELOG 사용자 영향에 pill이 사이드바에 남아 \"당신의 차례\" 시각화된다는 문구\n- releasing.md §5-5-1 session.idle bullet이 \"clear-status → set-status Needs Input\"으로 정확히 반영\n- releasing.md §5-5-1 session.status idle bullet도 동일 수정\n- memory 파일에 v0.16.0 bullet 갱신(Needs Input 전환 포함)",
+          "approach": "(1) CHANGELOG [0.16.0] ### 추가됨에 pill 전환 bullet, 사용자 영향 업데이트. (2) releasing.md §5-5-1 session.idle bullet에 \"set-status Needs Input 호출\" 명시. (3) memory 수정 사례 v0.16.0에 추가 언급.",
+          "plan_issue": 3,
+          "deps": [
+            11
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:56:19.104Z"
+        },
+        {
+          "id": 13,
+          "title": "전체 검증 파이프라인 재실행",
+          "status": "completed",
+          "context": "이번 추가 변경 반영 후 최종 게이트 재확인.",
+          "acceptance": "- check exit 0\n- test:e2e \"All integration checks passed.\"\n- npm pack --dry-run version 0.16.0 유지",
+          "approach": "bun run check + bun run test:e2e + npm pack --dry-run.",
+          "plan_issue": 1,
+          "deps": [
+            11,
+            12
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T08:56:21.365Z"
+        }
+      ]
     }
   ]
 }
