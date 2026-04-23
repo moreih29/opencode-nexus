@@ -199,7 +199,7 @@ After leaf removal, if the `plugin` array becomes empty or the `mcp` object beco
 If you run OpenCode inside the [cmux](https://github.com/coder/mux) desktop app, the Nexus plugin automatically posts native OS notifications at two lifecycle points:
 
 - **Response ready**: Lead finishes a turn and the session returns to idle waiting for your input.
-- **Waiting for input**: Lead or any subagent invokes the `question` tool.
+- **Waiting for your input**: Lead or any subagent invokes the `question` tool.
 
 The integration activates only when cmux's `CMUX_WORKSPACE_ID` env var is present (cmux injects it automatically in its terminals). Outside cmux the notification code is a no-op, so other environments are unaffected.
 
@@ -210,6 +210,27 @@ export OPENCODE_NEXUS_CMUX=0
 ```
 
 When cmux is not installed, or when the env var is absent, all notify calls fall back silently and the rest of the plugin continues to work.
+
+### Sidebar status
+
+The cmux sidebar displays a status pill alongside the notifications.
+
+- `Running` — `bolt` icon, blue (`#007AFF`). When the agent is actively working.
+- `Needs Input` — `bell` icon, blue. Whenever the agent is waiting for user input (both the `question` tool and permission requests).
+
+Status is tracked for the root session only (subagent states are excluded, same as the existing `session.idle` policy).
+
+### Permission notification
+
+When the agent requests permission, a `"Permission requested"` toast is shown and the sidebar pill switches to `Needs Input`.
+
+### Error log · notification
+
+When `session.error` occurs, the sidebar logs it at the `error` level (`cmux log --level error --source nexus`) and shows a `"Session error"` toast.
+
+Retries (`session.status: retry`) are logged to the sidebar at the `warning` level without a toast (minimizing noise).
+
+The new status indicators and notifications are also disabled by the same `OPENCODE_NEXUS_CMUX` flag.
 
 ## Upgrade
 

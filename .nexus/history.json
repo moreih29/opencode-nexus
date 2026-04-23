@@ -206,6 +206,223 @@
           "created_at": "2026-04-23T02:19:05.352Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T07:07:48.347Z",
+      "branch": "feat/uninstall-and-version",
+      "plan": {
+        "id": 2,
+        "topic": "cmux 훅 확장 — permission 알림, 사이드바 상태 표시(Running/Needs Input), 에러 알림",
+        "issues": [
+          {
+            "id": 1,
+            "title": "상태 추적 모델 설계 — 단일 key(`nexus-state`) 또는 복수 key로 running/needs-input/idle 관리",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "단일 pill key `nexus-state` + 상태머신(busy→Running, question|permission.ask→Needs Input, idle|deleted|error→clear). 분리 key는 사이드바 노이즈 증가 + clear 조건 복잡화로 기각. permission/question는 사용자 액션 대기가 동일하므로 Needs Input이 Running을 덮어쓰는 쪽이 UX 일관.",
+                "recorded_at": "2026-04-23T06:30:08.459Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "단일 pill key `nexus-state` 사용. 상태 머신: busy→Running, question/permission.ask→Needs Input, idle/deleted/error→clear. Needs Input이 Running을 덮어쓰는 방향(사용자 액션이 blocker). 기각: `nexus-running` + `nexus-needs-input` 분리 key(사이드바 노이즈, clear 복잡)."
+          },
+          {
+            "id": 2,
+            "title": "Running 감지 시점 — session.status busy 이벤트 vs chat.message hook vs session.updated 중 택일",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "event hook에서 session.status + status.type==='busy' + rootSessions.has(sessionID). chat.message는 permission 응답 후 재개/내부 재시도/tool-only 진행을 놓칠 수 있어 기각. session.updated는 계약 약해 추론 기반이라 기각.",
+                "recorded_at": "2026-04-23T06:30:14.274Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "`event` hook에서 `session.status` type 필터 + `status.type === 'busy'` + `rootSessions.has(sessionID)`. 세션 레벨 busy 전환을 직접 제공하는 가장 의미론적 정확한 신호. 기존 rootSessions Set 재활용으로 subagent 필터링 자연스럽게 통합. 기각: chat.message(false positive/negative), session.updated(계약 약함)."
+          },
+          {
+            "id": 3,
+            "title": "Permission 알림 구현 — `permission.ask` hook으로 notify 발사와 status 전환 방식",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "permission.ask hook에서 cmuxNotify + status 전환. 토스트 body='Permission requested'(짧고 모호하지 않음). pill은 question과 동일 `Needs Input`으로 통합 — 사용자 액션이 blocker라는 의미 동일.",
+                "recorded_at": "2026-04-23T06:30:19.660Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "`\"permission.ask\"` hook에서 cmuxNotify('opencode-nexus', 'Permission requested') + `nexus-state` pill을 Needs Input으로 전환. question과 permission은 둘 다 사용자 blocker이므로 동일 pill 값 사용. 기각: 별도 pill 분리(UX 정보량 이득 없고 구분점이 notify title에 이미 있음)."
+          },
+          {
+            "id": 4,
+            "title": "Status 시각 사양 — icon 이름(bolt/bell), color hex, pill key 명명",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "Running=icon:bolt/color:#007AFF, Needs Input=icon:bell/color:#007AFF. pill value는 접두사 없이 'Running'/'Needs Input' 그대로. iOS system blue가 cmux(macOS) 맥락에 가장 자연스럽고, bolt/bell은 base symbol이라 호환 기대치 높음.",
+                "recorded_at": "2026-04-23T06:30:25.032Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "Running pill: `cmux set-status nexus-state \"Running\" --icon bolt --color \"#007AFF\"`. Needs Input pill: `cmux set-status nexus-state \"Needs Input\" --icon bell --color \"#007AFF\"`. pill value는 접두사 없이 그대로(출처 구분은 key `nexus-state`가 담당). 기각: #3B82F6/#2563EB(웹 tailwind 톤이라 macOS 네이티브 맥락엔 덜 자연스러움), bolt.fill/zap(심볼 지원 불확실), \"Nexus Running\" 접두(과함)."
+          },
+          {
+            "id": 5,
+            "title": "Needs Input 종료 경로 — question 응답 및 permission.replied 시 status 복귀 방식",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "question은 명시적 종료 감지 없이 다음 session.status:busy 시 Running으로 overwrite, idle/deleted/error 시 clear. permission은 permission.replied 수신 시 명시적 clear(deny/cancel 경로에서 stale pill 방지). tool.execute.after(question)는 '질문 표시 완료'일 뿐 '답변 도착'이 아니라 기각.",
+                "recorded_at": "2026-04-23T06:30:30.869Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "question의 경우: 명시적 종료 감지 안 함. 다음 root session.status:busy가 오면 Running으로 overwrite되고, idle/deleted/error가 오면 clear된다. permission의 경우: `event` hook에서 `permission.replied` 수신 시 명시적으로 `cmux clear-status nexus-state` 호출(deny/cancel 경로에서 busy가 안 올 때 stale pill 방지). 이후 busy가 오면 Running으로 재설정. 기각: tool.execute.after(question)로 답변 감지('답변 도착'이 아닌 '질문 표시 완료'라 부정확), message.updated 감지(too noisy)."
+          },
+          {
+            "id": 6,
+            "title": "Error 알림 추가 여부 — session.error 이벤트 활용",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "session.error→cmux log --level error --source nexus '<1줄>' + notify 'Session error'. 메시지 추출은 error.message 우선, 없으면 name/type/code 순 fallback. 전체 error 덤프는 민감 정보 노출/포맷 불안정으로 기각. 추가 제안: session.status:retry는 pill 변경 없이 cmux log --level warning으로만 기록.",
+                "recorded_at": "2026-04-23T06:30:36.721Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "session.error 이벤트 추가: cmux log --level error --source nexus '<1줄 요약>' + cmuxNotify('opencode-nexus', 'Session error'). 메시지 추출은 error.message 우선, 없으면 error.name || error.type || error.code 순 fallback, 모두 없으면 'unknown'. 추가: session.status:retry는 pill 변경 없이 cmux log --level warning --source nexus 'Retrying: <attempt>/...'만 기록(토스트·status 미발사). 기각: 전체 error 객체 덤프(민감 정보·포맷 불안정)."
+          },
+          {
+            "id": 7,
+            "title": "테스트 전략 — plugin hook 단위 테스트 확장 (CHANGELOG v0.14.0의 cmux 4케이스 명세를 참고)",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "scripts/e2e-nexus-integration.mjs의 plugin hook 직접 호출 스타일 확장. 추가 최소 케이스 7개: permission.ask→notify+Needs Input / root busy→Running / non-root busy→no-fire / permission.replied→clear / session.error→log+notify / cmux disabled→모두 no-fire / root idle 또는 deleted→clear(+기존 Response ready notify 회귀 유지). 새 파일 분리는 setup 중복만 늘려 기각.",
+                "recorded_at": "2026-04-23T06:30:42.840Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "scripts/e2e-nexus-integration.mjs 안의 기존 plugin hook 직접 호출 테스트 블록을 확장. 추가 케이스 최소 7개: (a) permission.ask hook→cmux notify + set-status 'Needs Input' 둘 다 발사, (b) event session.status busy root→set-status 'Running', (c) event session.status busy non-root→no-fire, (d) event permission.replied root→clear-status, (e) event session.error root→cmux log --level error + notify 'Session error', (f) cmux disabled(OPENCODE_NEXUS_CMUX=0 또는 CMUX_WORKSPACE_ID 미설정)→모든 cmux 호출 no-fire, (g) event session.idle root→clear-status(+기존 'Response ready' notify 회귀 유지). 테스트 인프라: 기존 spawn mock 또는 cmux CLI spawn 호출을 인터셉트하는 방식(예: PATH 앞에 shim 넣거나 spawn을 wrapping). 새 파일 분리는 기각(기존 e2e와 setup 중복, 구조 복잡화)."
+          },
+          {
+            "id": 8,
+            "title": "문서 업데이트 범위 — README cmux 섹션 보강",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "README.md/README.en.md cmux 섹션 확장(추가 중심: sidebar pill Running/Needs Input, permission 토스트, error log, root-only 추적 제약). .nexus/context/releasing.md는 §5-4 uninstall과 분리해 §5-5 cmux integration 섹션 신설. uninstall에 섞기는 축이 달라 문서 구조 혼란으로 기각. cmux silent fallback 구조라 수동 회귀 체크 없이는 regression 배포까지 숨어들 위험.",
+                "recorded_at": "2026-04-23T06:30:51.776Z",
+                "agent_id": "ses_246fba71effeuZqogNKAzPLF56"
+              }
+            ],
+            "decision": "문서 업데이트 3개 파일: (1) README.md ko 기존 'cmux 통합' 섹션을 추가 중심으로 확장 — 사이드바 pill(Running/Needs Input, icon·color 명시), permission 토스트, error log/notify, root-only 추적 제약, 비활성화 방법(OPENCODE_NEXUS_CMUX=0 또는 비-cmux 환경 자동 no-op). (2) README.en.md 1:1 대응 영문판. (3) .nexus/context/releasing.md에 §5-5 cmux integration 회귀 체크 섹션 신설(기존 §5-4 uninstall 뒤). §5-5는 cmux 환경 있을 때와 없을 때 두 축으로 각 상태 이벤트에 알림/pill이 뜨는지 체크. uninstall 섹션에 섞기는 기각(기능 축이 달라 혼란). CHANGELOG는 직전 cycle 결정에 따라 이번 cycle에서도 건드리지 않음."
+          }
+        ],
+        "research_summary": "현재 src/plugin.ts는 cmuxNotify로 desktop notification만 발사: session.idle(root만)→'Response ready', tool.execute.before(question)→'Waiting for your input'. 기능은 CMUX_WORKSPACE_ID 존재 + OPENCODE_NEXUS_CMUX!=0/false 조건. cmux CLI는 이보다 훨씬 풍부한 API 제공: set-status <key> <value> --icon <name> --color <#hex>(사이드바 pill), clear-status <key>, set-progress <0-1> --label, log --level <info|progress|success|warning|error> --source. OpenCode plugin API(Hooks interface)는 permission.ask hook(Permission input + status out) 및 event hook(모든 Event 수신)을 지원. Event discriminated union 중 사용 가능한 주요 type: session.status({status:{type:'idle'|'retry'|'busy'}}) — busy/idle 전환 정확 감지, session.idle, session.error(ProviderAuthError|UnknownError|MessageOutputLengthError|MessageAbortedError|ApiError), permission.updated, permission.replied, session.compacted. 현재 구현은 session.status를 사용하지 않고 session.idle만 사용. 이번 확장에서 session.status를 도입하면 busy 시작 시점을 정확히 알 수 있음. 다만 subagent session도 session.status를 발사하므로 root 세션만 추적하는 기존 rootSessions Set 로직을 재활용해야 함. 'chat.message' hook은 user message 수신 시점이라 Running 시작점으로도 쓸 수 있으나 session.status busy가 보다 의미론적으로 정확. cmux set-status --help의 예시 icon은 sparkle/hammer로 이름 자유롭지만 SF Symbols 추정(번개는 bolt, 종은 bell이 자연스러움). 색상은 사용자가 '파란 색상' 지정 — 합리적 선택은 #3B82F6(tailwind blue-500). 이전 cycle의 history.json에 cmux/permission 관련 선행 결정 없음(검색 total:0). CHANGELOG v0.14.0은 cmux 단위 테스트 4 케이스를 기재('tool.execute.before question→fire', 'session.idle root→fire', 'session.idle non-root→no-fire', 'tool.execute.before bash→no-fire') — 이번 확장도 유사 형식의 단위 테스트 확장 권장.",
+        "created_at": "2026-04-23T06:25:07.680Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "src/plugin.ts cmux 훅 확장 (status pill + permission + error)",
+          "status": "completed",
+          "context": "현재 src/plugin.ts는 cmuxNotify(토스트)만 사용하고 session.idle(root)과 tool.execute.before(question)에서 2회 발사. 이번 확장은 cmux 사이드바 pill(set-status/clear-status)과 log(--level error) API를 추가로 활용해 Running/Needs Input 상태 표시, permission 알림, error 알림을 구현. 기존 rootSessions Set과 cmuxNotify 함수는 그대로 재활용하고 비-cmux 환경에서는 silent fallback 유지.",
+          "acceptance": "- `src/plugin.ts`에 cmuxSetStatus, cmuxClearStatus, cmuxLog 세 헬퍼 함수 추가(fire-and-forget, isCmuxNotifyEnabled 가드).\n- PILL_KEY/PILL_COLOR/icon/value 상수 정의.\n- event hook에 session.status(busy→Running, retry→warning log), session.error(error log + notify), permission.replied(clear) 분기 추가. session.idle·session.deleted의 기존 분기에 clear 추가.\n- tool.execute.before에서 question 분기에 setStatus 추가(기존 notify 유지).\n- permission.ask hook 신규. notify + setStatus 호출, output은 건드리지 않음.\n- 기존 cmuxNotify 호출 2곳 regression 없음(session.idle 'Response ready', question 'Waiting for your input').\n- 비-cmux 환경(CMUX_WORKSPACE_ID 없음 또는 OPENCODE_NEXUS_CMUX=0)에서는 모든 새 cmux 호출이 silent no-op.\n- `bun run check`(sync:dry + tsc --noEmit) 통과.\n- `bun run test:e2e` 통과(기존 테스트만 검증; 신규 테스트는 다음 task).",
+          "approach": "1. **새 cmux CLI 헬퍼 추가** (cmuxNotify와 동일 패턴: fire-and-forget spawn detached unref + isCmuxNotifyEnabled 가드):\n   - `cmuxSetStatus(key: string, value: string, icon: string, color: string): void` — `cmux set-status <key> <value> --icon <icon> --color <color>`\n   - `cmuxClearStatus(key: string): void` — `cmux clear-status <key>`\n   - `cmuxLog(level: 'info'|'error'|'warning'|'progress'|'success', source: string, message: string): void` — `cmux log --level <level> --source <source> -- <message>`\n   - 가드 함수는 기존 isCmuxNotifyEnabled를 그대로 재사용(이름이 notify-specific이지만 env 조건은 동일하므로 cmux-level 가드로 해석). 내부 호출 시 동일 함수 호출.\n\n2. **상태 머신 정의** (const):\n   - `PILL_KEY = \"nexus-state\"`\n   - `PILL_COLOR = \"#007AFF\"` (iOS system blue)\n   - `RUNNING_ICON = \"bolt\"`, `RUNNING_VALUE = \"Running\"`\n   - `NEEDS_INPUT_ICON = \"bell\"`, `NEEDS_INPUT_VALUE = \"Needs Input\"`\n\n3. **event hook 확장**:\n   - 기존 session.created(root 등록), session.deleted(root 제거), session.idle(root notify 'Response ready') 유지.\n   - `session.idle` + root: notify 기존 호출 유지 **+ cmuxClearStatus(PILL_KEY)** 추가.\n   - `session.deleted` + root: **cmuxClearStatus(PILL_KEY)** 추가.\n   - `session.status` type 이벤트 추가:\n     - root session + `status.type === 'busy'` → `cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR)`.\n     - root session + `status.type === 'retry'` → `cmuxLog('warning', 'nexus', \\`Retrying (attempt ${attempt}): ${message}\\`)` (notify/status 미발사, 정보성 로그만).\n     - root session + `status.type === 'idle'`은 session.idle과 중복 가능성 있어 skip(session.idle에서 이미 clear 처리).\n   - `session.error` 이벤트 추가: root session(또는 root ambiguous면 무조건) → 메시지 1줄 요약 추출 후 `cmuxLog('error', 'nexus', summary)` + `cmuxNotify('opencode-nexus', 'Session error')`. 메시지 추출: `error.message || error.name || error.type || error.code || 'unknown'`의 순. discriminated union을 좁힐 때 `typeof error === 'object' && error !== null`로 방어.\n   - `permission.replied` 이벤트 추가: `cmuxClearStatus(PILL_KEY)` 호출(deny/cancel 경로에서 busy가 안 올 때 stale pill 방지).\n\n4. **tool.execute.before 확장**: 기존 question 분기는 유지하되 notify와 함께 **cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR)** 호출 추가. 다른 tool은 no-op.\n\n5. **permission.ask hook 신규**: \n   ```\n   \"permission.ask\": async (_input, _output) => {\n     cmuxNotify(\"opencode-nexus\", \"Permission requested\");\n     cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);\n   }\n   ```\n   output.status는 건드리지 않음(사용자 동의/거부 로직을 가로채지 않음).\n\n6. **Event 타입 discrimination 주의**: TypeScript가 event.type 리터럴로 좁혀주므로 if/else 체인 그대로 사용 가능. 기존 session.idle 분기 스타일 유지. permission.replied와 session.error는 새 분기로 추가.\n\n7. **root session 판정**: permission.ask hook 자체는 sessionID를 input 어디 갖고 있는지 확인 필요. Permission 타입 정의를 확인 후 root session만 필터하거나, permission은 root session의 것만 발사된다고 가정하고 무조건 fire. 실제로 subagent가 permission을 개별 요청하는 구조인지 코드 탐색 필요. 기본 보수적 접근: permission.ask는 root 판정 없이 그대로 fire(OpenCode 자체가 permission을 root로 aggregate할 것으로 가정). 만약 subagent에서도 fire되면 notify 노이즈 증가 가능성은 있지만 status는 idempotent로 덮어씀.\n\n8. TypeScript 컴파일: `import type { Event }` 이미 있음. event.type을 `switch(event.type)` 또는 if 체인으로 narrowing.",
+          "risk": "(1) permission.ask의 input에서 sessionID를 root로 필터할지 결정은 Permission 타입 확인 후 판단. 기본은 root 필터 없이 fire. (2) event discriminated union narrowing에서 event.properties 접근 시 TS 에러 나지 않도록 각 type별 분기 내부에서만 properties 접근. (3) cmux CLI가 설치 안 됐거나 PATH에 없을 때 spawn error 이벤트로 처리되도록 기존 cmuxNotify와 동일한 try/catch 및 child.on('error') 패턴 유지.",
+          "plan_issue": 1,
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_246f2d0feffefaItMNwXXqabtc"
+          },
+          "created_at": "2026-04-23T06:32:33.403Z"
+        },
+        {
+          "id": 2,
+          "title": "e2e: cmux 훅 7 케이스 추가",
+          "status": "completed",
+          "context": "scripts/e2e-nexus-integration.mjs 앞부분에 plugin hook 직접 호출 방식으로 config hook을 검증하는 블록이 있음. 이를 확장해 event/permission.ask/tool.execute.before의 신규 동작을 검증한다. 현재 테스트는 cmux 호출 자체를 관찰하지 않음(cmuxNotify가 fire-and-forget이라 검증이 어려움). 이번 task에서는 cmux 바이너리를 PATH 앞의 shim으로 대체해서 호출 인수를 파일에 append하는 방식으로 관찰 가능하게 한다.",
+          "acceptance": "- scripts/e2e-nexus-integration.mjs에 cmux shim 인프라(`bin/cmux` mock script, CMUX_TEST_LOG env, PATH prepend) 추가.\n- 7개 cmux hook 케이스 (a)~(g) 모두 구현되고 각 케이스가 독립 초기화/teardown.\n- 각 케이스 실패 시 assert 메시지에 식별자 prefix (`cmux-a`, `cmux-b`, ...).\n- `bun run test:e2e` 전체 PASS.\n- 기존 install/uninstall/version 시나리오(이전 cycle에서 추가한 A~E) regression 없음.\n- 임시 디렉터리는 finally로 정리.\n- cmux disabled 케이스는 별도 plugin 인스턴스를 CMUX_WORKSPACE_ID 없이 생성해 검증.",
+          "approach": "1. **cmux shim mock 인프라 추가**: mkdtempSync로 격리 디렉터리 생성 후 그 안에 `bin/cmux` shell script 배치 — 모든 인수를 JSON 한 줄로 파일에 append(append-only log). shim 내부: `#!/usr/bin/env node\\nimport { appendFileSync } from 'node:fs'; const log = process.env.CMUX_TEST_LOG; if (log) appendFileSync(log, JSON.stringify(process.argv.slice(2)) + '\\\\n'); process.exit(0);`. shim에 chmod 755. env로 PATH 앞에 shim 디렉터리 prepend + CMUX_TEST_LOG 세팅 + CMUX_WORKSPACE_ID 세팅(필수 — isCmuxNotifyEnabled가 이걸로 가드함).\n\n2. **테스트 헬퍼 함수**: `resetCmuxLog()` → log file truncate. `readCmuxCalls()` → log file을 line별 JSON parse해 [argv[], argv[], ...] 반환.\n\n3. **plugin hook을 직접 호출하는 헬퍼**: 기존 패턴(`const hooks = await pluginModule.default({ directory })`)을 재사용. 각 테스트 케이스마다 hooks.event/hooks['tool.execute.before']/hooks['permission.ask']를 원하는 payload로 호출 후 resetCmuxLog → call → await new Promise(r=>setTimeout(r,50)) → readCmuxCalls → assert.\n\n4. **세션 관리**: plugin이 rootSessions Set을 내부에 갖고 있으므로, 각 test block은 먼저 session.created 이벤트(root: parentID 없음)를 dispatch해서 root session 등록한 뒤 나머지 이벤트 테스트. 다른 케이스에서 다른 sessionID 사용해 isolation.\n\n5. **7개 케이스 구현**:\n   (a) permission.ask: hooks['permission.ask']({}, {}) → log에 `['notify', '--title', 'opencode-nexus', '--body', 'Permission requested']`와 `['set-status', 'nexus-state', 'Needs Input', '--icon', 'bell', '--color', '#007AFF']` 두 호출 모두 포함.\n   (b) session.status busy root: session.created(root) 선행 → event({type:'session.status', properties:{sessionID: root, status:{type:'busy'}}}) → log에 `['set-status', 'nexus-state', 'Running', '--icon', 'bolt', '--color', '#007AFF']` 포함.\n   (c) session.status busy non-root: event({type:'session.status', properties:{sessionID: 'other', status:{type:'busy'}}}) → log 비어 있음(발사 없음).\n   (d) permission.replied: session.created(root) → event({type:'permission.replied', properties:{sessionID: root, permissionID:'p1', response:'allow'}}) → log에 `['clear-status', 'nexus-state']` 포함.\n   (e) session.error: session.created(root) → event({type:'session.error', properties:{sessionID: root, error:{message:'boom'}}}) → log에 `['log', '--level', 'error', '--source', 'nexus', '--', 'boom']`과 `['notify', '--title', 'opencode-nexus', '--body', 'Session error']` 포함.\n   (f) cmux disabled: env에서 CMUX_WORKSPACE_ID 제거(또는 OPENCODE_NEXUS_CMUX='0') → plugin 인스턴스 재생성 후 permission.ask hook 호출 → log가 비어 있음. 이 테스트는 별도 env로 새 plugin 인스턴스 필요.\n   (g) session.idle root: session.created(root) + event({type:'session.idle', properties:{sessionID: root}}) → log에 `['notify', '--title', 'opencode-nexus', '--body', 'Response ready']`와 `['clear-status', 'nexus-state']` 포함(기존 notify 회귀 유지).\n\n6. 추가: session.deleted root 또는 session.status retry에 대한 테스트는 core 7개에 포함하지 않고 선택. decision에 7개 최소만 명시했으므로 그대로.\n\n7. env 조작 주의: spawn 환경은 프로세스별 복제. plugin은 process.env.CMUX_WORKSPACE_ID를 호출 시점마다 읽는 구조(isCmuxNotifyEnabled 함수 내부)라 test에서 process.env를 수정하면 반영됨.\n\n8. 테스트 통과 시 임시 디렉터리 정리(finally).",
+          "risk": "(1) plugin이 process.env를 closure에 캡처하는지 매 호출 시점에 다시 읽는지가 중요. 현재 isCmuxNotifyEnabled는 함수 내부에서 process.env를 읽으므로 호출 시점 기준. (2) spawn shim이 node로 작성되면 shebang과 executable 권한 필요. 더 간단한 방법: bash script. 단 bash라면 JSON escaping이 번거로우므로 node가 안전. (3) fire-and-forget spawn은 microtask 대기 필요. 50ms 정도 timeout 충분하지만 flaky 가능성 약간 있음. 필요시 cmux shim 호출 개수를 기대값만큼 기다리는 polling으로 개선.",
+          "plan_issue": 7,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_246f2d0feffefaItMNwXXqabtc"
+          },
+          "created_at": "2026-04-23T06:33:09.145Z"
+        },
+        {
+          "id": 3,
+          "title": "문서 업데이트: README ko/en cmux 섹션 + releasing.md §5-5",
+          "status": "completed",
+          "context": "Issue 8 결정에 따라 3개 문서 업데이트. 이전 cycle과 동일하게 CHANGELOG는 이번 cycle에서도 건드리지 않음(릴리즈 시점에 일괄). 기존 cmux 섹션 보존 + 확장만. releasing.md에는 §5-5 cmux integration 회귀 체크 신설.",
+          "acceptance": "- README.md 기존 \"cmux 통합\" 섹션에 사이드바 pill(Running/Needs Input with icon/color), permission 알림, error 로그/알림, root-only 추적 제약이 모두 추가됨.\n- README.en.md에 동일 영문판. ko/en 섹션 구조 1:1.\n- .nexus/context/releasing.md에 §5-5 섹션이 §5-4 뒤에 존재. cmux 환경·비환경 두 축의 체크 항목이 각각 5개 이상 포함.\n- CHANGELOG.md diff 비어 있음.\n- 기존 문서 내용/문구 유실 없음. diff는 추가 중심.\n- 실제 구현(src/plugin.ts)의 cmux 호출 문자열(key, value, icon, color, level, source, title, body)과 문서 내 인용 문자열 정확 매칭.",
+          "approach": "### 1. README.md (ko) — \"cmux 통합\" 섹션 확장\n\n기존 \"cmux 통합 (데스크톱 알림)\" 섹션은 session.idle과 question 두 시점의 토스트만 설명. 이번에 아래 내용을 **추가**(기존 문구 보존):\n\n- **사이드바 상태 pill**: cmux 사이드바에 현재 작업 상태 표시.\n  - `Running` (bolt icon, 파란색 #007AFF): 에이전트가 작업을 진행 중.\n  - `Needs Input` (bell icon, 파란색): 에이전트가 사용자 응답을 기다림(question 툴 또는 permission 요청).\n  - 상태는 root session 단위로만 추적되며, subagent 상태는 제외(기존 session.idle 정책과 동일).\n- **Permission 알림**: 에이전트가 권한을 요청할 때 \"Permission requested\" 토스트 + Needs Input pill 자동 표시.\n- **Error 로그·알림**: `session.error` 발생 시 cmux 사이드바 로그에 error 레벨로 기록 + \"Session error\" 토스트.\n- 비활성화 방법은 기존과 동일: `OPENCODE_NEXUS_CMUX=0` 또는 비-cmux 환경이면 자동 no-op.\n\n### 2. README.en.md — 1:1 영문판\n\nko와 동일한 섹션 위치·내용·bullet 개수. 톤은 기존 영문 문서 유지.\n\n### 3. .nexus/context/releasing.md — §5-5 cmux integration 회귀 체크 신설\n\n§5-4 uninstall 뒤에 독립 섹션 `### 5-5. cmux 통합 동작 점검`. 내용은 두 축으로:\n\n**cmux 환경(CMUX_WORKSPACE_ID 존재, OPENCODE_NEXUS_CMUX 미설정/1)에서 확인**:\n- session.idle(root)에서 `cmux notify --title \"opencode-nexus\" --body \"Response ready\"` + `cmux clear-status nexus-state` 호출 확인.\n- session.status busy(root)에서 `cmux set-status nexus-state \"Running\" --icon bolt --color \"#007AFF\"` 호출 확인.\n- session.status busy(non-root)에서는 어느 cmux 호출도 없음.\n- tool.execute.before(question)에서 `cmux notify` + `cmux set-status \"Needs Input\" --icon bell` 둘 다 호출 확인.\n- permission.ask hook에서 notify 'Permission requested' + set-status 'Needs Input' 둘 다 호출 확인.\n- permission.replied(root)에서 `cmux clear-status nexus-state` 호출 확인.\n- session.error에서 `cmux log --level error --source nexus <1줄 요약>` + `cmux notify \"Session error\"` 호출 확인.\n- session.status retry에서 `cmux log --level warning --source nexus` 호출, pill 변경 없음.\n\n**cmux 비활성 환경(CMUX_WORKSPACE_ID 미설정 또는 OPENCODE_NEXUS_CMUX=0)에서 확인**:\n- 위 모든 hook에서 cmux 호출 0건. plugin 자체는 오류 없이 계속 동작.\n\n### 제약\n\n- CHANGELOG.md: 건드리지 않음(릴리즈 cycle에서 일괄 기록 예정).\n- 기존 문구 삭제 없음. 추가만.\n- 실제 CLI 문자열(예: \"Running\", \"Needs Input\", \"nexus-state\", \"#007AFF\", \"bolt\", \"bell\")을 src/plugin.ts 구현과 정확 일치시킴.\n- `.nexus/context/releasing.md` §5, §5-1, §5-2, §5-3, §5-4 번호 체계 보존.\n\n### Target files\n- /Users/kih/workspaces/areas/opencode-nexus/README.md\n- /Users/kih/workspaces/areas/opencode-nexus/README.en.md\n- /Users/kih/workspaces/areas/opencode-nexus/.nexus/context/releasing.md\n\n### Reference files (읽기)\n- /Users/kih/workspaces/areas/opencode-nexus/src/plugin.ts (구현과 문자열 정확 매칭 확인용)",
+          "risk": "실제 구현이 결정된 문자열(예: `nexus-state`, `#007AFF`, `bolt`)에서 벗어나면 문서가 reality와 어긋나게 됨. writer는 반드시 src/plugin.ts를 직접 확인하고 매칭. ko→en 번역체 위험은 이전 cycle과 동일.",
+          "plan_issue": 8,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "writer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_246e92a05ffeHoqLbSmMil1hUW"
+          },
+          "created_at": "2026-04-23T06:33:41.431Z"
+        },
+        {
+          "id": 4,
+          "title": "문서 정합성 검증 (reviewer pairing to task 3)",
+          "status": "completed",
+          "context": "Task 3의 writer 산출물이 실제 구현(src/plugin.ts의 cmux 호출 문자열)과 정확히 일치하는지 독립 검증. 이전 cycle의 문서 review와 유사한 5축 구조.",
+          "acceptance": "- `.nexus/state/artifacts/review/cmux-doc-deviations.md` 아티팩트 생성.\n- 5축 각각의 PASS/FAIL 판정.\n- 결함이 있으면 위치/현상/기대값/제안 수정 4단 구조로 기록.\n- 결함을 직접 수정하지 않음.\n- 마지막 응답에 artifact 경로와 종합 판정 포함.",
+          "approach": "다음 5축 검증. 아티팩트 `review/cmux-doc-deviations.md`에 결과 기록.\n\n### 축 1 — README.md ↔ README.en.md 1:1 대응\n- cmux 섹션 bullet 개수, 순서, 개념 누락 없는지. 기존 tone과 일관성.\n\n### 축 2 — README ↔ 실제 구현 문자열 매칭\n- src/plugin.ts에서 실제 사용된 cmux CLI 인수를 grep해서 README 문서의 문자열과 1:1 비교:\n  - `nexus-state` (key)\n  - `\"Running\"`, `\"Needs Input\"` (pill value)\n  - `bolt`, `bell` (icon)\n  - `#007AFF` (color)\n  - `\"Response ready\"`, `\"Waiting for your input\"`, `\"Permission requested\"`, `\"Session error\"` (notify body)\n  - `\"opencode-nexus\"` (notify title)\n  - `--level error`, `--level warning` (log level)\n  - `--source nexus` (log source)\n\n각 문자열이 문서 안에 정확히 있는지 확인. 불일치면 deviation 기록.\n\n### 축 3 — releasing.md §5-5 커버리지\n- Issue 7의 7개 cmux hook 케이스 + issue 6의 retry log + issue 3의 permission.ask + issue 5의 permission.replied clear가 모두 체크 항목으로 포함.\n- 두 축(cmux 환경 / 비-cmux 환경)이 각각 5개 이상 bullet.\n- §5, §5-1~§5-4 번호 체계 보존.\n\n### 축 4 — CHANGELOG 무변경\n- `git diff CHANGELOG.md` 빈 결과여야 함.\n\n### 축 5 — 기존 문서 내용 유실 없음\n- `git diff README.md`, `git diff README.en.md`, `git diff .nexus/context/releasing.md`에 \"-\" 라인 없음(추가만).\n\n### 결과 아티팩트\n`review/cmux-doc-deviations.md` 저장. ALL PASS 또는 DEVIATIONS FOUND 종합 판정.",
+          "plan_issue": 8,
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "reviewer",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_246d99467ffeXa9EbgOIX1zqz2"
+          },
+          "created_at": "2026-04-23T06:33:56.161Z"
+        },
+        {
+          "id": 5,
+          "title": "최종 파이프라인 검증 (tester pairing to tasks 1-2)",
+          "status": "completed",
+          "context": "이전 cycle의 tester task와 동일 패턴. 이번에는 cmux 확장에 특화된 스모크 + 기존 회귀까지 모두 확인. 릴리즈 직전 배포되는 feat 브랜치이므로 releasing.md의 관련 섹션(§3, §5, §5-4, §5-5)을 모두 게이트로.",
+          "acceptance": "- `.nexus/state/artifacts/test/cmux-verification-run.md` 아티팩트 생성.\n- Phase 1~5 모두 PASS(또는 실패 원인 명시적 기록).\n- cmux 환경·비환경 두 축의 동작이 각각 명시적으로 검증됨.\n- Version/help 표면 회귀 없음.\n- 최종 응답에 artifact 경로, 종합 판정, Phase별 한 줄 요약 포함.",
+          "approach": "### Phase 1 — 자동 검증\n- `bun install`\n- `bun run check`\n- `bun run test:e2e`  (기존 A~E + 신규 cmux-a~g까지 총 assert 모두 PASS)\n- `npm pack --dry-run` (src/plugin.ts 빌드 산출물 및 기존 lib/ 포함 확인)\n\n### Phase 2 — 기존 uninstall/install 회귀 (§5, §5-4)\n- mkdtemp에 install → uninstall --force → opencode.json/.opencode 제거 확인(이전 cycle 동일 절차).\n- 회귀 있으면 원인 task 지목.\n\n### Phase 3 — cmux 환경 시뮬레이션 (§5-5 핵심)\n- CMUX_WORKSPACE_ID를 임의 값으로 세팅. PATH 앞에 cmux shim 배치(모든 인수 로깅).\n- plugin을 직접 import해 이벤트 순서대로 호출:\n  1. session.created(root)\n  2. session.status busy(root) → set-status Running 확인\n  3. tool.execute.before(question) → notify + set-status 'Needs Input' 확인\n  4. permission.ask → notify + set-status 'Needs Input' 확인\n  5. permission.replied(root) → clear-status 확인\n  6. session.error(root) → log error + notify 'Session error' 확인\n  7. session.status retry(root) → log warning 확인, pill 변경 없음\n  8. session.idle(root) → notify 'Response ready' + clear-status 확인\n- e2e task에서 이미 (a)~(g) 자동화했으므로 이 Phase는 위 시나리오를 한 번에 직선으로 돌려 로그 순서까지 육안 확인.\n\n### Phase 4 — 비-cmux 환경\n- CMUX_WORKSPACE_ID unset + OPENCODE_NEXUS_CMUX=0. 위 이벤트 시퀀스 다시 호출 → cmux 호출 0건 확인.\n\n### Phase 5 — Version 표면 회귀\n- `node bin/opencode-nexus.mjs --version` → opencode-nexus <v>. help에 --version/version/uninstall 여전히 노출.\n\n### 결과 아티팩트\n`test/cmux-verification-run.md` 저장. Phase별 PASS/FAIL + 종합 판정.\n\nFAIL 시 원인 task(#1 또는 #2) 지목.",
+          "plan_issue": 7,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_246e88324ffeXmwRJ0F1Fa6zXP"
+          },
+          "created_at": "2026-04-23T06:34:13.778Z"
+        }
+      ]
     }
   ]
 }

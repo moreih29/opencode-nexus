@@ -178,6 +178,30 @@ drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 unin
 - leaf 제거 후 `plugin`이 `[]`, `mcp`가 `{}`, `agent.build`/`agent.plan`이 `{}`, `agent`가 `{}`면 각각 해당 키 제거.
 - `.opencode/skills/` 또는 `.opencode/`가 비면 디렉터리 삭제. 다른 파일이 하나라도 있으면 보존.
 
+### 5-5. cmux 통합 동작 점검
+
+#### 5-5-1. cmux 활성 환경에서 확인 (CMUX_WORKSPACE_ID 설정 + OPENCODE_NEXUS_CMUX 미설정/1)
+
+- `session.idle`(root) → `cmux notify --title "opencode-nexus" --body "Response ready"`와 `cmux clear-status nexus-state` 둘 다 호출된다.
+- `session.status` + `status.type === "busy"`(root) → `cmux set-status nexus-state "Running" --icon bolt --color "#007AFF"`가 호출된다.
+- `session.status` + busy(non-root) → 어떤 cmux 호출도 발생하지 않는다.
+- `tool.execute.before` + `tool === "question"` → `cmux notify --title "opencode-nexus" --body "Waiting for your input"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
+- `permission.ask` hook → `cmux notify --title "opencode-nexus" --body "Permission requested"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
+- `permission.replied`(root) → `cmux clear-status nexus-state`가 호출된다.
+- `session.error`(root) → `cmux log --level error --source nexus -- <요약>`와 `cmux notify --title "opencode-nexus" --body "Session error"`가 모두 호출된다.
+- `session.status` + `status.type === "retry"` → `cmux log --level warning --source nexus -- <메시지>`가 호출되고 pill은 변경되지 않는다.
+
+#### 5-5-2. cmux 비활성 환경에서 확인 (CMUX_WORKSPACE_ID 미설정 또는 OPENCODE_NEXUS_CMUX=0/false)
+
+- `session.idle`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.status` + `status.type === "busy"`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `tool.execute.before` + `tool === "question"`를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `permission.ask` hook을 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `permission.replied`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.error`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.status` + `status.type === "retry"`를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- plugin의 다른 기능(`install`, `models`, `chat.message` 등)에 영향이 없다.
+
 ## 6. 병합 동작 점검
 
 기존 설정 파일이 있을 때도 의도한 키만 바뀌는지 확인한다.

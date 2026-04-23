@@ -211,6 +211,27 @@ export OPENCODE_NEXUS_CMUX=0
 
 cmux 가 없어도, 환경변수가 없어도, 모두 silent fallback 되며 plugin 의 다른 기능은 그대로 작동합니다.
 
+### 사이드바 상태 표시
+
+cmux 사이드바에 작업 상태 pill을 함께 표시합니다.
+
+- `Running` — `bolt` 아이콘, 파란색(`#007AFF`). 에이전트가 작업을 진행 중일 때.
+- `Needs Input` — `bell` 아이콘, 파란색. 에이전트가 사용자 응답을 기다리는 모든 순간(`question` 툴 + permission 요청 공통).
+
+상태는 root session 기준으로만 추적됩니다(subagent 상태는 제외, 기존 `session.idle` 정책과 동일).
+
+### Permission 알림
+
+에이전트가 권한을 요청하는 순간 `"Permission requested"` 토스트와 함께 사이드바 pill이 `Needs Input`으로 전환됩니다.
+
+### Error 로그·알림
+
+`session.error` 발생 시 사이드바 로그에 `error` 레벨로 기록(`cmux log --level error --source nexus`)하고 `"Session error"` 토스트를 띄웁니다.
+
+재시도(`session.status: retry`)는 토스트 없이 사이드바 로그에 `warning` 레벨로만 기록합니다(noise 최소화).
+
+새로 추가된 상태 표시와 알림도 위 `OPENCODE_NEXUS_CMUX` 환경변수로 동일하게 비활성화할 수 있습니다.
+
 ## 업그레이드
 
 다음 버전으로 올릴 때는 CLI를 업그레이드한 뒤 `install`을 다시 실행하세요.

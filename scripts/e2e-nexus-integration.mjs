@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -54,6 +54,42 @@ function installMockOpencode(tempDir) {
     ...process.env,
     PATH: `${binDir}:${process.env.PATH ?? ""}`,
   };
+}
+
+function installCmuxShim(tempDir) {
+  const binDir = join(tempDir, "cmux-bin");
+  const logFile = join(tempDir, "cmux-calls.log");
+  const scriptPath = join(binDir, "cmux");
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(
+    scriptPath,
+    "#!/usr/bin/env node\nconst { appendFileSync } = require('node:fs');\nconst log = process.env.CMUX_TEST_LOG;\nif (log) {\n  try {\n    appendFileSync(log, JSON.stringify(process.argv.slice(2)) + '\\n');\n  } catch {}\n}\nprocess.exit(0);\n",
+    "utf8",
+  );
+  chmodSync(scriptPath, 0o755);
+  return { binDir, logFile };
+}
+
+function readCmuxCalls(logFile) {
+  if (!existsSync(logFile)) return [];
+  return readFileSync(logFile, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function resetCmuxLog(logFile) {
+  writeFileSync(logFile, "", "utf8");
+}
+
+async function waitForCmuxCalls(logFile, expectedCount, timeoutMs = 600) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const calls = readCmuxCalls(logFile);
+    if (calls.length >= expectedCount) return calls;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 20));
+  }
+  return readCmuxCalls(logFile);
 }
 
 async function main() {
@@ -289,6 +325,154 @@ async function main() {
   assert(!versionCommand.timedOut, "E: version command timed out");
   assert(versionCommand.code === 0, `E: version command failed: ${versionCommand.stderr || versionCommand.stdout}`);
   assert(versionCommand.stdout.trim() === `${PACKAGE_NAME} ${PACKAGE_VERSION}`, "E: version command output must match package name/version");
+
+  const cmuxTempDir = mkdtempSync(join(tmpdir(), "opencode-nexus-cmux-"));
+  const originalPath = process.env.PATH;
+  const originalWorkspaceID = process.env.CMUX_WORKSPACE_ID;
+  const originalCmuxTestLog = process.env.CMUX_TEST_LOG;
+  const originalCmuxDisable = process.env.OPENCODE_NEXUS_CMUX;
+
+  try {
+    const { binDir, logFile } = installCmuxShim(cmuxTempDir);
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+    process.env.CMUX_WORKSPACE_ID = "test-workspace";
+    process.env.CMUX_TEST_LOG = logFile;
+    delete process.env.OPENCODE_NEXUS_CMUX;
+
+    const cmuxHooks = await pluginModule.default({ directory: process.cwd() });
+    assert(typeof cmuxHooks.event === "function", "cmux-a: event hook must exist");
+    assert(typeof cmuxHooks["permission.ask"] === "function", "cmux-a: permission.ask hook must exist");
+
+    const rootSessionID = "root-session-1";
+    const otherSessionID = "other-session-1";
+    await cmuxHooks.event({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: rootSessionID,
+            parentID: undefined,
+          },
+        },
+      },
+    });
+
+    resetCmuxLog(logFile);
+    await cmuxHooks["permission.ask"]({ sessionID: rootSessionID }, { status: "ask" });
+    const callsA = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsA.some((call) => call[0] === "notify" && call[1] === "--title" && call[2] === "opencode-nexus" && call[3] === "--body" && call[4] === "Permission requested"),
+      `cmux-a: permission.ask must notify expected args, got ${JSON.stringify(callsA)}`,
+    );
+    assert(
+      callsA.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Needs Input" && call[3] === "--icon" && call[4] === "bell" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-a: permission.ask must set Needs Input pill, got ${JSON.stringify(callsA)}`,
+    );
+
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionID,
+          status: { type: "busy" },
+        },
+      },
+    });
+    const callsB = await waitForCmuxCalls(logFile, 1);
+    assert(
+      callsB.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running" && call[3] === "--icon" && call[4] === "bolt" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-b: root busy must set Running pill, got ${JSON.stringify(callsB)}`,
+    );
+
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: otherSessionID,
+          status: { type: "busy" },
+        },
+      },
+    });
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 150));
+    const callsC = readCmuxCalls(logFile);
+    assert(callsC.length === 0, `cmux-c: non-root busy must not spawn cmux, got ${JSON.stringify(callsC)}`);
+
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "permission.replied",
+        properties: {
+          sessionID: rootSessionID,
+          permissionID: "perm-1",
+          response: "allow",
+        },
+      },
+    });
+    const callsD = await waitForCmuxCalls(logFile, 1);
+    assert(
+      callsD.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
+      `cmux-d: permission.replied must clear status pill, got ${JSON.stringify(callsD)}`,
+    );
+
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: rootSessionID,
+          error: { message: "boom" },
+        },
+      },
+    });
+    const callsE = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsE.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error" && call[3] === "--source" && call[4] === "nexus" && call[5] === "--" && call[6] === "boom"),
+      `cmux-e: session.error must write error log, got ${JSON.stringify(callsE)}`,
+    );
+    assert(
+      callsE.some((call) => call[0] === "notify" && call[1] === "--title" && call[2] === "opencode-nexus" && call[3] === "--body" && call[4] === "Session error"),
+      `cmux-e: session.error must notify Session error, got ${JSON.stringify(callsE)}`,
+    );
+
+    resetCmuxLog(logFile);
+    process.env.OPENCODE_NEXUS_CMUX = "0";
+    await cmuxHooks["permission.ask"]({ sessionID: rootSessionID }, { status: "ask" });
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 150));
+    const callsF = readCmuxCalls(logFile);
+    assert(callsF.length === 0, `cmux-f: disabled mode must not spawn cmux, got ${JSON.stringify(callsF)}`);
+
+    delete process.env.OPENCODE_NEXUS_CMUX;
+    resetCmuxLog(logFile);
+    await cmuxHooks.event({
+      event: {
+        type: "session.idle",
+        properties: {
+          sessionID: rootSessionID,
+        },
+      },
+    });
+    const callsG = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsG.some((call) => call[0] === "notify" && call[1] === "--title" && call[2] === "opencode-nexus" && call[3] === "--body" && call[4] === "Response ready"),
+      `cmux-g: session.idle must keep Response ready notify, got ${JSON.stringify(callsG)}`,
+    );
+    assert(
+      callsG.some((call) => call[0] === "clear-status" && call[1] === "nexus-state"),
+      `cmux-g: session.idle must clear status pill, got ${JSON.stringify(callsG)}`,
+    );
+  } finally {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    if (originalWorkspaceID === undefined) delete process.env.CMUX_WORKSPACE_ID;
+    else process.env.CMUX_WORKSPACE_ID = originalWorkspaceID;
+    if (originalCmuxTestLog === undefined) delete process.env.CMUX_TEST_LOG;
+    else process.env.CMUX_TEST_LOG = originalCmuxTestLog;
+    if (originalCmuxDisable === undefined) delete process.env.OPENCODE_NEXUS_CMUX;
+    else process.env.OPENCODE_NEXUS_CMUX = originalCmuxDisable;
+    rmSync(cmuxTempDir, { recursive: true, force: true });
+  }
 
   if (failures.length > 0) {
     for (const failure of failures) {

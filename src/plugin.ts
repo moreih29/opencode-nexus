@@ -45,6 +45,14 @@ const NEXUS_AGENTS = {
   writer,
 };
 
+const PILL_KEY = "nexus-state";
+const PILL_COLOR = "#007AFF";
+const RUNNING_ICON = "bolt";
+const RUNNING_VALUE = "Running";
+const NEEDS_INPUT_ICON = "bell";
+const NEEDS_INPUT_VALUE = "Needs Input";
+const LOG_SOURCE = "nexus";
+
 function ensureNexusStructure(root: string) {
   const nexusDir = join(root, ".nexus");
   const contextDir = join(nexusDir, "context");
@@ -111,20 +119,42 @@ function isCmuxNotifyEnabled(): boolean {
   return true;
 }
 
-function cmuxNotify(title: string, body: string): void {
+function cmuxSpawn(args: string[]): void {
   if (!isCmuxNotifyEnabled()) return;
   try {
-    const child = spawn("cmux", ["notify", "--title", title, "--body", body], {
+    const child = spawn("cmux", args, {
       stdio: "ignore",
       detached: true,
     });
-    child.on("error", () => {
-      /* cmux CLI not found or spawn failed — silently skip */
-    });
+    child.on("error", () => {});
     child.unref();
-  } catch {
-    /* swallow any synchronous spawn errors too */
-  }
+  } catch {}
+}
+
+function cmuxNotify(title: string, body: string): void {
+  cmuxSpawn(["notify", "--title", title, "--body", body]);
+}
+
+function cmuxSetStatus(key: string, value: string, icon: string, color: string): void {
+  cmuxSpawn(["set-status", key, value, "--icon", icon, "--color", color]);
+}
+
+function cmuxClearStatus(key: string): void {
+  cmuxSpawn(["clear-status", key]);
+}
+
+function cmuxLog(level: "info" | "error" | "warning" | "progress" | "success", source: string, message: string): void {
+  cmuxSpawn(["log", "--level", level, "--source", source, "--", message]);
+}
+
+function extractErrorSummary(err: unknown): string {
+  if (typeof err !== "object" || err === null) return "unknown";
+  const record = err as Record<string, unknown>;
+  if (typeof record.message === "string" && record.message.length > 0) return record.message;
+  if (typeof record.name === "string" && record.name.length > 0) return record.name;
+  if (typeof record.type === "string" && record.type.length > 0) return record.type;
+  if (typeof record.code === "string" && record.code.length > 0) return record.code;
+  return "unknown";
 }
 
 export const OpencodeNexus: Plugin = async ({ directory }) => {
@@ -157,18 +187,50 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         return;
       }
       if (event.type === "session.deleted") {
+        const wasRoot = rootSessions.has(event.properties.info.id);
         rootSessions.delete(event.properties.info.id);
+        if (wasRoot) {
+          cmuxClearStatus(PILL_KEY);
+        }
         return;
       }
       if (event.type === "session.idle" && rootSessions.has(event.properties.sessionID)) {
         cmuxNotify("opencode-nexus", "Response ready");
+        cmuxClearStatus(PILL_KEY);
+        return;
+      }
+      if (event.type === "session.status" && rootSessions.has(event.properties.sessionID)) {
+        const status = event.properties.status;
+        if (status.type === "busy") {
+          cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR);
+        } else if (status.type === "retry") {
+          cmuxLog("warning", LOG_SOURCE, `Retrying (attempt ${status.attempt}): ${status.message}`);
+        }
+        return;
+      }
+      if (event.type === "session.error") {
+        const sessionID = event.properties.sessionID;
+        if (sessionID && !rootSessions.has(sessionID)) return;
+
+        const summary = extractErrorSummary(event.properties.error);
+        cmuxLog("error", LOG_SOURCE, summary);
+        cmuxNotify("opencode-nexus", "Session error");
+        return;
+      }
+      if (event.type === "permission.replied" && rootSessions.has(event.properties.sessionID)) {
+        cmuxClearStatus(PILL_KEY);
         return;
       }
     },
     "tool.execute.before": async (input) => {
       if (input.tool === "question") {
         cmuxNotify("opencode-nexus", "Waiting for your input");
+        cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
       }
+    },
+    "permission.ask": async (_input, _output) => {
+      cmuxNotify("opencode-nexus", "Permission requested");
+      cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
     },
     "chat.message": async (_input, output) => {
       const textPart = output.parts.find((part) => part.type === "text");
