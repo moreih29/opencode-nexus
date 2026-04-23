@@ -52,6 +52,9 @@ const RUNNING_VALUE = "Running";
 const NEEDS_INPUT_ICON = "bell";
 const NEEDS_INPUT_VALUE = "Needs Input";
 const LOG_SOURCE = "nexus";
+const RESPONSE_READY_FALLBACK = "Response ready";
+const PREVIEW_MAX_LEN = 100;
+const PRE_CHECK_MARKER = "[Pre-check]";
 
 function ensureNexusStructure(root: string) {
   const nexusDir = join(root, ".nexus");
@@ -119,16 +122,36 @@ function isCmuxNotifyEnabled(): boolean {
   return true;
 }
 
+// All cmux CLI invocations go through a single promise queue so they reach
+// the cmux server socket in the same order the plugin emitted them. Previous
+// fire-and-forget detached spawns suffered from an OS-level race: when a
+// `set-status` child and a follow-up `clear-status` child were forked in
+// rapid succession (e.g. session.status busy immediately followed by
+// session.idle), the two processes wrote to the cmux unix socket in
+// nondeterministic order and `clear` could land before `set`, leaving the
+// pill stuck as "Running" even though the plugin logic had intended to clear
+// it. Serialising them via awaiting child exit guarantees the server sees
+// writes in plugin-issued order. Callers remain fire-and-forget: the queue
+// is maintained internally and we never return a Promise to the event hook.
+let cmuxQueue: Promise<void> = Promise.resolve();
+
 function cmuxSpawn(args: string[]): void {
   if (!isCmuxNotifyEnabled()) return;
-  try {
-    const child = spawn("cmux", args, {
-      stdio: "ignore",
-      detached: true,
-    });
-    child.on("error", () => {});
-    child.unref();
-  } catch {}
+  cmuxQueue = cmuxQueue
+    .catch(() => {})
+    .then(
+      () =>
+        new Promise<void>((resolve) => {
+          try {
+            const child = spawn("cmux", args, { stdio: "ignore" });
+            const done = () => resolve();
+            child.once("error", done);
+            child.once("exit", done);
+          } catch {
+            resolve();
+          }
+        }),
+    );
 }
 
 function cmuxNotify(title: string, body: string): void {
@@ -157,11 +180,57 @@ function extractErrorSummary(err: unknown): string {
   return "unknown";
 }
 
+// If the assistant response opens with a `[Pre-check]` scaffold block (the
+// default opening introduced by nexus-core 0.20.0), skip past it so the
+// preview shows the actual body instead of the meta checklist. A blank line
+// (`\n\n`) separates the Pre-check block from the body. If the whole text
+// is Pre-check with no body, return empty string so the caller falls back.
+function stripPreCheck(text: string): string {
+  if (!text.trimStart().startsWith(PRE_CHECK_MARKER)) return text;
+  const idx = text.indexOf("\n\n");
+  if (idx < 0) return "";
+  return text.slice(idx + 2);
+}
+
+// Collapse whitespace (including newlines that a notification center would
+// render as spaces anyway), trim, and truncate to PREVIEW_MAX_LEN characters
+// with a trailing ellipsis. Returns empty string only when the input itself
+// was whitespace-only; callers decide on a fallback.
+function truncateForNotification(text: string): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (collapsed.length === 0) return "";
+  if (collapsed.length <= PREVIEW_MAX_LEN) return collapsed;
+  return `${collapsed.slice(0, PREVIEW_MAX_LEN)}…`;
+}
+
+// Opt-out flag. Preview is on by default. Users who prefer the old fixed
+// "Response ready" body (e.g. because responses may contain sensitive text
+// shown in the OS notification center) can set OPENCODE_NEXUS_NOTIFY_PREVIEW
+// to "0" or "false" in their shell environment.
+function shouldPreviewResponse(): boolean {
+  const flag = process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW;
+  if (flag === "0" || flag === "false") return false;
+  return true;
+}
+
+function buildResponseReadyBody(lastText: string | undefined): string {
+  if (!shouldPreviewResponse()) return RESPONSE_READY_FALLBACK;
+  if (!lastText) return RESPONSE_READY_FALLBACK;
+  const afterPrecheck = stripPreCheck(lastText);
+  const preview = truncateForNotification(afterPrecheck);
+  return preview.length > 0 ? preview : RESPONSE_READY_FALLBACK;
+}
+
 export const OpencodeNexus: Plugin = async ({ directory }) => {
   // Track root sessions so we only forward `session.idle` to cmux for the
   // top-level session. Subagent sessions also emit `session.idle` whenever
   // they finish a turn, and notifying on each of those would be spam.
   const rootSessions = new Set<string>();
+  // Holds the most recently observed assistant text part per root session.
+  // Updated on every `message.part.updated` with a text part, reset at each
+  // new turn (session.status busy) so stale text from a prior turn never
+  // leaks into the next notification. Read and cleared on `session.idle`.
+  const rootSessionLastText = new Map<string, string>();
 
   return {
     config: async (config) => {
@@ -189,27 +258,55 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
       if (event.type === "session.deleted") {
         const wasRoot = rootSessions.has(event.properties.info.id);
         rootSessions.delete(event.properties.info.id);
+        rootSessionLastText.delete(event.properties.info.id);
         if (wasRoot) {
           cmuxClearStatus(PILL_KEY);
         }
         return;
       }
       if (event.type === "session.idle" && rootSessions.has(event.properties.sessionID)) {
-        cmuxNotify("opencode-nexus", "Response ready");
-        cmuxClearStatus(PILL_KEY);
+        const lastText = rootSessionLastText.get(event.properties.sessionID);
+        const body = buildResponseReadyBody(lastText);
+        cmuxNotify("opencode-nexus", body);
+        // Response is complete: it's the user's turn. We set the pill to
+        // "Needs Input" (the same value used for question/permission prompts)
+        // so the sidebar retains a visible indicator that the agent is
+        // waiting for the user. A subsequent session.status busy will
+        // overwrite this back to "Running".
+        cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
+        rootSessionLastText.delete(event.properties.sessionID);
         return;
       }
       if (event.type === "session.status" && rootSessions.has(event.properties.sessionID)) {
         const status = event.properties.status;
         if (status.type === "busy") {
+          // New turn starting — drop any cached text so the next idle notify
+          // never shows the previous turn's preview as a fallback.
+          rootSessionLastText.delete(event.properties.sessionID);
           cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR);
         } else if (status.type === "retry") {
           cmuxLog("warning", LOG_SOURCE, `Retrying (attempt ${status.attempt}): ${status.message}`);
         } else if (status.type === "idle") {
-          // Backs up session.idle for abort/error paths where session.status
-          // transitions to idle without firing the separate session.idle event.
-          // Without this, a prior "busy" pill would stay stuck as Running.
-          cmuxClearStatus(PILL_KEY);
+          // Backs up session.idle for paths where OpenCode emits only the
+          // session.status idle variant without the separate session.idle
+          // event. Same user-turn semantic as session.idle: switch pill to
+          // Needs Input so the sidebar indicates the agent is waiting.
+          cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
+        }
+        return;
+      }
+      if (event.type === "message.part.updated") {
+        // Cache the latest text part seen for each root session so that the
+        // next session.idle notification can preview the response. The first
+        // text part in a turn is the user input; later text parts from the
+        // assistant overwrite it via Map.set, so by the time session.idle
+        // fires we are holding the assistant's latest text. Subagents and
+        // non-root sessions are ignored (no cache slot).
+        const part = event.properties.part;
+        if (part.type !== "text") return;
+        if (!rootSessions.has(part.sessionID)) return;
+        if (typeof part.text === "string" && part.text.length > 0) {
+          rootSessionLastText.set(part.sessionID, part.text);
         }
         return;
       }

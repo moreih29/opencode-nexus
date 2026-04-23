@@ -182,15 +182,16 @@ drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 unin
 
 #### 5-5-1. cmux 활성 환경에서 확인 (CMUX_WORKSPACE_ID 설정 + OPENCODE_NEXUS_CMUX 미설정/1)
 
-- `session.idle`(root) → `cmux notify --title "opencode-nexus" --body "Response ready"`와 `cmux clear-status nexus-state` 둘 다 호출된다.
-- `session.status` + `status.type === "busy"`(root) → `cmux set-status nexus-state "Running" --icon bolt --color "#007AFF"`가 호출된다.
+- `session.idle`(root) → `cmux notify --title "opencode-nexus" --body <...>` + `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"` 둘 다 호출된다. 기본 모드에서는 `--body`에 응답 텍스트의 첫 100자(공백 collapse + 초과 시 `…`)가 들어가고 `[Pre-check]` 블록은 자동 skip된다. `OPENCODE_NEXUS_NOTIFY_PREVIEW=0` 또는 `false` 환경에서는 고정 문자열 `"Response ready"`로 복원된다. 응답 텍스트 캐시가 비어 있거나 Pre-check만 있는 경우에도 `"Response ready"` fallback. pill은 `clear-status`가 아니라 `Needs Input`으로 전환되므로 사이드바에 사용자 턴 신호가 남는다.
+- `session.status` + `status.type === "busy"`(root) → `cmux set-status nexus-state "Running" --icon bolt --color "#007AFF"`가 호출된다. 또한 내부 text 캐시가 초기화되어 이전 turn의 응답이 다음 turn의 preview에 누출되지 않는다.
 - `session.status` + busy(non-root) → 어떤 cmux 호출도 발생하지 않는다.
 - `tool.execute.before` + `tool === "question"` → `cmux notify --title "opencode-nexus" --body "Waiting for your input"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
 - `permission.ask` hook → `cmux notify --title "opencode-nexus" --body "Permission requested"`와 `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 모두 호출된다.
 - `permission.replied`(root) → `cmux clear-status nexus-state`가 호출된다.
 - `session.error`(root) → `cmux log --level error --source nexus -- <요약>`, `cmux notify --title "opencode-nexus" --body "Session error"`, 그리고 `cmux clear-status nexus-state`가 모두 호출된다. 마지막 clear-status가 빠지면 MessageAbortedError 같은 abort 경로에서 `Running` pill이 stuck된다(v0.15.1에서 수정된 회귀 사례).
-- `session.status` + `status.type === "idle"`(root) → `cmux clear-status nexus-state`가 호출된다. `session.idle` 이벤트가 fire하지 않는 경로에 대비한 2차 방어선이며, 이 bullet이 빠지면 특정 abort 시나리오에서 pill이 stuck된다.
+- `session.status` + `status.type === "idle"`(root) → `cmux set-status nexus-state "Needs Input" --icon bell --color "#007AFF"`가 호출된다. `session.idle` 이벤트가 fire하지 않는 경로에 대한 2차 방어선이며 pill 전환 방향은 session.idle과 동일(사용자 턴). 이 bullet이 빠지면 특정 abort/정상 완료 시나리오에서 pill이 `Running`으로 stuck된다.
 - `session.status` + `status.type === "retry"` → `cmux log --level warning --source nexus -- <메시지>`가 호출되고 pill은 변경되지 않는다.
+- **cmux CLI 호출은 직렬화(serialize)된다** — 여러 훅에서 연속 발행된 `cmux set-status` / `cmux clear-status` / `cmux notify` 등이 plugin이 의도한 순서 그대로 cmux 서버에 도달해야 한다. 예를 들어 `session.status busy` 직후 `session.idle`이 fire되면 반드시 `set-status` → `clear-status` 순서로 처리되어야 pill이 최종 clear 상태가 된다. 이 직렬화가 깨지면(이전 fire-and-forget detached spawn 구조처럼 OS fork 스케줄링에 맡겨지면) `clear`가 `set`보다 먼저 socket에 도달해 pill이 `Running`으로 stuck된다(v0.16.0에서 수정된 회귀 사례). e2e의 cmux-k scenario가 이 순서 보장을 회귀 확인한다.
 
 #### 5-5-2. cmux 비활성 환경에서 확인 (CMUX_WORKSPACE_ID 미설정 또는 OPENCODE_NEXUS_CMUX=0/false)
 
