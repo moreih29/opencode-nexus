@@ -1119,6 +1119,95 @@
           "created_at": "2026-04-23T08:56:21.365Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T09:16:13.112Z",
+      "branch": "fix/v0.16.1-icon-and-preview-diagnostic",
+      "plan": {
+        "id": 7,
+        "topic": "v0.16.1: bell.fill icon + preview debug diagnostic env",
+        "issues": [
+          {
+            "id": 1,
+            "title": "v0.16.1 변경 범위 정의 — bell.fill + diagnostic env + test 수정 언덕",
+            "status": "decided",
+            "decision": "**선정**: 세 변경 포함. 다른 수정은 제외.\n\n(a) **`NEEDS_INPUT_ICON = \"bell\"` → `\"bell.fill\"`**. 사용자가 시각적으로 원하는 채워진 종 아이콘. SF Symbols 명명 체계이며, 다른 plugin(`claude_code`)이 이미 사용.\n\n(b) **`OPENCODE_NEXUS_DEBUG_PREVIEW=1|true` opt-in 환경변수** + **`isPreviewDebugEnabled()` helper** + **`message.part.updated` 핸들러 상단에 진단 `cmuxLog`**. 로그 내용은 `preview-debug: part.type=<type> part.sessionID=<id> rootKnown=<bool> textLen=<len|NA>`. 기본 OFF(사용자 재현 시에만 enable). 서버 flood 방지.\n\n(c) **e2e test**: `NEEDS_INPUT_ICON` 상수를 쓰는 cmux-a / cmux-g / cmux-i scenario의 `call[4] === \"bell\"`을 `\"bell.fill\"`로 변경. diagnostic log 자체에 대한 신규 scenario는 추가하지 않음(opt-in 기능, 임시 진단 용도).\n\n**근거**:\n- bell.fill은 **사용자 명시 요구**이고 1라인 변경으로 해결되므로 patch bump에 자연 포함.\n- diagnostic cmuxLog 추가는 **진단 목적**이라 장기 기능 아님. v0.16.2에서 정식 fix와 함께 제거하거나 유지 결정. opt-in 방식이 디폴트 사용자에게 noise 0.\n- test 수정은 아이콘 상수 변경에 종속된 기계적 수정. 새 scenario 없이 회귀만 유지.\n\n**기각된 대안**:\n1. diagnostic log 상시 ON — 기각: message.part.updated는 턴당 수십 번 fire. 로그 flood로 cmux notifications/log UI 오염.\n2. diagnostic log 대신 추측 fix(part.type reasoning 허용 등) 추가 — 기각: 사용자 결정 \"진단 배포 먼저\"와 명시적 반대.\n3. 아이콘을 `bell.fill` 말고 cmux custom icon(예: `bolt.fill` 같은 다른 것) — 기각: 사용자는 \"채워진 종\"을 명시.\n4. 진단 log를 cmuxLog 대신 console.error 등 stdout/stderr로 — 기각: OpenCode 로그 volume 커서 찾기 어려움. cmux list-log가 workspace 단위 필터링 가능해 가장 실용적."
+          },
+          {
+            "id": 2,
+            "title": "릴리즈 전략 — patch v0.16.1 단독 배포, 정식 fix는 v0.16.2",
+            "status": "decided",
+            "decision": "**선정**: **patch `v0.16.1`로 단독 배포**. 브랜치 `fix/v0.16.1-icon-and-preview-diagnostic`, 단일 commit, 메시지 `v0.16.1: bell.fill icon + opt-in diagnostic log for preview cache`.\n\n**근거**:\n- **patch**: 새 feature 아닌 사소한 아이콘 수정 + 임시 진단 도구. pre-v1 patch 범주 맞음.\n- **fix/ prefix**: 진단 로그는 preview 버그 조사 목적이라 fix 성격. 새 feature(preview) 추가가 아닌 기존 기능의 진단 지원.\n- **단독 배포**: 사용자가 \"진단 먼저\"를 명시. v0.16.2에 정식 fix 포함될 예정이고, v0.16.1이 진단 배포로 선행되는 게 순차적.\n- CHANGELOG에도 \"진단용\" 명시해 사용자가 OPENCODE_NEXUS_DEBUG_PREVIEW 기능이 한시적임을 인지.\n\n**기각된 대안**:\n1. v0.17.0 minor — 기각: 새 feature 추가가 아닌 patch 범주.\n2. v0.16.1에 정식 preview fix 같이 포함 — 기각: 원인 확정 전 추측 기반 fix는 노이즈. 사용자 결정과 반대.\n3. 브랜치 `chore/v0.16.1` — 기각: 진단 지원은 chore 아닌 fix. release 버그 조사 도구."
+          }
+        ],
+        "research_summary": "워크스페이스 재테스트 결과: (1) notification body가 \"Response ready\" 고정 문자열로 찍힘 → buildResponseReadyBody가 lastText=undefined로 fallback 경로. message.part.updated 훅의 text 캐싱이 작동 안 하고 있다는 증거. (2) workspace:10 cmux list-status pill icon=bell (filled 아님). 다른 plugin(claude_code)은 bell.fill 씀. cmux가 SF Symbols 명명 따름. (3) OpenCode log T090228에서 \"안녕?\" 턴의 이벤트 시퀀스 확보: session.created → message.part.updated(x1 user) → session.status busy → message.part.updated(x4 assistant) → session.idle. 즉 이벤트 자체는 오고 있음. payload가 INFO 레벨에 안 찍혀 part.type/sessionID 확정 불가. 원인 가설 3개(part.type 불일치 / part.sessionID root 아님 / part.text 빈 문자열). 디버그 로그 심어 재현 후 확정 필요.",
+        "created_at": "2026-04-23T09:09:40.016Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "브랜치 전환 + package.json 0.16.1 + plugin.ts 수정",
+          "status": "completed",
+          "context": "main → fix/v0.16.1-icon-and-preview-diagnostic 이동, package.json 0.16.0 → 0.16.1, plugin.ts에 NEEDS_INPUT_ICON 상수 수정 + isPreviewDebugEnabled helper + message.part.updated 핸들러 상단 diagnostic cmuxLog 추가.",
+          "acceptance": "- git branch === fix/v0.16.1-icon-and-preview-diagnostic\n- package.json version === 0.16.1\n- plugin.ts NEEDS_INPUT_ICON === \"bell.fill\"\n- isPreviewDebugEnabled 함수 존재, OPENCODE_NEXUS_DEBUG_PREVIEW 값이 1/true일 때 true 반환\n- message.part.updated 핸들러 첫 줄이 조건부 cmuxLog (기본 OFF)\n- bun run check PASS",
+          "approach": "(1) git checkout -b. (2) Edit package.json version. (3) Edit plugin.ts: NEEDS_INPUT_ICON \"bell.fill\", DEBUG_PREVIEW_ENV 상수, isPreviewDebugEnabled, 핸들러에 조건부 cmuxLog. (4) bun run check.",
+          "plan_issue": 1,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:10:29.019Z"
+        },
+        {
+          "id": 2,
+          "title": "e2e: bell → bell.fill assertion 갱신 (cmux-a/g/i)",
+          "status": "completed",
+          "context": "NEEDS_INPUT_ICON 상수 변경에 따라 기존 assertion이 bell → bell.fill로 바뀌어야 함.",
+          "acceptance": "- cmux-a assertion 바뀐 값\n- cmux-g assertion 바뀐 값\n- cmux-i assertion 바뀐 값\n- bun run test:e2e \"All integration checks passed.\"",
+          "approach": "Edit로 cmux-a, cmux-g, cmux-i의 `call[4] === \"bell\"` 3곳을 `\"bell.fill\"`로 변경. test:e2e로 PASS 확인.",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:10:33.998Z"
+        },
+        {
+          "id": 3,
+          "title": "CHANGELOG / README / releasing.md / memory 업데이트",
+          "status": "completed",
+          "context": "v0.16.1 entry, README 버전 동기화, releasing.md bell.fill 반영, memory에 진단 도구 기록.",
+          "acceptance": "- CHANGELOG ## [0.16.1] — 2026-04-23 존재\n- 진단 env 사용법 기재: OPENCODE_NEXUS_DEBUG_PREVIEW=1 opencode 실행 + cmux list-log --workspace <ref>\n- README에서 0.16.0 흔적 0개 (install @latest 제외)\n- releasing.md 해당 bullet에 bell.fill\n- memory 파일에 진단 env bullet 추가",
+          "approach": "(1) CHANGELOG [0.16.1] entry (수정됨: bell.fill + opt-in diagnostic, 사용자 영향에 진단 사용법, 검증). (2) README 6곳 0.16.0 → 0.16.1. (3) releasing.md §5-5-1의 set-status Needs Input bullet에 --icon bell.fill 반영. (4) memory 파일에 진단 env bullet 추가.",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:10:40.958Z"
+        },
+        {
+          "id": 4,
+          "title": "전체 검증 + 사이클 마감 + commit + 배포 + 브랜치 정리",
+          "status": "in_progress",
+          "context": "check + test:e2e + npm pack → nx_task_close → commit → push → PR → merge → tag → publish-npm → GitHub Release → 브랜치 정리. 이전 v0.15.1 / v0.16.0 사이클 전례 그대로.",
+          "acceptance": "- bun run check/test:e2e/npm pack PASS\n- git commit 단일 생성\n- PR validate PASS → merge\n- tag v0.16.1 push → publish-npm PASS\n- npm registry dist-tags.latest === 0.16.1\n- GitHub Release v0.16.1 published\n- fix 브랜치 로컬+원격 삭제",
+          "approach": "순차 실행. validate workflow + publish-npm workflow pass 대기.",
+          "plan_issue": 2,
+          "deps": [
+            2,
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:10:46.606Z"
+        }
+      ]
     }
   ]
 }
