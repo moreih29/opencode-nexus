@@ -1208,6 +1208,95 @@
           "created_at": "2026-04-23T09:10:46.606Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-23T09:31:25.650Z",
+      "branch": "fix/v0.16.2-preview-cache-step-start",
+      "plan": {
+        "id": 8,
+        "topic": "v0.16.2: step-start marker 기반 assistant turn 경계 + busy delete 제거",
+        "issues": [
+          {
+            "id": 1,
+            "title": "plugin.ts 스킬 설계 — assistantTurnActive 관리 방식, cache 경론 재구성",
+            "status": "decided",
+            "decision": "**선정**: plugin-instance 내 `assistantTurnActive: Map<string, boolean>` 추가. `session.status busy` 분기의 `rootSessionLastText.delete` 제거. `message.part.updated` 분기 재구성(step-start→turn 시작 표시 + cache 초기화, text→assistantTurnActive일 때만 캐싱, step-finish→선택적으로 turn 종료 마감). session.idle/session.deleted에서 `assistantTurnActive`도 같이 정리.\n\n**구체 로직**:\n```ts\n// plugin instance state\nconst assistantTurnActive = new Map<string, boolean>();\n\n// message.part.updated 분기\nif (event.type === \"message.part.updated\") {\n  const part = event.properties.part;\n  const sessionID = (part as { sessionID?: string }).sessionID;\n  if (!sessionID || !rootSessions.has(sessionID)) return;\n  \n  if (part.type === \"step-start\") {\n    assistantTurnActive.set(sessionID, true);\n    rootSessionLastText.delete(sessionID);  // 이전 turn 잔존물 정리\n    return;\n  }\n  if (part.type === \"text\" && assistantTurnActive.get(sessionID)) {\n    const text = (part as { text?: unknown }).text;\n    if (typeof text === \"string\" && text.length > 0) {\n      rootSessionLastText.set(sessionID, text);\n    }\n    return;\n  }\n  return;\n}\n\n// session.status busy — delete 제거, set만\nif (status.type === \"busy\") {\n  cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR);\n}\n\n// session.idle — delete 그대로 유지 + assistantTurnActive도 정리\nif (event.type === \"session.idle\" && rootSessions.has(...)) {\n  const body = buildResponseReadyBody(...);\n  cmuxNotify(...); cmuxSetStatus(... Needs Input ...);\n  rootSessionLastText.delete(sessionID);\n  assistantTurnActive.delete(sessionID);\n}\n\n// session.deleted — 둘 다 delete\n```\n\n**근거**:\n- OpenCode turn 구조가 step-start / step-finish marker로 일관 구획됨(진단 로그 실증). 이를 turn 경계로 쓰면 user/assistant 구분도 자동.\n- busy에서 delete 제거가 단일 행이지만 **근본 원인 해소**. 이전에 busy를 turn 경계로 오해한 설계 교정.\n- `assistantTurnActive` 분리 state — turn 내 여러 step이 있어도 각 step-start마다 cache 초기화. 마지막 step의 text가 최종 preview. 일반적 agent flow와 부합.\n- 기존 진단 env(OPENCODE_NEXUS_DEBUG_PREVIEW)는 제거하지 않음. 유사 preview 회귀 시 재사용.\n\n**기각된 대안**:\n1. `message.updated`로 AssistantMessage role을 따로 확인 — 기각: 추가 이벤트 dependency + race 위험. step-start marker가 같은 이벤트 stream에 있어 더 단순.\n2. step-finish 때 turn 종료로 assistantTurnActive=false — 기각: step-finish 이후 session.status/session.idle이 올 때까지 짧은 간격이 있고, 이 시간에 추가 text part가 late-arriving할 수 있어 active 상태를 session.idle까지 유지하는 게 안전.\n3. `rootSessionLastText.delete`를 busy에서 유지하되 \"assistantTurn이 아니면 skip\" 가드 — 기각: 같은 근본 결함을 우회만 함. step-start 기반 명시적 경계가 더 깔끔.\n4. 아예 `session.idle`에서만 delete, step-start 기반 reset 없음 — 기각: 이전 turn에서 session.idle이 안 fire된 케이스(abort)에서 stale user text가 다음 turn preview로 노출 가능. step-start reset이 defense-in-depth."
+          },
+          {
+            "id": 2,
+            "title": "e2e scenario 수정 범위 — 기존 l/m/p 조정 + 신규 q 추가 여부",
+            "status": "decided",
+            "decision": "**선정**: 기존 cmux-l/m/p 수정 + cmux-q 신규 추가. cmux-o(no-cache fallback)는 그대로 유지(여전히 assistantTurnActive 안 쌓이면 fallback).\n\n**수정 범위**:\n- **cmux-l** (preview happy path): `message.part.updated (text)` 단독 → **step-start + text 순서**로 변경. step-start 없이는 캐싱 안 되는 게 새 설계이므로.\n- **cmux-m** (Pre-check skip): 마찬가지로 step-start를 text 이전에 fire.\n- **cmux-n** (opt-out flag): step-start + text + session.idle 조합에 OPENCODE_NEXUS_NOTIFY_PREVIEW=0. 로직 동일.\n- **cmux-o** (no-cache fallback): message.part.updated 없이 session.idle만 → fallback. **그대로 유지**.\n- **cmux-p** (구 busy cache reset): **의미 교체** → **cmux-p: step-start가 prior text를 reset**. 이전 user text part를 먼저 fire → step-start fire → session.idle → fallback 확인(이전 user text 누출 없음).\n\n**신규 cmux-q**: **text part만 fire하고 step-start 없으면 캐싱 안 되어야** — user input이 캐시에 쌓이는 걸 방지하는지 명시 검증. user text input을 simulate하고 step-start 없이 session.idle → fallback \"Response ready\" assert.\n\n**의도적 유지**:\n- cmux-k (race serialize): 영향 없음. busy/idle ping-pong은 cache와 독립.\n- cmux-a~j: 영향 없음.\n\n**근거**:\n- step-start 기반 설계가 message.part.updated 처리 계약을 바꾸므로 해당 scenario들이 모두 영향 받음.\n- cmux-p의 기존 목적(prior turn 누출 방지)은 유지, 수단만 busy → step-start로 교체.\n- cmux-q 신규: \"step-start 없이 text만 오면 캐시 안 됨\" 계약을 명시 테스트. 향후 regression 감지.\n\n**기각된 대안**:\n1. cmux-l/m/n 모두 step-start 없이 유지하고 테스트 자체를 바꾸지 않음 — 기각: 새 plugin 로직이 step-start 없으면 캐싱 안 하므로 현재 테스트는 FAIL.\n2. cmux-p 삭제 — 기각: prior turn 누출 방지 회귀 감지가 여전히 중요. 수단 교체로 유지가 정답.\n3. cmux-q 대신 cmux-l에 합치기 — 기각: 단일 관심사 원칙. 실패 메시지 명확성.\n4. cmux-q까지 추가 없이 단지 cmux-p 수정으로 커버 — 기각: cmux-p는 prior turn 누출 방지, cmux-q는 step-start 요구 명시. 측정 대상이 다름."
+          }
+        ],
+        "research_summary": "v0.16.1 진단 로그 + OpenCode 서버 로그 대조 결과 preview cache 소실 근본 원인 확정. OpenCode가 턴당 session.status를 4번 fire하며 그 중 하나가 step-finish 이후 busy로 fire되어 내 plugin의 `rootSessionLastText.delete`가 assistant text 캐싱 직후 cache를 날려버린다. 진단 로그에서 message.part.updated의 step-start/step-finish가 assistant turn 경계를 명확히 표시함을 확인. Fix: session.status busy의 delete 제거 + step-start marker 기반 assistant turn state 관리 + text 캐싱은 step-start 이후에만. 이 방식은 user/assistant text 구분도 부수 효과로 해결.",
+        "created_at": "2026-04-23T09:24:09.631Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "브랜치 + package.json 0.16.1 → 0.16.2 + plugin.ts 재설계",
+          "status": "completed",
+          "context": "main에서 fix/v0.16.2-preview-cache-step-start 이동. package.json 버전 bump. plugin.ts에 assistantTurnActive Map 추가 + busy delete 제거 + message.part.updated 분기 step-start/text/other 3분기로 재구성 + session.idle/session.deleted에 assistantTurnActive 정리.",
+          "acceptance": "- git branch === fix/v0.16.2-preview-cache-step-start\n- package.json.version === \"0.16.2\"\n- plugin.ts에 assistantTurnActive: Map<string, boolean> 존재\n- session.status busy에서 rootSessionLastText.delete 호출 없음\n- message.part.updated 분기가 step-start → turn start + cache reset, text → assistantTurnActive일 때만 캐싱, 그 외 무시\n- session.idle에서 assistantTurnActive.delete 호출\n- session.deleted에서 assistantTurnActive.delete 호출\n- bun run check PASS",
+          "approach": "(1) git checkout -b fix/v0.16.2-preview-cache-step-start. (2) Edit package.json version 0.16.2. (3) Edit plugin.ts: assistantTurnActive Map, session.status busy에서 delete 제거, message.part.updated 재구성, session.idle/deleted에 assistantTurnActive.delete. (4) bun run check PASS.",
+          "plan_issue": 1,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:25:14.610Z"
+        },
+        {
+          "id": 2,
+          "title": "e2e scenario 수정 — cmux-l/m/p 조정 + cmux-q 신규",
+          "status": "completed",
+          "context": "cmux-l: text 앞에 step-start fire 추가. cmux-m: 동일. cmux-n: 동일. cmux-p: busy 대신 step-start가 prior text reset하는 것으로 의미 교체. cmux-q 신규: step-start 없이 text만 오면 캐시 안 쌓이고 fallback인지 assert.",
+          "acceptance": "- cmux-l: step-start + text + session.idle → notify body에 text 포함\n- cmux-m: step-start + [Pre-check] text → body에 [Pre-check] 미포함, 본문 포함\n- cmux-n: step-start + text + OPENCODE_NEXUS_NOTIFY_PREVIEW=0 → body === \"Response ready\"\n- cmux-p: (구 busy) → 의미 교체. user text 먼저 fire → step-start fire → session.idle → fallback (이전 텍스트 누출 없음)\n- cmux-q 신규: text part만 fire (step-start 없이) + session.idle → body === \"Response ready\" (캐시 안 됨)\n- bun run test:e2e PASS",
+          "approach": "Edit로 scenario 5개(l/m/n/p + q 신규) 재작성. cmux-o는 손대지 않음. test:e2e로 PASS 확인.",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:25:21.766Z"
+        },
+        {
+          "id": 3,
+          "title": "CHANGELOG / README / releasing.md / memory 업데이트",
+          "status": "completed",
+          "context": "v0.16.2 entry 신규, README illustrative 버전 동기화, releasing.md §5-5-1에 step-start marker 설명 추가, memory에 원인 확정 + fix 완료 섹션 추가.",
+          "acceptance": "- CHANGELOG ## [0.16.2] — 2026-04-23 존재\n- 진단 결과 기반 원인 설명 + fix 메커니즘 기술\n- README 0.16.1 흔적 0개\n- releasing.md §5-5-1에 step-start 기반 캐싱 bullet\n- memory v0.16.2 bullet + 교훈 업데이트",
+          "approach": "(1) CHANGELOG [0.16.2] — 수정됨(preview cache 정식 fix), 검증 항목 포함. (2) README 6곳 0.16.1 → 0.16.2. (3) releasing.md §5-5-1에 \"preview는 message.part.updated의 step-start 이후 text part만 캐싱\" bullet. (4) memory 파일에 v0.16.2 수정 사례 + \"step-start marker 기반 turn 경계\" 교훈.",
+          "plan_issue": 1,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:25:29.133Z"
+        },
+        {
+          "id": 4,
+          "title": "검증 + 사이클 마감 + commit + 배포 + 브랜치 정리",
+          "status": "in_progress",
+          "context": "check + test:e2e + npm pack → nx_task_close → 단일 commit → push → PR → merge → tag v0.16.2 → publish-npm → GitHub Release → 브랜치 정리.",
+          "acceptance": "- check/test:e2e/npm pack --dry-run PASS\n- 단일 commit on fix branch\n- PR validate PASS → merge\n- tag v0.16.2 push → publish-npm PASS\n- npm registry dist-tags.latest === 0.16.2\n- GitHub Release v0.16.2 published\n- fix branch 로컬+원격 제거",
+          "approach": "이전 v0.15.1 / v0.16.0 / v0.16.1 사이클 전례 그대로.",
+          "plan_issue": 1,
+          "deps": [
+            2,
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-23T09:25:34.270Z"
+        }
+      ]
     }
   ]
 }

@@ -240,10 +240,16 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
   // they finish a turn, and notifying on each of those would be spam.
   const rootSessions = new Set<string>();
   // Holds the most recently observed assistant text part per root session.
-  // Updated on every `message.part.updated` with a text part, reset at each
-  // new turn (session.status busy) so stale text from a prior turn never
-  // leaks into the next notification. Read and cleared on `session.idle`.
+  // Updated on every `message.part.updated` text part that arrives *during
+  // an active assistant turn*, read and cleared on `session.idle`.
   const rootSessionLastText = new Map<string, string>();
+  // Tracks whether the current turn has reached the assistant's response
+  // phase. Set to true on `message.part.updated` with a `step-start` part,
+  // cleared on `session.idle` / `session.deleted`. Only while true do we
+  // accept text parts into `rootSessionLastText` — this guards against
+  // accidentally caching the user's input text or other pre-assistant
+  // payloads as the preview body.
+  const assistantTurnActive = new Map<string, boolean>();
 
   return {
     config: async (config) => {
@@ -272,6 +278,7 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         const wasRoot = rootSessions.has(event.properties.info.id);
         rootSessions.delete(event.properties.info.id);
         rootSessionLastText.delete(event.properties.info.id);
+        assistantTurnActive.delete(event.properties.info.id);
         if (wasRoot) {
           cmuxClearStatus(PILL_KEY);
         }
@@ -288,14 +295,19 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         // overwrite this back to "Running".
         cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
         rootSessionLastText.delete(event.properties.sessionID);
+        assistantTurnActive.delete(event.properties.sessionID);
         return;
       }
       if (event.type === "session.status" && rootSessions.has(event.properties.sessionID)) {
         const status = event.properties.status;
         if (status.type === "busy") {
-          // New turn starting — drop any cached text so the next idle notify
-          // never shows the previous turn's preview as a fallback.
-          rootSessionLastText.delete(event.properties.sessionID);
+          // v0.16.0 had `rootSessionLastText.delete(sessionID)` here to
+          // "reset on new turn". That was wrong: OpenCode emits session.status
+          // busy multiple times per turn (often four times — twice at start
+          // and twice near the end, before session.idle). One of those late
+          // busy events would wipe the freshly cached assistant text, leaving
+          // session.idle to fall back to "Response ready". Turn boundaries
+          // are now tracked via message.part.updated `step-start`, not busy.
           cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR);
         } else if (status.type === "retry") {
           cmuxLog("warning", LOG_SOURCE, `Retrying (attempt ${status.attempt}): ${status.message}`);
@@ -309,18 +321,21 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         return;
       }
       if (event.type === "message.part.updated") {
-        // Cache the latest text part seen for each root session so that the
-        // next session.idle notification can preview the response. The first
-        // text part in a turn is the user input; later text parts from the
-        // assistant overwrite it via Map.set, so by the time session.idle
-        // fires we are holding the assistant's latest text. Subagents and
-        // non-root sessions are ignored (no cache slot).
+        // Turn structure (empirically confirmed via v0.16.1 diagnostic):
+        //   message.part.updated (text, user input, short length)
+        //   session.status busy × 1-2
+        //   message.part.updated (step-start)   ← assistant turn begins
+        //   message.part.updated (text, len=0)  ← streaming delta
+        //   message.part.updated (text, len=N)  ← final assistant text
+        //   message.part.updated (step-finish)
+        //   session.status × 1-2, then session.idle
+        // So we treat `step-start` as the assistant-turn boundary: only
+        // text parts emitted after that marker are cached as preview
+        // material. This cleanly discards user input parts and any
+        // pre-assistant payloads.
         const part = event.properties.part;
-        // v0.16.1 temporary diagnostic: when users hit the "Response ready"
-        // fallback even though their response text appeared on screen, we
-        // need the per-event (type, sessionID, rootKnown, textLen) shape to
-        // pick between part-type / sessionID / payload hypotheses. Gated by
-        // an opt-in env so default runs stay quiet.
+        // Opt-in diagnostic, still useful if similar cache-miss bugs come
+        // back. Kept gated behind OPENCODE_NEXUS_DEBUG_PREVIEW.
         if (isPreviewDebugEnabled()) {
           const partSessionID = (part as { sessionID?: unknown }).sessionID;
           const partText = (part as { text?: unknown }).text;
@@ -331,10 +346,21 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
             `preview-debug: part.type=${part.type} sessionID=${String(partSessionID)} rootKnown=${rootSessions.has(String(partSessionID))} textLen=${textLen}`,
           );
         }
-        if (part.type !== "text") return;
-        if (!rootSessions.has(part.sessionID)) return;
-        if (typeof part.text === "string" && part.text.length > 0) {
-          rootSessionLastText.set(part.sessionID, part.text);
+        const partSessionID = (part as { sessionID?: unknown }).sessionID;
+        if (typeof partSessionID !== "string" || !rootSessions.has(partSessionID)) return;
+        if (part.type === "step-start") {
+          // New assistant step begins — flag the turn and drop any stale
+          // text cached from a previous (possibly aborted) turn.
+          assistantTurnActive.set(partSessionID, true);
+          rootSessionLastText.delete(partSessionID);
+          return;
+        }
+        if (part.type === "text" && assistantTurnActive.get(partSessionID) === true) {
+          const text = (part as { text?: unknown }).text;
+          if (typeof text === "string" && text.length > 0) {
+            rootSessionLastText.set(partSessionID, text);
+          }
+          return;
         }
         return;
       }
