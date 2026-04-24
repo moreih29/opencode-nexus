@@ -380,7 +380,13 @@ async function main() {
         },
       },
     });
-    const callsB = await waitForCmuxCalls(logFile, 1);
+    // On the first idle→running transition we now clear cmux sidebar logs
+    // before setting Running (plan issue 1 source-of-truth).
+    const callsB = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsB.filter((call) => call[0] === "clear-log").length === 1,
+      `cmux-b: first root busy must clear cmux log exactly once, got ${JSON.stringify(callsB)}`,
+    );
     assert(
       callsB.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running" && call[3] === "--icon" && call[4] === "bolt" && call[5] === "--color" && call[6] === "#007AFF"),
       `cmux-b: root busy must set Running pill, got ${JSON.stringify(callsB)}`,
@@ -548,8 +554,8 @@ async function main() {
         },
       });
     }
-    const callsK = await waitForCmuxCalls(logFile, 20, 3000);
-    assert(callsK.length >= 20, `cmux-k: expected >= 20 serialized cmux calls, got ${callsK.length}`);
+    const callsK = await waitForCmuxCalls(logFile, 30, 3000);
+    assert(callsK.length >= 30, `cmux-k: expected >= 30 serialized cmux calls, got ${callsK.length}`);
     const lastK = callsK[callsK.length - 1];
     // With session.status idle now transitioning the pill to Needs Input
     // (not clear), the last cmux call in a busy→idle ping-pong must be
@@ -657,7 +663,7 @@ async function main() {
         properties: { sessionID: rootSessionID },
       },
     });
-    const callsM = await waitForCmuxCalls(logFile, 3);
+    const callsM = await waitForCmuxCalls(logFile, 4);
     const notifyM = callsM.find((call) => call[0] === "notify");
     assert(notifyM, `cmux-m: session.idle must fire notify, got ${JSON.stringify(callsM)}`);
     const bodyM = notifyM[notifyM.indexOf("--body") + 1];
@@ -713,7 +719,7 @@ async function main() {
         properties: { sessionID: rootSessionID },
       },
     });
-    const callsN = await waitForCmuxCalls(logFile, 3);
+    const callsN = await waitForCmuxCalls(logFile, 4);
     delete process.env.OPENCODE_NEXUS_NOTIFY_PREVIEW;
     const notifyN = callsN.find((call) => call[0] === "notify");
     assert(notifyN, `cmux-n: session.idle must fire notify, got ${JSON.stringify(callsN)}`);
@@ -738,7 +744,7 @@ async function main() {
         properties: { sessionID: rootSessionID },
       },
     });
-    const callsO = await waitForCmuxCalls(logFile, 3);
+    const callsO = await waitForCmuxCalls(logFile, 4);
     const notifyO = callsO.find((call) => call[0] === "notify");
     assert(notifyO, `cmux-o: session.idle must fire notify even without prior text, got ${JSON.stringify(callsO)}`);
     const bodyO = notifyO[notifyO.indexOf("--body") + 1];
@@ -908,7 +914,7 @@ async function main() {
         },
       },
     });
-    const callsR = await waitForCmuxCalls(logFile, 2);
+    const callsR = await waitForCmuxCalls(logFile, 3);
     assert(
       callsR.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running" && call[3] === "--icon" && call[4] === "bolt" && call[5] === "--color" && call[6] === "#007AFF"),
       `cmux-r: pre-abort busy must set Running pill, got ${JSON.stringify(callsR)}`,
@@ -982,7 +988,7 @@ async function main() {
         },
       },
     });
-    const callsS = await waitForCmuxCalls(logFile, 4);
+    const callsS = await waitForCmuxCalls(logFile, 5);
     assert(
       callsS.some((call) => call[0] === "log" && call[1] === "--level" && call[2] === "error" && call[3] === "--source" && call[4] === "nexus"),
       `cmux-s: non-abort session.error must write error log, got ${JSON.stringify(callsS)}`,
@@ -1005,6 +1011,189 @@ async function main() {
     if (originalCmuxDisableS === undefined) delete process.env.OPENCODE_NEXUS_CMUX;
     else process.env.OPENCODE_NEXUS_CMUX = originalCmuxDisableS;
     rmSync(cmuxScenarioSDir, { recursive: true, force: true });
+  }
+
+  const cmuxScenarioTDir = mkdtempSync(join(tmpdir(), "opencode-nexus-cmux-tuvw-"));
+  const originalPathT = process.env.PATH;
+  const originalWorkspaceIDT = process.env.CMUX_WORKSPACE_ID;
+  const originalCmuxTestLogT = process.env.CMUX_TEST_LOG;
+  const originalCmuxDisableT = process.env.OPENCODE_NEXUS_CMUX;
+  try {
+    const { binDir, logFile } = installCmuxShim(cmuxScenarioTDir);
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ""}`;
+    process.env.CMUX_WORKSPACE_ID = "test-workspace-t";
+    process.env.CMUX_TEST_LOG = logFile;
+    delete process.env.OPENCODE_NEXUS_CMUX;
+
+    const cmuxHooksT = await pluginModule.default({ directory: process.cwd() });
+    const rootSessionIDT = "root-session-t";
+    const otherSessionIDT = "other-session-t";
+    await cmuxHooksT.event({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: rootSessionIDT,
+            parentID: undefined,
+          },
+        },
+      },
+    });
+
+    // cmux-t: Primary user path — after an error, the next user input starts
+    // a new busy turn and stale error log entries should be auto-cleared
+    // ("에러 후 새 입력이 오면 에러 로그 자동 제거").
+    resetCmuxLog(logFile);
+    await cmuxHooksT.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: rootSessionIDT,
+          error: { message: "boom" },
+        },
+      },
+    });
+    await waitForCmuxCalls(logFile, 3);
+    resetCmuxLog(logFile);
+    await cmuxHooksT.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionIDT,
+          status: { type: "busy" },
+        },
+      },
+    });
+    const callsT = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsT.filter((call) => call[0] === "clear-log").length === 1,
+      `cmux-t: post-error busy must emit clear-log exactly once, got ${JSON.stringify(callsT)}`,
+    );
+    assert(
+      callsT.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running" && call[3] === "--icon" && call[4] === "bolt" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-t: post-error busy must set Running pill, got ${JSON.stringify(callsT)}`,
+    );
+
+    // cmux-u: Dedup guard — repeated busy events in one turn clear only once.
+    resetCmuxLog(logFile);
+    await cmuxHooksT.event({
+      event: {
+        type: "session.idle",
+        properties: {
+          sessionID: rootSessionIDT,
+        },
+      },
+    });
+    await waitForCmuxCalls(logFile, 2);
+    resetCmuxLog(logFile);
+    for (let i = 0; i < 5; i++) {
+      await cmuxHooksT.event({
+        event: {
+          type: "session.status",
+          properties: {
+            sessionID: rootSessionIDT,
+            status: { type: "busy" },
+          },
+        },
+      });
+    }
+    const callsU = await waitForCmuxCalls(logFile, 6);
+    assert(
+      callsU.filter((call) => call[0] === "clear-log").length === 1,
+      `cmux-u: repeated busy in one turn must clear-log exactly once, got ${JSON.stringify(callsU)}`,
+    );
+    assert(
+      callsU.filter((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running").length === 5,
+      `cmux-u: repeated busy in one turn must set Running 5 times, got ${JSON.stringify(callsU)}`,
+    );
+
+    // cmux-v: MessageAbortedError should still reset running-state tracking so
+    // the next busy transition re-triggers clear-log.
+    resetCmuxLog(logFile);
+    await cmuxHooksT.event({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID: rootSessionIDT,
+          error: { name: "MessageAbortedError", message: "aborted" },
+        },
+      },
+    });
+    const callsVAbort = await waitForCmuxCalls(logFile, 1);
+    assert(
+      callsVAbort.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Needs Input"),
+      `cmux-v: MessageAbortedError must set Needs Input before next busy, got ${JSON.stringify(callsVAbort)}`,
+    );
+    resetCmuxLog(logFile);
+    await cmuxHooksT.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionIDT,
+          status: { type: "busy" },
+        },
+      },
+    });
+    const callsV = await waitForCmuxCalls(logFile, 2);
+    assert(
+      callsV.some((call) => call[0] === "clear-log"),
+      `cmux-v: post-abort busy must emit clear-log, got ${JSON.stringify(callsV)}`,
+    );
+    assert(
+      callsV.some((call) => call[0] === "set-status" && call[1] === "nexus-state" && call[2] === "Running" && call[3] === "--icon" && call[4] === "bolt" && call[5] === "--color" && call[6] === "#007AFF"),
+      `cmux-v: post-abort busy must set Running pill, got ${JSON.stringify(callsV)}`,
+    );
+
+    // cmux-w: Negative guard 1 — disabled mode must suppress cmux writes.
+    resetCmuxLog(logFile);
+    process.env.OPENCODE_NEXUS_CMUX = "0";
+    await cmuxHooksT.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: rootSessionIDT,
+          status: { type: "busy" },
+        },
+      },
+    });
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 150));
+    const callsWDisabled = readCmuxCalls(logFile);
+    assert(callsWDisabled.length === 0, `cmux-w: disabled mode busy must not spawn cmux, got ${JSON.stringify(callsWDisabled)}`);
+    delete process.env.OPENCODE_NEXUS_CMUX;
+    await cmuxHooksT.event({
+      event: {
+        type: "session.idle",
+        properties: {
+          sessionID: rootSessionIDT,
+        },
+      },
+    });
+    await waitForCmuxCalls(logFile, 2);
+
+    // cmux-w: Negative guard 2 — non-root busy must not spawn cmux writes.
+    resetCmuxLog(logFile);
+    await cmuxHooksT.event({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID: otherSessionIDT,
+          status: { type: "busy" },
+        },
+      },
+    });
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 150));
+    const callsWNonRoot = readCmuxCalls(logFile);
+    assert(callsWNonRoot.length === 0, `cmux-w: non-root busy must not spawn cmux, got ${JSON.stringify(callsWNonRoot)}`);
+  } finally {
+    if (originalPathT === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPathT;
+    if (originalWorkspaceIDT === undefined) delete process.env.CMUX_WORKSPACE_ID;
+    else process.env.CMUX_WORKSPACE_ID = originalWorkspaceIDT;
+    if (originalCmuxTestLogT === undefined) delete process.env.CMUX_TEST_LOG;
+    else process.env.CMUX_TEST_LOG = originalCmuxTestLogT;
+    if (originalCmuxDisableT === undefined) delete process.env.OPENCODE_NEXUS_CMUX;
+    else process.env.OPENCODE_NEXUS_CMUX = originalCmuxDisableT;
+    rmSync(cmuxScenarioTDir, { recursive: true, force: true });
   }
 
   if (failures.length > 0) {
