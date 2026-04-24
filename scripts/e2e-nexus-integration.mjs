@@ -244,6 +244,7 @@ async function main() {
     const negativeResult = await run("node", [negativeScript, "--dry-run"], { timeoutMs: 10000 });
     assert(!negativeResult.timedOut, "post-sync-a: wrong expected count negative test timed out");
     assert(negativeResult.code !== 0, "post-sync-a: wrong expected count negative test must fail non-zero");
+    assert(negativeResult.stderr.includes("Likely causes:"), "post-sync-a: wrong expected count negative test must print diagnostic hints");
   } finally {
     rmSync(asyncifyNegativeDir, { recursive: true, force: true });
   }

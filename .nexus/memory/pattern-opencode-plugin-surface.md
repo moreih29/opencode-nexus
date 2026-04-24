@@ -116,16 +116,25 @@ bump 작업 시 수정 대상: 루트 `package.json`만. `bun install`로 `bun.l
 - `empirical-cmux-pill-clear-paths.md` — cmux 통합 회귀 방지 원리 (set-clear pair, spawn serialize)
 - `pattern-bug-fix-routing.md` — upstream vs local 경로 분리
 
-## 8. Post-sync asyncify layer (Phase 1 temporary)
+## 8. Post-sync asyncify layer
 
-`scripts/post-sync-asyncify.mjs`는 Phase 1의 임시 치환 레이어다. `bun run sync`로 생성된 skill 본문 중 `{{subagent_spawn type="U2" ...}}` 매크로가 OpenCode 하네스에서 `task({subagent_type, ...})`로 치환된 결과를, 다시 `nexus_spawn({agent_id, ...})` 호출로 교체한다.
+`scripts/post-sync-asyncify.mjs`는 opencode-nexus sync 파이프라인의 정규 layer다. `bun run sync`가 `nexus-sync --harness=opencode`를 실행한 뒤 체이닝되어, (1) subagent_spawn 매크로가 opencode 하네스에서 렌더된 `task({subagent_type,...})`를 `nexus_spawn({agent_id,...})`로 치환하고, (2) upstream sync가 덮어쓰는 9개 agent의 Lead-monopoly permission(`nexus_spawn: "deny"`, `nexus_result: "deny"`)을 재주입한다.
 
-- **존재 이유**: nexus-core가 아직 `subagent_spawn_async` 매크로를 제공하지 않아서, sync 출력 후 후처리로 async spawn을 주입한다.
-- **치환 대상**: `.opencode/skills/nx-plan/SKILL.md`, `.opencode/skills/nx-auto-plan/SKILL.md` (agent body가 아닌 skill body에 매크로가 있음).
-- **치환 건수 assertion 상수**: 8건.
-- **제거 전망**: Phase 3에서 nexus-core 이슈 [#68](https://github.com/moreih29/nexus-core/issues/68)가 반영되면 제거된다.
+### 장기 유지 정책
 
-관련 경험 기록: [`empirical-opencode-async-session.md`](./empirical-opencode-async-session.md)
+nexus-core 메인테이너가 [#68](https://github.com/moreih29/nexus-core/issues/68)(closed, not planned)에서 이 downstream post-process 패턴을 legitimate integration으로 명시 인정했다. 우리는 cycle 12 Issue 2 α1 결정에 따라 이 레이어를 영구 유지하며, variant 협력 이슈를 선제 제기하지 않는다. 자동 합류 조건: opencode runtime이 task tool에 native async를 추가하거나 nexus-core가 self-initiated harness variant를 도입하는 경우 — 그때 별도 cycle에서 제거 재평가.
+
+### Dependency contract
+
+- `nexus-core harness/opencode/invocations.yml:5` — subagent_spawn template이 정확히 `task({ subagent_type: "{target_role}", prompt: "{prompt}", description: "{name}" })` 형태임을 전제. bump 시 이 라인이 변경되면 `scripts/post-sync-asyncify.mjs`의 regex 업데이트 필요.
+- Assertion 3개(치환 8 / 파일 9 / entry 18)가 fail-fast drift 감지. 실패 시 stderr에 "Likely causes:" 진단 힌트 출력.
+- `nexus-core spec/agents/*/body.md` — subagent_spawn 매크로 **미사용**(역할 정의만). Phase 계획 시 이 사실을 추정이 아닌 grep으로 verified evidence로 확인할 것. 근거: `empirical-sync-macro-usage-verification.md`.
+
+### Phase 2 phantom scope 관찰 기록
+
+Note: 원래 Phase 2 계획("expand replacement scope to DO/CHECK agents")은 phantom scope였음. nexus-core spec 구조상 agent body에 subagent_spawn 매크로가 없고, 스폰은 skill body가 담당. 권한 주입은 이미 9 agents × 2 entries = 18 entries로 Phase 1에서 완료. 향후 skill body에 새 subagent_spawn 사용처가 추가되면 on-demand 확대.
+
+관련 경험 기록: [`empirical-opencode-async-session.md`](./empirical-opencode-async-session.md), [`empirical-sync-macro-usage-verification.md`](./empirical-sync-macro-usage-verification.md)
 
 ## 조사 원본
 

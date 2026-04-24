@@ -87,7 +87,7 @@ It also normalizes these defaults:
 - `agent.build.disable: true`
 - `agent.plan.disable: true`
 
-For development synchronization, `bun run sync` generates skills/agents from `nexus-core` and then chains `post-sync-asyncify` to replace the Lead + four HOW agents' `subagent_spawn` calls with async `nexus_spawn` calls. This is a temporary Phase 1 measure and will be removed once the upstream `nexus-core` macro ([moreih29/nexus-core#68](https://github.com/moreih29/nexus-core/issues/68)) lands.
+For development synchronization, `bun run sync` generates skills/agents from `nexus-core` and then chains `post-sync-asyncify` to replace the Lead + four HOW agents' `subagent_spawn` calls with async `nexus_spawn` calls. Post-sync asyncify is a regular component of the opencode-nexus sync pipeline. The nexus-core maintainer has acknowledged this as a [legitimate downstream integration pattern](https://github.com/moreih29/nexus-core/issues/68) (#68 closed, 2026-04-24).
 
 ## Scope
 
@@ -252,9 +252,9 @@ Lead can spawn subagents in the background using the `nexus_spawn` custom tool. 
 
 ### Phase plan
 
-- **Phase 1 (current)**: U2 replacement via `scripts/post-sync-asyncify.mjs`. On `bun run sync`, 8 occurrences of `task({subagent_type,...})` are replaced with `nexus_spawn({agent_id,...})`.
-- **Phase 2**: Expand replacement targets and stabilize.
-- **Phase 3**: Remove the post-sync layer once nexus-core issue [#68](https://github.com/moreih29/nexus-core/issues/68) is resolved. Use the upstream `subagent_spawn_async` macro directly.
+- **Phase 1**: Initial implementation complete (A-MVP plugin + post-sync asyncify, cycle 11). `scripts/post-sync-asyncify.mjs` replaces 8 occurrences of `task({subagent_type,...})` with `nexus_spawn({agent_id,...})` on `bun run sync`.
+- **Phase 2**: The original "expand replacement scope to DO/CHECK agents" plan was a phantom scope — the nexus-core spec structure has no `subagent_spawn` macro in agent bodies. Current replacement targets are 8 occurrences in `nx-plan`/`nx-auto-plan` skill bodies. Will expand on demand if nexus-core spec introduces new `subagent_spawn` usage in skill bodies.
+- **Phase 3**: The original "remove post-sync asyncify" goal is abandoned. Post-sync is retained as a permanent layer. Removal will be re-evaluated in a separate cycle only if the opencode runtime adds native async to the task tool or nexus-core introduces a self-initiated harness variant.
 
 ### Installation requirements
 

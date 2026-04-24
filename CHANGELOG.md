@@ -8,18 +8,20 @@
 
 - **`nexus_spawn` / `nexus_result` custom tool** — Lead가 subagent를 비동기로 spawn하고 결과를 조회할 수 있는 A-MVP primary unblock 기능. 구현 위치: `src/plugin.ts`.
 - **9개 subagent permission에 `nexus_spawn: deny`, `nexus_result: deny` 추가** — Lead 독점 원칙 적용.
-- **`scripts/post-sync-asyncify.mjs`** — Phase 1 U2 치환 레이어. `bun run sync` 시 `.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`에서 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})`로 8건 치환. Phase 3에서 제거 예정.
+- **`scripts/post-sync-asyncify.mjs`** — Phase 1 U2 치환 레이어. `bun run sync` 시 `.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`에서 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})`로 8건 치환.
+- **post-sync-asyncify.mjs 보강** — 헤더를 정규 layer로 승격, assertion 실패 시 "Likely causes:" 진단 힌트, invocations.yml:5 dependency contract 명시, permission injection brace-aware scanner(line comment/trailing comma/whitespace 변형 안전)
 - **README 비동기 서브에이전트 실험적 섹션** — 한국어/영문 모두 추가.
 
 ### 변경됨
 
 - **package.json의 `sync` / `sync:dry` script가 `post-sync-asyncify.mjs`를 이어 실행** — sync 출력 후 asyncify 후처리가 체이닝됨.
 - **`.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`가 sync 시점에 치환됨** — `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` (8건). 이 파일들은 sync 생성물이므로 저장소에서 직접 수정하지 않음.
+- **Phase 3 전략 재설정** — post-sync asyncify를 opencode-nexus sync 파이프라인의 영구 component로 승격. 원래 "migration 제거" 목표는 폐기. 이유: nexus-core 메인테이너가 vocabulary 확장 제안(#68)을 정당한 3 논거로 거절하되 downstream post-sync를 legitimate pattern으로 인정.
 
 ### 업스트림
 
 - **`@moreih29/nexus-core` 버전 변경 없음**.
-- **nexus-core 저장소에 이슈 제기**: [moreih29/nexus-core#68](https://github.com/moreih29/nexus-core/issues/68) (`subagent_spawn_async` 매크로 제안) — 해결 시 Phase 3 진입.
+- **[nexus-core#68](https://github.com/moreih29/nexus-core/issues/68) closed (not planned, 2026-04-24)** — 3 논거 전면 수용. variant 협력 경로는 미래 조건부 자원으로 보존, 선제 이슈 제기 안 함.
 
 ### 사용자 영향
 
@@ -31,6 +33,7 @@
 
 - `bun run check` PASS
 - `bun run test:e2e` 진행 중 (Task 5가 async e2e 시나리오 추가)
+- cycle 12에서 `bun run check` / `test:e2e` / `sync` 재확인 (치환 8/18/9 files PASS)
 
 ## [0.16.4] — 2026-04-24
 
