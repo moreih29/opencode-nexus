@@ -239,6 +239,27 @@ for (const target of permissionTargets) {
   }
 }
 
+// Graceful skip: in dry-run mode, if all sync outputs are missing from disk
+// (e.g. fresh CI checkout before `bun run sync` has ever run), we cannot
+// meaningfully assert replacement/permission counts. Exit with a warning
+// instead of failing — the actual sync pipeline runs in full (non-dry) mode
+// during `bun run sync` and `bun run test:e2e`, which exercise the assertions.
+const missingTargetCount = summaries.filter((entry) => entry.skipped).length;
+const missingPermCount = permissionSummaries.filter((entry) => entry.skipped).length;
+
+if (
+  dryRun &&
+  missingTargetCount === targets.length &&
+  missingPermCount === permissionTargets.length
+) {
+  console.warn(
+    `[post-sync-asyncify] dry-run: sync outputs not present on disk (${missingTargetCount} asyncify target(s) + ${missingPermCount} permission target(s) missing). ` +
+      `Skipping assertions — this is expected on a fresh checkout before \`bun run sync\` creates generated files. ` +
+      `Run \`bun run sync\` (not dry) or \`bun run test:e2e\` to exercise full assertions.`,
+  );
+  process.exit(0);
+}
+
 if (replacementCount + (asyncifiedCount - replacementCount) !== expectedReplacementCount) {
   console.error(
     `[post-sync-asyncify] ASSERTION FAILED: expected ${expectedReplacementCount} subagent_spawn replacements, got ${asyncifiedCount}.\n\n` +
