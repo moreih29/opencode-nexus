@@ -34,12 +34,15 @@ import { resolve } from "node:path";
 
 const dryRun = process.argv.includes("--dry-run");
 
+// Asyncify targets: only the generated skill bodies actually emit
+// `task({ subagent_type, ... })` from the `subagent_spawn` macro. Agent
+// body files (`src/agents/*.ts`) render role definitions and never host
+// the macro — see `.nexus/memory/empirical-sync-macro-usage-verification.md`
+// for why this distinction matters (phantom scope lesson from cycle 12).
+// Keeping only skill-body targets also lets the dry-run graceful-skip
+// condition trigger correctly on fresh CI checkouts where `.opencode/` is
+// gitignored.
 const targets = [
-  "src/agents/lead.ts",
-  "src/agents/architect.ts",
-  "src/agents/designer.ts",
-  "src/agents/postdoc.ts",
-  "src/agents/strategist.ts",
   ".opencode/skills/nx-plan/SKILL.md",
   ".opencode/skills/nx-auto-plan/SKILL.md",
   ".opencode/skills/nx-run/SKILL.md",
@@ -239,28 +242,24 @@ for (const target of permissionTargets) {
   }
 }
 
-// Graceful skip: in dry-run mode, if all sync outputs are missing from disk
-// (e.g. fresh CI checkout before `bun run sync` has ever run), we cannot
-// meaningfully assert replacement/permission counts. Exit with a warning
-// instead of failing — the actual sync pipeline runs in full (non-dry) mode
-// during `bun run sync` and `bun run test:e2e`, which exercise the assertions.
+// Graceful skip (per-assertion): in dry-run mode, if all asyncify targets
+// are missing from disk (e.g. fresh CI checkout before `bun run sync` has
+// ever run — `.opencode/skills/*` is gitignored), we cannot meaningfully
+// assert replacement counts. Permission targets (`src/agents/*.ts`) are
+// git-tracked, so their assertion runs even on fresh checkouts. Both
+// assertions always run in non-dry invocations (`bun run sync`,
+// `bun run test:e2e`), which exercise the full contract.
 const missingTargetCount = summaries.filter((entry) => entry.skipped).length;
 const missingPermCount = permissionSummaries.filter((entry) => entry.skipped).length;
+const skipAsyncifyAssertion = dryRun && missingTargetCount === targets.length;
+const skipPermissionAssertion = dryRun && missingPermCount === permissionTargets.length;
 
-if (
-  dryRun &&
-  missingTargetCount === targets.length &&
-  missingPermCount === permissionTargets.length
-) {
+if (skipAsyncifyAssertion) {
   console.warn(
-    `[post-sync-asyncify] dry-run: sync outputs not present on disk (${missingTargetCount} asyncify target(s) + ${missingPermCount} permission target(s) missing). ` +
-      `Skipping assertions — this is expected on a fresh checkout before \`bun run sync\` creates generated files. ` +
-      `Run \`bun run sync\` (not dry) or \`bun run test:e2e\` to exercise full assertions.`,
+    `[post-sync-asyncify] dry-run: asyncify targets (${targets.length} skill bodies) not present on disk — ` +
+      `expected on a fresh checkout before \`bun run sync\` creates them. Skipping replacement-count assertion.`,
   );
-  process.exit(0);
-}
-
-if (replacementCount + (asyncifiedCount - replacementCount) !== expectedReplacementCount) {
+} else if (asyncifiedCount !== expectedReplacementCount) {
   console.error(
     `[post-sync-asyncify] ASSERTION FAILED: expected ${expectedReplacementCount} subagent_spawn replacements, got ${asyncifiedCount}.\n\n` +
       `Likely causes:\n` +
@@ -275,7 +274,12 @@ if (replacementCount + (asyncifiedCount - replacementCount) !== expectedReplacem
   process.exit(1);
 }
 
-if (permissionFilesReady !== expectedPermissionFileCount || permissionEntriesPresent !== expectedPermissionEntryCount) {
+if (skipPermissionAssertion) {
+  console.warn(
+    `[post-sync-asyncify] dry-run: permission targets (${permissionTargets.length} agent files) not present on disk. ` +
+      `Skipping permission assertion.`,
+  );
+} else if (permissionFilesReady !== expectedPermissionFileCount || permissionEntriesPresent !== expectedPermissionEntryCount) {
   console.error(
     `[post-sync-asyncify] ASSERTION FAILED: expected ${expectedPermissionEntryCount} permission entries ` +
       `across ${expectedPermissionFileCount} files, got ${permissionEntriesPresent} across ${permissionFilesReady}.\n\n` +
