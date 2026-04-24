@@ -3,6 +3,8 @@ export const researcher = {
   name: "researcher",
   description: "Independent investigation — conducts web searches, gathers evidence, and reports findings with citations",
   permission: {
+    nexus_spawn: "deny",
+    nexus_result: "deny",
     nx_task_add: "deny",
     nx_task_close: "deny",
     task: "deny",

@@ -49,7 +49,7 @@ bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
-특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.16.4`).
+특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.17.0`).
 
 설치된 CLI 버전은 `opencode-nexus --version` 또는 `opencode-nexus version`으로 확인할 수 있습니다.
 
@@ -66,12 +66,12 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `.opencode/skills/` 아래에 Nexus 스킬 복사
 - 현재 실행 중인 CLI 버전으로 plugin pin
 
-`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.16.4`이면 다음과 같이 기록됩니다.
+`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.17.0`이면 다음과 같이 기록됩니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.16.4"],
+  "plugin": ["opencode-nexus@0.17.0"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -86,6 +86,8 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 
 - `agent.build.disable: true`
 - `agent.plan.disable: true`
+
+개발 동기화용 `bun run sync`는 `nexus-core`에서 skill/agent를 생성한 뒤 `post-sync-asyncify`를 이어 실행해 Lead + HOW 4명의 `subagent_spawn` 호출을 `nexus_spawn`(async)로 치환합니다. post-sync asyncify는 opencode-nexus sync 파이프라인의 정규 구성 요소입니다. nexus-core 메인테이너가 이를 [legitimate downstream integration pattern](https://github.com/moreih29/nexus-core/issues/68)으로 인정한 바 있습니다(#68 closed, 2026-04-24).
 
 ## Scope
 
@@ -231,6 +233,32 @@ cmux 사이드바에 작업 상태 pill을 함께 표시합니다.
 재시도(`session.status: retry`)는 토스트 없이 사이드바 로그에 `warning` 레벨로만 기록합니다(noise 최소화).
 
 새로 추가된 상태 표시와 알림도 위 `OPENCODE_NEXUS_CMUX` 환경변수로 동일하게 비활성화할 수 있습니다.
+
+## 비동기 서브에이전트 (실험적)
+
+Lead가 `nexus_spawn` custom tool로 서브에이전트를 background에서 실행할 수 있습니다. primary session은 block되지 않으므로, HOW 병렬 실행이나 장시간 researcher 작업 중에도 Lead가 사용자와 상호작용을 유지할 수 있습니다.
+
+- `nexus_spawn({ agent_id, prompt, description? })` → `{ task_id }`  
+  `description`은 Lead가 task에 붙일 사람이 읽기 쉬운 선택적 라벨입니다.
+- `nexus_result({ task_id })` → `{ status, result?, error? }`
+
+### 현재 한계
+
+- **동시성 제한 없음**: 여러 subagent를 동시에 spawn할 수 있지만, rate limit은 수동으로 관리해야 합니다.
+- **stuck detection 없음**: `promptAsync` wake watchdog가 3초 + 1 retry만 제공합니다.
+- **mid-task inject 불가**: 실행 중인 subagent에 중간 개입할 수 없습니다 (upstream 이슈 [#17691](https://github.com/anomalyco/opencode/issues/17691), [#16102](https://github.com/anomalyco/opencode/issues/16102), [#17412](https://github.com/anomalyco/opencode/issues/17412)).
+- **resume은 sync 유지**: 종료된 subagent를 재개할 때는 여전히 `task({ task_id, prompt })`를 사용합니다.
+- **플러그인 재시작 시 상태 유실**: async task 상태는 메모리 내에서만 유지되므로 OpenCode 재시작 시 사라집니다.
+
+### Phase별 계획
+
+- **Phase 1**: 1차 구현 완료 (A-MVP plugin + post-sync asyncify, cycle 11). `scripts/post-sync-asyncify.mjs`로 `bun run sync` 시 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})`로 8건 치환.
+- **Phase 2**: 원래 "DO/CHECK 확대" 계획은 phantom scope였음 — nexus-core spec 구조상 agent body에는 subagent_spawn 매크로가 없음. 현재 치환 대상은 `nx-plan`/`nx-auto-plan` skill body의 8건. 향후 nexus-core spec이 새 subagent_spawn 사용처를 skill body에 도입하면 on-demand 확대.
+- **Phase 3**: 원래 "post-sync asyncify 제거" 목표는 폐기. post-sync는 영구 layer로 유지. opencode runtime이 task tool에 native async를 추가하거나 nexus-core가 self-initiated로 harness variant를 도입하면 별도 cycle에서 제거 재평가.
+
+### 설치 필요 환경
+
+특별한 설치 없이 기본 OpenCode 환경에서 동작합니다. `nexus_spawn`과 `nexus_result`는 plugin이 자동으로 등록하며, 9개 subagent permission에 이미 `nexus_spawn: deny`, `nexus_result: deny`가 추가되어 Lead 독점 사용 원칙이 적용되어 있습니다.
 
 ## 업그레이드
 

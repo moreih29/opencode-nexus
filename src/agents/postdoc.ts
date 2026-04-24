@@ -3,6 +3,8 @@ export const postdoc = {
   name: "postdoc",
   description: "Research methodology and synthesis — designs investigation approach, evaluates evidence quality, writes synthesis documents",
   permission: {
+    nexus_spawn: "deny",
+    nexus_result: "deny",
     edit: "deny",
     nx_task_add: "deny",
     nx_task_update: "deny",

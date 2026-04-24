@@ -2,6 +2,43 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.17.0] — 2026-04-24
+
+### 추가됨
+
+- **`nexus_spawn` / `nexus_result` custom tool** — Lead가 subagent를 비동기로 spawn하고 결과를 조회할 수 있는 A-MVP primary unblock 기능. `session.create(parentID)` + `session.promptAsync` fire-and-forget + 3초 wake watchdog × 1 retry + `session.messages` 기반 explicit 결과 수거. 구현 위치: `src/plugin.ts`.
+- **9개 subagent permission에 `nexus_spawn: deny`, `nexus_result: deny` 추가** — Lead 독점 원칙 적용.
+- **`scripts/post-sync-asyncify.mjs`** — opencode-nexus sync 파이프라인의 정규 layer. `bun run sync` 시 bundled skill bodies(`skills/nx-plan/SKILL.md`, `skills/nx-auto-plan/SKILL.md` — package.json `files`로 배포되는 것)에서 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` 8건 치환 + 9개 agent 파일 permission 18 entries 재주입(upstream sync가 덮어쓰는 deny를 복원). 헤더에 Responsibilities/Dependency contract 명시, assertion 실패 시 "Likely causes:" 진단 힌트, permission injection brace-aware scanner(line comment/trailing comma/whitespace 변형 안전). dry-run은 targets/permission 각각 독립적으로 graceful-skip하여 fresh CI 체크아웃에서도 통과.
+- **README 비동기 서브에이전트 실험적 섹션** — 한국어/영문 모두 추가. Phase 1~3 로드맵 서술.
+- **`.nexus/memory/empirical-opencode-async-session.md`** — opencode SDK의 `session.create` / `session.promptAsync` / `session.messages` 실증 + upstream 제약(#21524, #21176, #20460) 분석.
+- **`.nexus/memory/empirical-sync-macro-usage-verification.md`** — Phase 계획 시 sync 매크로 사용처를 추정이 아닌 grep으로 verified evidence로 확인하라는 교훈.
+- **`.nexus/memory/pattern-opencode-plugin-surface.md` §8** — Post-sync asyncify layer 운영 정책 + dependency contract(invocations.yml:5) + Phase 2 phantom scope 관찰.
+
+### 변경됨
+
+- **package.json의 `sync` / `sync:dry` script가 `post-sync-asyncify.mjs`를 이어 실행** — sync 출력 후 asyncify 후처리가 체이닝됨.
+- **bundled skill bodies (`skills/nx-plan/SKILL.md`, `skills/nx-auto-plan/SKILL.md`)가 sync 시점에 치환됨** — `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` (8건). 배포 artifact(`npm pack`)에 포함되는 파일들이며, install CLI가 사용자의 `.opencode/skills/`로 복사할 때 자동으로 async 버전이 전달됨.
+- **Phase 3 전략 재설정** — post-sync asyncify를 opencode-nexus sync 파이프라인의 영구 component로 승격. 원래 "migration 제거" 목표는 폐기. 이유: nexus-core 메인테이너가 vocabulary 확장 제안(#68)을 정당한 3 논거로 거절하되 downstream post-sync를 legitimate pattern으로 인정.
+
+### 업스트림
+
+- **`@moreih29/nexus-core` 버전 변경 없음** (0.20.0 유지).
+- **[nexus-core#68](https://github.com/moreih29/nexus-core/issues/68) closed (not planned, 2026-04-24)** — 3 논거 전면 수용. variant 협력 경로는 미래 조건부 자원으로 보존, 선제 이슈 제기 안 함.
+
+### 사용자 영향
+
+- **breaking change 없음**. 기존 사용자는 기존 동작 그대로 유지됩니다. trigger 태그(`[plan]`, `[auto-plan]`, `[run]`)·MCP 인터페이스·CLI·config 모두 동일.
+- Lead가 자율 판단에 따라 `nexus_spawn`을 사용할 수 있게 됩니다. 사용자 체감: HOW 병렬, 장시간 researcher 등 시나리오에서 primary session이 block되지 않음.
+- `nexus_spawn`/`nexus_result`는 Lead 전용이며, subagent는 직접 호출할 수 없습니다 (permission deny).
+- 기존 설치본에서 `opencode-nexus install` 또는 글로벌 업데이트 후 OpenCode 재시작만 하면 반영됨.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS — 기존 cmux 시나리오 + Phase 1 async A-MVP mock 시나리오(`nexus_spawn` 즉시 반환, session.create parentID, watchdog retry, `nexus_result` session.messages fetch, cleanup) + post-sync 치환/permission inject assertion + negative test("Likely causes:" 진단 힌트 확인)
+- `bun run sync` PASS — 치환 8건 / 9 files / 18 permission entries
+- `npm pack --dry-run` 결과 의도 파일만 포함
+
 ## [0.16.4] — 2026-04-24
 
 ### 수정됨

@@ -82,6 +82,45 @@ function resetCmuxLog(logFile) {
   writeFileSync(logFile, "", "utf8");
 }
 
+function countOccurrences(content, pattern) {
+  return [...content.matchAll(pattern)].length;
+}
+
+function parseJsonToolOutput(output) {
+  return typeof output === "string" ? JSON.parse(output) : output;
+}
+
+function installFakeTimers() {
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  const timers = [];
+  let nextID = 1;
+  globalThis.setTimeout = (callback, delay = 0, ...args) => {
+    const id = nextID++;
+    timers.push({ id, callback, delay, args, cleared: false });
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    const timer = timers.find((entry) => entry.id === id);
+    if (timer) timer.cleared = true;
+  };
+
+  return {
+    async runTimersByTime(ms) {
+      const due = timers.filter((timer) => !timer.cleared && timer.delay <= ms);
+      for (const timer of due) {
+        timer.cleared = true;
+        timer.callback(...timer.args);
+        await Promise.resolve();
+      }
+    },
+    restore() {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    },
+  };
+}
+
 async function waitForCmuxCalls(logFile, expectedCount, timeoutMs = 600) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -107,9 +146,78 @@ async function main() {
   assert(typeof config.agent?.lead?.prompt === "string", "config hook must inject lead agent prompt");
   assert(typeof config.agent?.engineer?.prompt === "string", "config hook must inject engineer agent prompt");
 
+  const asyncCalls = { create: [], promptAsync: [], messages: [] };
+  const asyncClient = {
+    session: {
+      create: async (request) => {
+        asyncCalls.create.push(request);
+        return { data: { id: `child-${asyncCalls.create.length}` } };
+      },
+      promptAsync: (request) => {
+        asyncCalls.promptAsync.push(request);
+        return new Promise(() => {});
+      },
+      messages: async (request) => {
+        asyncCalls.messages.push(request);
+        return {
+          data: [
+            { info: { role: "user" }, parts: [{ type: "text", text: "original prompt" }] },
+            { info: { role: "assistant" }, parts: [{ type: "text", text: "child result text" }] },
+          ],
+        };
+      },
+    },
+  };
+  const asyncHooks = await pluginModule.default({ directory: process.cwd(), client: asyncClient });
+  const fakeTimers = installFakeTimers();
+  try {
+    const spawnStartedAt = Date.now();
+    const spawnOutput = parseJsonToolOutput(await asyncHooks.tool.nexus_spawn.execute(
+      { agent_id: "tester", prompt: "verify async retry", description: "Async retry e2e" },
+      { sessionID: "root-async-retry", metadata: () => {} },
+    ));
+    assert(Date.now() - spawnStartedAt < 100, "async-a: nexus_spawn must return { task_id } within 100ms while promptAsync is pending");
+    assert(spawnOutput.task_id === "child-1", `async-a: nexus_spawn must return child task_id, got ${JSON.stringify(spawnOutput)}`);
+    assert(asyncCalls.create[0]?.body?.parentID === "root-async-retry", `async-a: session.create body must include parentID, got ${JSON.stringify(asyncCalls.create[0])}`);
+    assert(asyncCalls.promptAsync.length === 1, `async-a: initial promptAsync must be called once, got ${asyncCalls.promptAsync.length}`);
+    await fakeTimers.runTimersByTime(3000);
+    assert(asyncCalls.promptAsync.length === 2, `async-a: watchdog must retry promptAsync once after 3s without busy, got ${asyncCalls.promptAsync.length}`);
+    await fakeTimers.runTimersByTime(3000);
+    const retryResult = parseJsonToolOutput(await asyncHooks.tool.nexus_result.execute({ task_id: "child-1" }));
+    assert(retryResult.status === "error" && retryResult.error === "idle session wake failed", `async-a: second watchdog timeout must set error status, got ${JSON.stringify(retryResult)}`);
+
+    const resultOutput = parseJsonToolOutput(await asyncHooks.tool.nexus_spawn.execute(
+      { agent_id: "tester", prompt: "produce result", description: "Async result e2e" },
+      { sessionID: "root-async-result", metadata: () => {} },
+    ));
+    await asyncHooks.event({ event: { type: "session.status", properties: { sessionID: resultOutput.task_id, status: { type: "busy" } } } });
+    await asyncHooks.event({ event: { type: "session.idle", properties: { sessionID: resultOutput.task_id } } });
+    const messagesBeforeResult = asyncCalls.messages.length;
+    const completedResult = parseJsonToolOutput(await asyncHooks.tool.nexus_result.execute({ task_id: resultOutput.task_id }));
+    assert(asyncCalls.messages.length === messagesBeforeResult + 1, "async-b: nexus_result for a completed child must explicitly call client.session.messages");
+    assert(completedResult.status === "completed" && completedResult.result === "child result text", `async-b: nexus_result must return latest assistant result, got ${JSON.stringify(completedResult)}`);
+    await asyncHooks.event({ event: { type: "session.deleted", properties: { info: { id: resultOutput.task_id } } } });
+    const deletedResult = parseJsonToolOutput(await asyncHooks.tool.nexus_result.execute({ task_id: resultOutput.task_id }));
+    assert(deletedResult.status === "error" && deletedResult.error?.includes("unknown task_id"), `async-b: deleted child task must return unknown/cleaned response, got ${JSON.stringify(deletedResult)}`);
+
+    const rootCleanupOutput = parseJsonToolOutput(await asyncHooks.tool.nexus_spawn.execute(
+      { agent_id: "tester", prompt: "root cleanup", description: "Root cleanup e2e" },
+      { sessionID: "root-async-cleanup", metadata: () => {} },
+    ));
+    await asyncHooks.event({ event: { type: "session.deleted", properties: { info: { id: "root-async-cleanup" } } } });
+    const rootDeletedResult = parseJsonToolOutput(await asyncHooks.tool.nexus_result.execute({ task_id: rootCleanupOutput.task_id }));
+    assert(rootDeletedResult.status === "error" && rootDeletedResult.error?.includes("unknown task_id"), `async-b: root session deletion must clean child tasks, got ${JSON.stringify(rootDeletedResult)}`);
+  } finally {
+    fakeTimers.restore();
+  }
+
   const dryRun = await run("./node_modules/.bin/nexus-sync", ["--harness=opencode", "--target=./", "--dry-run"]);
   assert(!dryRun.timedOut, "sync --dry-run timed out");
   assert(dryRun.code === 0, `sync --dry-run failed: ${dryRun.stderr || dryRun.stdout}`);
+
+  const syncResult = await run("bun", ["run", "sync"], { timeoutMs: 20000 });
+  assert(!syncResult.timedOut, "post-sync-a: bun run sync timed out");
+  assert(syncResult.code === 0, `post-sync-a: bun run sync failed: ${syncResult.stderr || syncResult.stdout}`);
 
   const requiredPaths = [
     "skills/nx-auto-plan/SKILL.md",
@@ -119,6 +227,29 @@ async function main() {
 
   for (const relativePath of requiredPaths) {
     assert(existsSync(resolve(relativePath)), `missing synced file: ${relativePath}`);
+  }
+
+  // Verify the bundled skill bodies at `skills/*` (root) — these are the
+  // files shipped via `package.json` `files: ["skills", ...]`, so users
+  // only receive async-enabled skills if the rewrite lands here.
+  for (const relativePath of ["skills/nx-plan/SKILL.md", "skills/nx-auto-plan/SKILL.md"]) {
+    const content = readFileSync(resolve(relativePath), "utf8");
+    assert(countOccurrences(content, /nexus_spawn\(/g) >= 1, `post-sync-a: ${relativePath} must contain nexus_spawn(`);
+    assert(countOccurrences(content, /task\(\{\s*subagent_type:/g) === 0, `post-sync-a: ${relativePath} must not retain task({ subagent_type: patterns`);
+    assert(countOccurrences(content, /task\(\{\s*task_id:/g) >= 1, `post-sync-a: ${relativePath} must preserve task({ task_id: resume patterns`);
+  }
+
+  const asyncifyNegativeDir = mkdtempSync(join(tmpdir(), "opencode-nexus-asyncify-negative-"));
+  try {
+    const negativeScript = join(asyncifyNegativeDir, "post-sync-asyncify-wrong-count.mjs");
+    const originalScript = readFileSync(resolve("scripts/post-sync-asyncify.mjs"), "utf8");
+    writeFileSync(negativeScript, originalScript.replace("const expectedReplacementCount = 8;", "const expectedReplacementCount = 999;"), "utf8");
+    const negativeResult = await run("node", [negativeScript, "--dry-run"], { timeoutMs: 10000 });
+    assert(!negativeResult.timedOut, "post-sync-a: wrong expected count negative test timed out");
+    assert(negativeResult.code !== 0, "post-sync-a: wrong expected count negative test must fail non-zero");
+    assert(negativeResult.stderr.includes("Likely causes:"), "post-sync-a: wrong expected count negative test must print diagnostic hints");
+  } finally {
+    rmSync(asyncifyNegativeDir, { recursive: true, force: true });
   }
 
   const tempDir = mkdtempSync(join(tmpdir(), "opencode-nexus-"));

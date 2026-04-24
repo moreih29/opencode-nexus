@@ -3,6 +3,8 @@ export const writer = {
   name: "writer",
   description: "Technical writing — transforms research findings, code, and analysis into clear documents and presentations for the intended audience",
   permission: {
+    nexus_spawn: "deny",
+    nexus_result: "deny",
     nx_task_add: "deny",
     nx_task_close: "deny",
     task: "deny",

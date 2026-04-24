@@ -1632,6 +1632,333 @@
           "created_at": "2026-04-24T00:51:33.022Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-24T13:46:09.408Z",
+      "branch": "feat/async-subagent-phase1",
+      "plan": {
+        "id": 11,
+        "topic": "서브에이전트 비동기 실행 도입 검토",
+        "issues": [
+          {
+            "id": 1,
+            "title": "현상 진단 — blocking의 정확한 층위 규명 (우리 플러그인인지 opencode core인지)",
+            "status": "decided",
+            "decision": "Blocking의 원인은 opencode core의 `TaskTool.execute`(packages/opencode/src/tool/task.ts)가 `ops.prompt`를 `yield*`로 await하는 동기 구현이다. 우리 opencode-nexus 플러그인 코드(src/plugin.ts)는 blocking에 기여하지 않으며 5개 hook(config/event/tool.execute.before/permission.ask/chat.message)만 사용한다. 우리가 제어 가능한 해결 축은 (a) core 우회 — plugin에 custom tool을 등록하고 내부에서 `session.create(parentID)` + `session.promptAsync` + event 구독으로 구현, (b) Lead prompt 패턴 변경 — 여러 task tool call을 한 메시지에 병렬 배치하도록 유도, (c) upstream 이슈 #5887/#20849/#21524 해결 대기 — 수동적. Issue 3에서 이 세 축을 구체화한다. Plugin 내부 재구현만으로 충분하다는 진단은 틀렸으므로 옵션에서 제외한다."
+          },
+          {
+            "id": 2,
+            "title": "투자 가치 판단 — 지금 이 문제를 해결하는 것이 opencode-nexus의 우선순위인가",
+            "status": "decided",
+            "decision": "A·B 해결을 진행한다. 근거: (1) 사용자가 구체 체감 시나리오 3개를 명시적 signal로 제시 — strategist의 \"유저 signal 없음\" 반대 근거 무효화. (2) 최저비용 옵션인 omo 병행 안내만 해도 README 수준의 작업으로 A·B 기능 확보 가능 — 현상유지를 택할 정당화가 없음. (3) 얇은 래퍼 철학·omo 경쟁·upstream 종속 리스크·SUL-1.0 같은 strategist의 여타 반대 근거는 모두 \"A 자체 구현 vs B omo 병행 vs hybrid\" 선택 축에 관련된 것이며 Issue 3에서 구체 방식과 함께 다룬다. (4) C(running subagent inject)는 우선순위 낮으므로 본 cycle의 primary target에서 제외, upstream 이슈(#17691, #16102, #17412) 모니터링으로 대체. Issue 3에서 architect를 투입해 A·B를 어떻게 제공할지 구체 방식을 결정한다."
+          },
+          {
+            "id": 3,
+            "title": "해결 접근법 선택 — async subagent 구현 전략 (omo-style 직접 구현 / omo 병행 / parallel task calls / upstream 대기)",
+            "status": "decided",
+            "decision": "A-MVP(200~400 LOC) 자체 구현으로 진행한다. 구조: (1) custom tool 1~2개 등록 (예: `nexus_spawn` — agent_id·prompt를 받아 task_id 반환, `nexus_result` — task_id로 결과 조회). (2) tool 내부에서 session.create({parentID: currentRootSession}) + session.promptAsync({sessionID, text})로 fire-and-forget 실행. (3) 기존 event hook 확장 — parentID가 있는 session.idle를 child-complete로 분기, message.part.updated의 text 부분을 child별 캐시에 저장 (현재 rootSessionLastText 패턴의 변주). (4) 내부 상태는 Map<task_id, {sessionID, status, result, lastActivity}>로 단순 관리. production 기능(ConcurrencyManager, stuck detector, circuit breaker, state persistence)은 운영하며 점진적 보강하거나 필요 시점에 별개 cycle로 승격. SUL-1.0 대응: omo 파일 직접 참조 최소, `@opencode-ai/sdk` 공식 API 문서 위주 구현. 필수 부수 작업: (a) engineer/tester/researcher 등 permission에 `nexus_spawn: deny`, `nexus_result: deny` 추가 — Lead 독점 원칙 보장. (b) Lead prompt에 \"매 turn 시작 시 pending async task 확인 후 필요 시 nexus_result 호출\" 규칙 추가 — parent notification이 LLM turn 소모하는 문제(#20460)의 MVP 수준 대응. (c) `pattern-opencode-plugin-surface.md`의 bump re-verification checklist에 session.create / session.promptAsync / session.idle.parentID 의존 항목 추가. 한계 인정: A-MVP는 concurrency 제한·stuck 감지 없이 시작하며 rate limit 충돌·네트워크 멈춤은 사용자 수동 대응으로 둔다. 필요 시 incremental 보강 또는 upstream 해결로 회수한다."
+          },
+          {
+            "id": 4,
+            "title": "적용 스코프 — 모든 서브에이전트에 적용할지, HOW 병렬 등 특정 경로만 적용할지",
+            "status": "decided",
+            "decision": "async 허용 스코프는 **모든 9-agent** (I 옵션). Lead가 상황에 맞게 async(nexus_spawn)와 sync(task) 중 선택하며, agent_id는 9개 중 어떤 것이든 가능. 쓰기 race 리스크(engineer/writer 동시 spawn 시 파일 충돌)는 초기에는 Lead의 판단에 맡긴다 — Lead system prompt에 \"쓰기 작업은 직렬화 권고, 병렬은 읽기 위주에 우선 적용\" 가이드라인을 명시. 필요 시점에 concurrency 제한이나 쓰기 격리 로직을 별개 cycle로 보강. 단, 이 스코프를 실제로 구현하려면 skill/agent 본문의 기존 `task({task_id, prompt})` 호출을 async 경로로 전환하는 문제가 발생 — nexus-core 기반 원칙과 충돌 가능. 이 축은 Issue 5에서 별도로 다룬다."
+          },
+          {
+            "id": 5,
+            "title": "Primary unblock 3요구의 기술 타당성 확인 — (a) primary가 subagent 동작 중 user와 대화, (b) primary가 추가 subagent 호출, (c) running subagent에 수정명령 inject. omo 구현 범위 + opencode API 실측 재조사",
+            "status": "decided",
+            "decision": "Primary unblock 3요구의 기술 타당성 매트릭스 확정: (A) primary가 subagent 동작 중 user와 대화 — plugin-level 자체 구현 가능 (omo가 입증: session.create(parentID) + session.promptAsync + event 구독), 비용 저~중. (B) primary가 추가 subagent 호출 — 동일 API 조합으로 자체 구현 가능, 비용 중, 구현 규모 ≈ 2-3k LOC(omo 참고). (C) running subagent에 mid-task inject — omo조차 의도적으로 차단(manager.resume이 running task skip). opencode core에 mid-task inject 공식 API 없음(#17691, #16102, #17412 모두 Open/unmerged). Soft redirect workaround(running session에 promptAsync 직접 전송)는 #21524 부수 관찰일 뿐 공식 동작 아님. Hard interrupt workaround(session.abort + 재호출)는 abort가 cooperative-only라 LLM API blocking 중 실패(#21176). 완전 해결은 upstream 수정 필요. 사용자 우선순위는 \"C는 있으면 좋은 수준, A·B가 우선\" — 따라서 Issue 2/3에서는 A·B 커버 수단에 집중하고 C는 upstream 모니터링으로 미룬다."
+          },
+          {
+            "id": 6,
+            "title": "async custom tool과 nexus-core 매크로 체계의 통합 전략 — U1(nexus-core 매크로 확장) / U2(post-sync 치환) / U3(agent override만) / U4(혼합) 중 선택",
+            "status": "decided",
+            "decision": "U4 단계적 채택 — 3 phase. **Phase 1 (3~5일)**: (a) src/plugin.ts에 A-MVP 구현. (b) scripts/post-sync-asyncify.mjs + 치환 건수 assertion. (c) package.json sync 체이닝. (d) e2e 회귀 테스트. (e) pattern-opencode-plugin-surface.md/README/CHANGELOG 업데이트. **(f) nexus-core 저장소(moreih29/nexus-core)에 GitHub 이슈 제기 — Phase 1과 병렬 착수**: 이슈 본문에 `subagent_spawn_async` 매크로 제안(vocabulary/invocations.yml) + opencode template 제안(harness/opencode/invocations.yml) + spec body 삽입 위치 + 우리 측 Phase 1 U2 post-sync의 존재와 Phase 3 제거 계획을 명시. **PR은 opencode-nexus 측에서 직접 제출하지 않고, 이슈만 제기 — 수정은 nexus-core 메인테이너가 직접 수행 (사용자 요청 2026-04-24).** Phase 1과 nexus-core 작업이 병행되어 Phase 3 시점에 반영될 수 있도록 의도. **Phase 2 (2~3주)**: 치환 대상을 DO/CHECK 4명(engineer, researcher/writer, reviewer, tester)까지 확대. **Phase 3 (이슈 해결·nexus-core 새 버전 릴리스 후)**: scripts/post-sync-asyncify.mjs 제거, sync 원복, memory에 \"post-sync layer 제거됨\" 기록. U3는 harness/opencode/layout.yml이 src/agents sync 지정이라 실행 불가. Phase 1 착수 전 tester가 session.promptAsync empirical 검증 1회."
+          }
+        ],
+        "research_summary": "**조사 요약 (researcher + explore 병렬 수행, 2026-04-24)**\n\n### 1. 현재 실행 구조\n- opencode의 공식 `task` tool(`packages/opencode/src/tool/task.ts`)은 **동기 blocking**. `TaskTool.execute` 내부에서 `ops.prompt({sessionID:nextSession.id,...})`를 `yield*`로 호출하여 subagent 완료까지 primary를 block.\n- 우리 opencode-nexus 플러그인(`src/plugin.ts`)은 **blocking에 기여하지 않음** — `config`/`event`/`tool.execute.before`/`permission.ask`/`chat.message` 5개 hook만 사용하며 subagent spawn 코드는 없음. Agent 정의와 system prompt만 주입.\n- 즉 \"우리 플러그인에서 block된다\"는 사용자 명제는 부정확 — 실제 원인은 opencode core의 task tool 동기 실행.\n\n### 2. opencode의 비동기 API\n- `POST /session/{id}/prompt_async` (SDK `session.promptAsync`) — 204 즉시 반환, fire-and-forget. openapi.json line 3940-4073.\n- `session.create`에 `parentID` 지정 가능 — child session 생성.\n- `event` hook으로 글로벌 SSE 스트림(`session.idle`, `message.part.updated`, `session.error` 등) 구독 가능.\n- 단, **upstream 버그 #21524**: `promptAsync`가 idle 세션을 깨우지 못함.\n- **Issue #20460**: 결과를 parent session에 주입하면 parent LLM turn을 소모 → 비용 문제.\n\n### 3. omo (oh-my-openagent) 분석\n- **레포**: code-yeongyu/oh-my-openagent, npm `oh-my-openagent@3.17.5`, 53.9k stars, 월 28만 다운로드.\n- **라이선스**: SUL-1.0 (Source Available) — 코드 직접 복사 주의.\n- **구현**: plugin이 `call_omo_agent` / `delegate_task` 커스텀 tool을 등록. 내부에서 `session.create(parentID)` + `session.promptAsync` 호출(fire-and-forget). `BackgroundManager`가 event hook으로 완료 추적. `ConcurrencyManager`로 동시 실행 제어. 완료 시 parent session에 notify.\n- **구조적 함의**: opencode core 수정 없이 plugin 레벨에서 async subagent 우회 구현 가능함을 입증.\n\n### 4. 관련 업스트림 이슈 (모두 Open, 2025-12 ~ 2026-04)\n- #5887 True Async/Background Sub-Agent Delegation (기본 task tool이 sync/modal이라는 문제제기)\n- #8322 Show background tasks status in sidebar\n- #20460 Silent result collection (LLM turn 소모 문제)\n- #20849 Plugin-based agent orchestration layer — parallel execution without upstream changes\n- #21524 prompt_async does not wake idle sessions (버그)\n- #21032 omo works on 1.3.13 but not 1.3.14 (omo의 core 호환성 이슈)\n\n### 5. 평가\n- **기술적 적용 가능성**: opencode-nexus는 이미 동일한 plugin API 기반이므로 omo가 입증한 `promptAsync`+`event`+custom tool 패턴 복제 가능.\n- **리스크**: (a) upstream 버그 #21524 종속, (b) #20460 비용 이슈, (c) omo의 core 호환성 이슈(#21032)로 미루어 볼 때 upstream 런타임 변화에 쉽게 깨지는 경로, (d) SUL-1.0 라이선스로 코드 복사 불가(패턴만 참고), (e) 현재 우리 아키텍처가 \"얇은 래퍼\" 원칙(5개 hook만 사용) 유지 중 — 자체 BackgroundManager/ConcurrencyManager 도입은 이 원칙과의 긴장 관계.\n- **대안 축**: (a) omo-style 자체 구현, (b) omo 플러그인을 우리 설치 스펙에 병행 포함, (c) Lead prompt를 \"병렬 task call\" 가이드로 최적화 (opencode가 parallel tool call을 지원하는지 별도 검증 필요), (d) upstream #5887/#20849 해결 대기.",
+        "created_at": "2026-04-24T10:23:48.891Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "session.promptAsync empirical 사전 검증",
+          "status": "completed",
+          "context": "Phase 1 A-MVP 구현 전에 `@opencode-ai/sdk`의 `session.create({parentID})` + `session.promptAsync({sessionID, text})` + `event` hook 조합이 우리 환경에서 실제로 primary unblock을 제공하는지, 그리고 알려진 upstream 이슈 (#21524 idle 세션 wake 불가, #21176 abort cooperative-only, #20460 결과 주입 LLM turn 소모)가 어떤 방식으로 재현되는지 empirical 확인. Issue 6 decision에 따른 architect 권고.",
+          "acceptance": "- 최소 검증 스크립트 또는 수동 실험 절차 수립: (a) parentID 지정한 child session 생성 성공 확인, (b) child에 promptAsync 전송 시 204 즉시 반환 확인, (c) primary가 block되지 않고 다른 prompt에 응답 가능한지 확인, (d) child 완료 시 session.idle 이벤트가 parentID 필드를 포함하는지 확인.\n- 결과 보고 1건 작성 — .nexus/memory/empirical-opencode-async-session.md 경로 제안 (새 empirical- 메모리). 각 관찰에 재현 절차 명시.\n- 재현 환경에서 치명적 blocker 발견 시 Lead에 즉시 에스컬레이션 (A-MVP 구현 계획 재검토 필요).",
+          "approach": "cmux/opencode 로컬 환경에서 최소 플러그인 stub 작성 or @opencode-ai/sdk를 직접 Node script로 호출해 각 API 동작 확인. #21524는 \"idle 세션에 promptAsync\" 시나리오를 직접 구성해 재현 여부 기록. #20460은 child 완료 시 parent session의 LLM turn count 변화 관찰. 정확한 보장을 요구하는 것이 아니라 \"우리 MVP가 의지할 수 있는 동작의 범위\"를 확정하는 것이 목적.",
+          "risk": "opencode 런타임의 private 동작에 의존하는 실험이라, 관찰 결과가 다음 버전에서 달라질 수 있음. empirical- 메모리로 기록해 bump 시 재검증.",
+          "plan_issue": 6,
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_2408b48baffeHeuG0jrLqoo4EE"
+          },
+          "created_at": "2026-04-24T12:18:44.956Z"
+        },
+        {
+          "id": 2,
+          "title": "A-MVP plugin 구현 — nexus_spawn / nexus_result custom tool + event hook 확장",
+          "status": "completed",
+          "context": "Issue 3/4 decision 반영. src/plugin.ts에 custom tool 2개 등록하고 기존 event hook을 child session 감지까지 확장. 9-agent 모두 async 대상 가능. Issue 3 decision에 명시된 부수 작업 (permission 보강 + Lead prompt 가이드) 포함. tester empirical 검증(task 1) 결과를 근거로 API 의존.",
+          "acceptance": "- src/plugin.ts에 두 custom tool 등록: `nexus_spawn({agent_id, prompt}) → {task_id}`, `nexus_result({task_id}) → {status, result?, error?}`. tool 내부에서 session.create({parentID: currentRootSession}) + session.promptAsync({sessionID, text}) 호출.\n- 내부 상태: Map<task_id, {sessionID, parentRootID, status: \"running\"|\"completed\"|\"error\", result?, lastActivity}>.\n- event hook 확장: session.idle event의 sessionID가 위 Map에 있으면 child-complete로 분기, message.part.updated의 text 부분을 child별 캐시에 저장.\n- engineer/tester/researcher/reviewer/writer/postdoc/strategist/architect/designer permission에 `nexus_spawn: deny`, `nexus_result: deny` 추가 — Lead 독점 원칙.\n- Lead system prompt(src/agents/lead.ts 또는 해당 agent body가 sync에서 오므로 lead body의 해당 부분이 변경될 필드 식별 → 실제 수정 경로는 task 4 post-sync 스크립트에서 처리) 확인. MVP 단계에서는 src/agents/lead.ts의 system prompt에 \"async spawn 가능: nexus_spawn, 매 turn 시작 시 pending task 있으면 nexus_result 먼저 호출\" 가이드라인이 반영될 방법을 구현.\n- `bun run check` PASS (TypeScript 타입 에러 없음).",
+          "approach": "(1) @opencode-ai/plugin과 @opencode-ai/sdk의 최신 API에서 custom tool 등록 방법 확인. 플러그인의 Plugin 반환 객체에 tool을 추가하거나 config hook에서 tool 주입 — 정확한 API는 구현 시점에 결정. (2) session API client는 plugin input으로 제공될 가능성 — 확인 필요. (3) rootSessionLastText와 유사한 패턴을 child용 Map으로 재사용하되 별도 컨테이너로 분리. (4) 결과 노출: nexus_result가 completed 상태면 result.text 반환, running이면 status만 반환. (5) error 처리: session.error 이벤트가 child sessionID에 해당하면 Map의 status를 error로 세팅. (6) 재시작 시 Map 유실은 MVP에서는 허용 (persistent state 없음).",
+          "risk": "(1) @opencode-ai/plugin에 custom tool 등록 API의 공식 문서가 부족할 수 있음 — 실패 시 architect 재투입. (2) child session의 event stream에서 부모-자식 연관을 parentID만으로 신뢰할 수 있는지 task 1이 판정. (3) 기존 rootSessionLastText 로직과 새 child 캐시의 생명주기가 충돌하지 않아야 함 — session.deleted 시 양쪽 cleanup 보장.",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_2407b84aaffeLAURVOo3tR40l7"
+          },
+          "created_at": "2026-04-24T12:19:14.526Z"
+        },
+        {
+          "id": 3,
+          "title": "A-MVP plugin 런타임 검증",
+          "status": "completed",
+          "context": "Task 2에서 구현된 A-MVP의 런타임 동작 검증. engineer task 자동 페어.",
+          "acceptance": "- 최소 시나리오 3개 PASS: (a) Lead가 nexus_spawn 호출 후 primary prompt 이어가기 → block되지 않음 확인, (b) child session 완료 후 nexus_result로 결과 수신 확인, (c) 동시에 여러 child spawn → 각 task_id로 독립 추적 확인.\n- permission 회귀: engineer/tester 등이 nexus_spawn 호출 시도하면 deny 확인.\n- Lead가 실제 Lead system prompt 안에서 nexus_spawn을 활용할 수 있는지 시나리오 1개 (HOW 병렬 분석을 async로).\n- 결과는 scripts/e2e-nexus-integration.mjs 수정으로 CI에 포함되거나, 수동 재현 절차 기록.",
+          "approach": "engineer가 제공한 구현을 기존 e2e 패턴(cmux shim + mock opencode)으로 검증. nexus_spawn이 session.create을 호출했는지, session.promptAsync를 호출했는지 mock이 assert. 실제 LLM 호출 없이 동작 검증.",
+          "plan_issue": 3,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_2404f850cffeKuP8rZYitbLLAX"
+          },
+          "created_at": "2026-04-24T12:19:22.667Z"
+        },
+        {
+          "id": 4,
+          "title": "post-sync-asyncify.mjs 스크립트 + package.json sync 체이닝",
+          "status": "completed",
+          "context": "Issue 6 Phase 1의 U2 치환. bun run sync 이후 sync 생성물(src/agents/*.ts와 .opencode/skills/**/SKILL.md)의 subagent_spawn 치환 결과 `task({subagent_type:\"...\", prompt:\"...\", description:\"...\"})` 호출을 `nexus_spawn({agent_id:\"...\", prompt:\"...\"})`로 변환. subagent_resume 경로의 `task({task_id, prompt})`는 MVP에서 sync 유지이므로 명확히 구분.",
+          "acceptance": "- scripts/post-sync-asyncify.mjs 신규 파일.\n- 치환 대상 초기 스코프: Phase 1에서는 Lead + HOW 4명(architect, designer, postdoc, strategist) body가 렌더된 결과. 치환 범위를 명시적 allowlist로 코드에 기록.\n- 치환 건수 assertion 필수: 기대치와 다르면 process.exit(1). 기대치는 코드에 상수로 기록하고 Phase 2 확장 시 함께 수정.\n- subagent_resume 결과(`task({task_id: ...})`)는 치환 대상에서 제외 — 정규식으로 명확히 구분.\n- package.json의 \"sync\" script를 `./node_modules/.bin/nexus-sync --harness=opencode --target=./ && node scripts/post-sync-asyncify.mjs`로 체이닝. \"sync:dry\"도 대응 (dry-run 모드에서는 post-sync도 dry).\n- README에 \"bun run sync가 내부적으로 post-sync 치환을 수행함\" 1문단 명시.\n- `bun run sync` 실제 실행 → src/agents/lead.ts의 lead system prompt 내 `task(...)` (subagent_spawn 경로)가 `nexus_spawn(...)`로 치환된 결과 확인.",
+          "approach": "(1) sync 결과의 src/agents/{id}.ts는 `export const ... = { system: \\`...\\` }` 구조 — backtick template literal 내부. regex는 escape 규칙을 고려. (2) .opencode/skills/**/SKILL.md는 plain markdown. (3) subagent_spawn vs subagent_resume 구분은 `task({ subagent_type: \"...\",` 패턴 (spawn) vs `task({ task_id: \"...\",` 패턴 (resume)으로 명확. (4) 기대 치환 건수는 Lead + HOW 4명 body의 subagent_spawn 등장 횟수를 nexus-core spec에서 확인 후 상수로 기록.",
+          "risk": "nexus-core가 다음 버전에서 opencode invocations.yml의 template 형식을 미세 변경하면 regex가 no-op으로 조용히 회귀 — 치환 건수 assertion이 이를 방어. Phase 2에서 U1 PR로 매크로 자체를 nexus-core에 넣으면 이 방어 자체가 불필요해짐.",
+          "plan_issue": 6,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_24072635effeIcugVvXkmBiIjz"
+          },
+          "created_at": "2026-04-24T12:19:41.513Z"
+        },
+        {
+          "id": 5,
+          "title": "post-sync 치환 e2e 회귀 테스트",
+          "status": "completed",
+          "context": "Task 4의 post-sync 스크립트가 sync 파이프라인 안에서 의도대로 작동하고, 향후 nexus-core bump 시 조용히 회귀하지 않도록 e2e에 포함.",
+          "acceptance": "- scripts/e2e-nexus-integration.mjs에 시나리오 추가: (a) bun run sync 후 src/agents/lead.ts에 `nexus_spawn(` 문자열이 최소 1회 나타남, (b) `task({ subagent_type:` 패턴이 Lead + HOW 4명 agent에서 0건, (c) `task({ task_id:` 패턴(resume)은 그대로 유지됨 확인.\n- 치환 건수 assertion이 sync 과정에서 실제로 터지는지 negative test 1개 — 스크립트에 일부러 잘못된 기대치를 주입한 시나리오에서 exit code != 0 확인.\n- bun run test:e2e PASS.",
+          "plan_issue": 6,
+          "deps": [
+            4
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_2405a970effeCXm9AlfgAsOfGc"
+          },
+          "created_at": "2026-04-24T12:19:47.636Z"
+        },
+        {
+          "id": 6,
+          "title": "문서화 — pattern-opencode-plugin-surface.md + README + CHANGELOG",
+          "status": "completed",
+          "context": "Phase 1 변경 사항을 knowledge layer와 사용자 문서에 반영.",
+          "acceptance": "- `.nexus/memory/pattern-opencode-plugin-surface.md` 업데이트:\n  · §1-2 또는 신규 §1-4 섹션: custom tool 2개(nexus_spawn/nexus_result) 접점 기록.\n  · §1-3: `session.idle`의 parentID 분기, `message.part.updated`의 child 캐시 분기 추가.\n  · §6 bump re-verification checklist에 session.create / session.promptAsync / session.idle.parentID / session.deleted(child) 의존 항목 추가.\n  · 신규 §7 또는 §8 \"post-sync asyncify layer\" 섹션 추가 — Phase 2/3 계획에서 제거 예정임을 명시.\n- `.nexus/memory/empirical-opencode-async-session.md` (task 1 산출물)이 존재하면 이 pattern 파일에서 교차 참조.\n- README.md / README.en.md: \"Async subagents (experimental)\" 섹션 신설. 사용법, 한계 (concurrency 제한 없음, stuck 감지 없음, resume은 sync), Phase별 계획 요약.\n- CHANGELOG.md [Unreleased] 섹션 추가 — \"추가됨: nexus_spawn / nexus_result custom tools (A-MVP, primary unblock)\", \"추가됨: post-sync asyncify layer (Phase 1, Phase 3에 제거 예정)\", \"업스트림: @moreih29/nexus-core 버전 변경 없음\", \"사용자 영향: 기존 사용자에게 breaking change 없음, 새 tool 선택적 사용\".",
+          "approach": "writer가 구현 결과(Task 2/4)를 참고해 작성. reviewer가 정확성과 빠진 항목 점검. pattern 파일은 기존 스타일 유지(마크다운 표, 참조 링크).",
+          "plan_issue": 6,
+          "deps": [
+            2,
+            4
+          ],
+          "owner": {
+            "role": "writer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_24059f46fffe0rUvwuWTdKpLCn"
+          },
+          "created_at": "2026-04-24T12:20:00.480Z"
+        },
+        {
+          "id": 7,
+          "title": "문서 검증",
+          "status": "completed",
+          "context": "Task 6의 writer 산출물에 대한 reviewer 검증. writer task 자동 페어.",
+          "acceptance": "- pattern-opencode-plugin-surface.md의 새 항목들이 실제 소스 코드 위치와 일치하는지 확인 (line 번호는 drift 가능하지만 모듈/파일명은 정확해야 함).\n- README의 async 사용법이 실제 nexus_spawn/nexus_result API 시그니처와 일치하는지 확인.\n- CHANGELOG 엔트리가 .nexus/context/releasing.md §13 구조(추가됨/변경됨/업스트림/사용자 영향/검증)를 따르는지 확인.\n- 빠진 항목 있으면 writer에게 revision 요청.",
+          "plan_issue": 6,
+          "deps": [
+            6
+          ],
+          "owner": {
+            "role": "reviewer",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_2404d4bddffeBehi9sBLs32q75"
+          },
+          "created_at": "2026-04-24T12:20:05.198Z"
+        },
+        {
+          "id": 8,
+          "title": "nexus-core GitHub 이슈 draft 작성 — subagent_spawn_async 매크로 제안",
+          "status": "completed",
+          "context": "Issue 6 Phase 1(f). Phase 1과 병렬로 nexus-core 저장소(moreih29/nexus-core)에 GitHub 이슈를 제기해 메인테이너 측 작업과 우리 Phase 1 작업이 병행되도록 함. 이슈 본문은 메인테이너가 빠른 채택 판단을 할 수 있도록 제안 변경 내용·근거·우리 측 transition plan을 구체적으로 포함. PR은 opencode-nexus에서 직접 제출하지 않고, 이슈만 제기 (사용자 명시, 2026-04-24). 수정은 nexus-core 메인테이너가 직접.",
+          "acceptance": "- 이슈 본문 draft 1건 — `.nexus/state/artifacts/` 또는 Lead에게 직접 전달.\n- 내용 포함 체크리스트: (1) 제안 요약 2~3문장, (2) 구체 변경 지점(파일 경로 + 라인), (3) 예시 before/after, (4) opencode-nexus Phase 1~3 transition 설명, (5) open question 3개 이상, (6) 근거(upstream 이슈 번호·우리 plan 링크).\n- Markdown 형식. 제목: \"Proposal: add `subagent_spawn_async` macro for primary-unblock subagent invocation\" (또는 유사).\n- PR을 직접 제출한다는 표현 절대 포함 금지. \"We propose / We request a maintainer to consider\" 톤.",
+          "approach": "이슈 draft는 다음 구조로 작성:\n1. **배경**: opencode 생태계에서 primary unblock이 필요한 이유. task tool의 동기 blocking 구조(yield* ops.prompt) 언급. upstream #5887/#20460/#20849 issue 참조.\n2. **제안**: vocabulary/invocations.yml에 `subagent_spawn_async` 신규 매크로 추가. 파라미터는 기존 `subagent_spawn`과 동일(target_role, prompt, name). harness별 invocations.yml에 template: opencode는 `nexus_spawn({agent_id: \"{target_role}\", prompt: \"{prompt}\"})` (또는 메인테이너가 정하는 더 나은 이름). claude/codex는 기존 sync `task`/`@mention` 유지 또는 각 harness의 async 경로.\n3. **사용 위치**: spec/skills/nx-plan/body.md, nx-run/body.md 등의 HOW 병렬 spawn 지시 부분에서 `{{subagent_spawn_async ...}}` 사용.\n4. **opencode-nexus 측 transition**: Phase 1(지금)부터 post-sync-asyncify 스크립트로 치환 중. nexus-core 매크로가 공식화되면 Phase 3에서 post-sync 제거 후 순수 sync 경로로 복귀. opencode-nexus 릴리스와 조율 필요.\n5. **Open question**: 매크로 이름(spawn_async vs async_spawn vs background_spawn 등), fallback 전략(async 지원 없는 harness는 sync로 자동 치환 가능할지), subagent_resume의 async 변형 필요성(MVP 범위 밖이나 참고).\n6. **근거**: 실제 사용자 요구(opencode-nexus cycle 11 plan), architect 분석 요약, omo의 입증된 사례(code-yeongyu/oh-my-openagent), 라이선스 제약(omo SUL-1.0)으로 코드 복사 불가 → 매크로 구조 확장이 정석 경로임.\n드래프트 완성 후 reviewer에게 전달. reviewer OK 후 Lead가 `gh issue create --repo moreih29/nexus-core ...`로 submit 및 이슈 번호 기록.",
+          "risk": "메인테이너가 매크로 이름/구조에 이견을 제시할 수 있음 — 우리는 강제 불가. 이슈 본문의 \"Open question\" 섹션에서 대안 이름들을 병기해 채택 확률을 높인다.",
+          "plan_issue": 6,
+          "owner": {
+            "role": "writer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_2408a9f8affefRpUG5gmUBUnzv"
+          },
+          "created_at": "2026-04-24T12:25:23.975Z"
+        },
+        {
+          "id": 9,
+          "title": "nexus-core 이슈 draft 검토",
+          "status": "completed",
+          "context": "Task 8의 이슈 draft에 대한 reviewer 검증. submit 전 품질 확인.",
+          "acceptance": "- Task 8 acceptance의 체크리스트 6개 항목 모두 충족 확인.\n- 톤 확인: PR 직접 제출 의사 없음 명확, \"propose/request\" 중심 톤.\n- 사실 검증: 참조 파일 경로(vocabulary/invocations.yml, harness/opencode/invocations.yml 등), 이슈 번호(#5887, #20460, #20849 등)가 실제 존재하는지 sampling 확인.\n- 빠진 항목 또는 오류 있으면 writer에게 revision 요청 (최대 2회).\n- 최종 OK 후 Lead가 gh로 submit.",
+          "plan_issue": 6,
+          "deps": [
+            8
+          ],
+          "owner": {
+            "role": "reviewer",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_2407b428dffeVhx7ciXJdnJuMU"
+          },
+          "created_at": "2026-04-24T12:25:28.616Z"
+        }
+      ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-24T14:50:38.706Z",
+      "branch": "feat/async-subagent-phase1",
+      "plan": {
+        "id": 12,
+        "topic": "nexus-core #68 거절 대응 — post-sync 레이어 장기 전략 재설정",
+        "issues": [
+          {
+            "id": 1,
+            "title": "거절 수용 여부 — 메인테이너 3개 논거 수용·반박·일부 접고 중 선택",
+            "status": "decided",
+            "decision": "nexus-core 메인테이너의 3개 거절 논거를 전면 수용한다. 근거: (논거 1) Non-portable primitive — `external-harness-shared-vs-specific.md`의 \"common vocabulary는 intent 수준, lifecycle variance는 harness adapter\" 원칙에 부합하며 OpenCode/Claude/Codex 3개 harness에서 async spawn 지원 비대칭성이 실재. (논거 2) 반쪽 lifecycle — 우리 #68 draft의 Open Question 3번이 이미 자인한 약점. spawn_async만 추가하고 async collect/await 없으면 skill body에 harness-specific glue 침투 불가피. 반박 불가. (논거 3) post-sync-asyncify legitimate pattern — 메인테이너가 우리 Phase 1 구현을 \"reasonable downstream integration pattern\"으로 인정. 반박할 이유 없음. 따라서 #68을 vocabulary 추가 제안으로서는 철회·수용 방향으로 응답한다. variant 협력(harness-variant / build-time option) 경로를 계속 추진할지는 Issue 2에서 결정한다."
+          },
+          {
+            "id": 2,
+            "title": "Phase 3 전략 재설정 — 중기 가이드 (영구화 / 조건부 제거 위한 variant 협력 / sync 파이프라인 자체 재구성)",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "**권고: α 영구화 기본 채택 + β 조건부 병행 개방. γ는 비권고.**\n\n핵심 근거:\n- α: 비용 0 (이미 작동), \"legitimate downstream pattern\"으로 메인테이너 인정, 얇은 래퍼 정체성 내, 미래 opencode native async 도입 시 가장 빠른 소멸 가능. 모니터링 부담은 `harness/opencode/invocations.yml:5`의 `task(...)` template 12줄 + 기존 assertion 3개(치환 8/파일 9/entry 18).\n- β 리스크: nexus-core `loadHarnessInvocationMap`은 현재 단일 dir만 로드하므로 variant overlay 도입엔 nexus-core 측 구조 추가 필요. 또한 메인테이너가 카운터 제안한 variant가 template override 수준만 언급 — async collect/await가 빠지면 #68 거절 논거 #2(반쪽 lifecycle)가 재현될 위험.\n- γ 기각: nexus-core `src/generate/*`가 public API 아님 + 초기 LOC 수백 규모 + drift 관리 부담 + 얇은 래퍼 철학 포기.\n\n조건부 분기:\n- X: opencode 6개월 내 native async 추가 → α 자동 소멸 경로\n- Y: nexus-core self-initiated variant 도입 → β 경로 자동 합류\n- Z: nexus-core 1.x→2.x 구조 개편 → assertion fail → `[plan]` cycle 격상\n\nOpen risks: harness/opencode/invocations.yml:5 template 변화, β 이슈의 반쪽 lifecycle 위험, opencode runtime async 시점 미정.",
+                "recorded_at": "2026-04-24T14:10:42.223Z",
+                "agent_id": "ses_2402e4d79ffeyhRbR7HGKHTwKk"
+              }
+            ],
+            "decision": "**Phase 3 전략: α1 — α 순수 영구화, β(variant 협력 이슈) 지금 제기 안 함.** post-sync-asyncify.mjs를 opencode-nexus 정규 sync 파이프라인의 영구 레이어로 승격한다. \"Phase 3 = migration 제거\" 목표는 폐기하고 \"Phase 3 = 유지·진화\" 로 재정의한다. 근거: (1) 사용자 표현 \"우리쪽만의 수정으로 충분히 대응 가능한지\"에 가장 정확히 부합 — 수동적 대기(nexus-core가 self-initiated로 variant 도입할 때 합류)가 원칙과 일치. (2) α는 이미 작동 중이고 nexus-core 메인테이너가 \"legitimate downstream integration pattern\"으로 명시 인정(#68) — 추가 움직임 불필요. (3) β 선제 이슈 제기는 메인테이너 거절 논거 #2(반쪽 lifecycle)를 회피하려면 async collect/await 완성 설계를 우리가 선제 제시해야 하는데 이는 사용자 방향과 역행. 메인테이너 \"Happy to coordinate\" 협력 의지는 **미래 필요 시 활용 가능한 자원**으로 pattern memory에 기록만 해둔다. 조건부 분기: opencode runtime이 native async를 task tool에 추가하면 α는 자동 소멸 경로(스크립트 삭제)로 진입하고, nexus-core가 self-initiated variant를 도입하면 우리는 자동 합류. γ(sync 파이프라인 자체 재구성)는 비용·얇은 래퍼 철학 훼손·drift 관리 부담이 모두 불리해 기각. Open risk: `harness/opencode/invocations.yml:5` template 문자열 변화 — 기존 assertion 3개(치환 8/파일 9/entry 18)로 fail-fast 감지하며, pattern memory에 의존 라인 번호 pin."
+          },
+          {
+            "id": 3,
+            "title": "메인테이너 응답·#68 처리 방식 — close 수용 표명 / variant 새 이슈 제기 / 현재 상태 유지 중 선택",
+            "status": "decided",
+            "decision": "A. Close comment + close. Lead가 직접 정중한 수용 comment 작성 후 `gh issue close 68`로 종결. Comment 내용: 메인테이너 3 논거 수용 감사, 우리 결정(post-sync 영구화·Phase 3 재정의) 공지, variant 협력 경로는 미래 조건부 재협의 여지 유지 (\"Happy to coordinate\" 의지 감사 기록), 이슈 close 사유 명시. 새로운 이슈는 제기하지 않음(Issue 2 α1 결정에 따름). 실행은 Task 형태로 본 cycle run 단계에서 처리."
+          },
+          {
+            "id": 4,
+            "title": "post-sync 레이어 장기 보강 스코프 — assertion 정교화·Phase 2 확대·upstream bump 회귀 감지·문서화 중 우선순위",
+            "status": "decided",
+            "decision": "P2 — post-sync 장기 보강을 engineer 1 task(A/B/C/E 묶음) + D는 Issue 5 문서 작업과 통합하는 방식으로 처리. 아이템 정의: **A) 스크립트 헤더 주석 승격** — \"Phase 1 temporary\" → \"Regular sync pipeline layer, part of opencode-nexus sync pipeline since cycle 12\". **B) Assertion 메시지 개선** — drift 발생 시 어느 파일에서 몇 건이 예상과 다른지 + 원인 후보(template 변화, 새 subagent_spawn 사용처, permission 구조 변화 등) actionable 힌트 출력. **C) invocations.yml:5 의존 명시** — 스크립트 상단 주석에 `nexus-core harness/opencode/invocations.yml:5`를 의존 contract로 pin(bump 시 우선 점검 항목)하고, Issue 5에서 pattern memory §8에도 동일 pin. **E) robustness 추가** — permission 객체에 comment 포함 등 edge case test + 기존 e2e의 negative test 보강. tester 자동 페어링은 기존 e2e 시나리오에서 이미 충분히 커버되므로 별도 추가 안 함. D(Phase 2 재정의 — \"DO/CHECK 확대\"에서 \"on-demand 확대\"로 변경)는 Issue 5에서 writer가 README/CHANGELOG/pattern memory 보정과 함께 처리. Phase 2 원래 계획은 phantom scope였음 — nexus-core spec 구조상 agent body에 subagent_spawn 매크로가 없어 \"DO/CHECK까지 확대\"가 실체 없는 계획이었고, permission은 이미 9 agent 전부 처리 완료 상태."
+          },
+          {
+            "id": 5,
+            "title": "문서 업데이트 스코프 — Phase 3를 ‘마이그레이션 제거’고 기술한 README·CHANGELOG·pattern memory 보정",
+            "status": "decided",
+            "decision": "Q1 — writer 1 task로 4개 파일 일괄 보정 + reviewer auto-pair로 검증. 대상·변경 요지: **README.md / README.en.md**: (a) line 90 post-sync 문단에서 \"Phase 3 제거 예정\" 표현 삭제, \"regular component of our sync pipeline\" 등으로 교체; (b) async 실험적 섹션의 Phase 1~3 계획 요약 부분 전면 재작성 — Phase 1(완료된 1차 구현), Phase 2(원래 phantom scope, on-demand 확대로 재정의), Phase 3(폐기되고 post-sync 영구화로 변경). **CHANGELOG.md**: [Unreleased] 섹션에 새 항목 추가 — \"변경됨: Phase 3 전략 재설정 (post-sync 영구화로 전환)\", \"업스트림: nexus-core#68은 메인테이너의 정당한 3논거로 거절됨. 우리는 수용하고 close, variant 협력은 미래 조건부 자원으로 보존\", 보강 항목 반영. **.nexus/memory/pattern-opencode-plugin-surface.md §8**: (a) 제목 \"Post-sync asyncify layer (Phase 1 temporary)\" → \"Post-sync asyncify layer (regular sync pipeline component)\"; (b) 제거 전망 문단 삭제 후 \"영구 레이어. nexus-core self-initiated variant 시 자동 합류 가능하나 우리가 선제 요청하지 않음\" 서술; (c) invocations.yml:5 dependency pin 명시 (bump 시 우선 점검 대상); (d) Phase 2 phantom scope 관찰 기록 (nexus-core spec 구조상 agent body에 subagent_spawn 매크로가 없어 \"DO/CHECK 확대\"가 실체 없었던 계획이었음). reviewer는 각 파일이 Phase 3 관련 표현을 빠짐없이 보정했는지 + 수치·참조(nexus-core#68, invocations.yml:5 등) 정확한지 확인."
+          }
+        ],
+        "research_summary": "### nexus-core #68 댓글 조사 (2026-04-24)\n\n메인테이너(moreih29, owner)가 `gh issue view 68 --repo moreih29/nexus-core --comments`로 확인된 상세한 논거로 **수용 거절 + 카운터 제안** 응답.\n\n#### 거절 3개 논거\n\n**1. Non-portable primitive** — async spawn은 3개 harness에서 비대칭:\n- OpenCode: native async 없음. `nexus_spawn`은 opencode-nexus plugin에 의존 → vocabulary 레벨에 넣으면 skill body가 플러그인 설치를 de-facto 전제로 가짐\n- Claude: clear async primitive 없음. silent sync fallback 시 `_async` 접미사가 misleading\n- Codex: native async 있음 (`spawn_agent` + `wait_agent`). 유일하게 깔끔\n- 원칙 위배: \"common vocabulary는 intent 수준, lifecycle variance는 harness adapter로 push\" (nexus-core `.nexus/memory/external-harness-shared-vs-specific.md`)\n\n**2. 반쪽 lifecycle** — 제안서가 async `subagent_resume` 변형을 defer. portable collect/correlate primitive 없이 `{{subagent_spawn_async}}` 만 skill body에 넣으면 opaque id를 받고 결과 회수 방법 없음 → skill authors가 harness-specific glue를 body에 섞게 됨 → macro system 목적 훼손. 완성된 lifecycle(spawn_async + collect/await) 설계 후에만 재논의 가능.\n\n**3. post-sync-asyncify는 legitimate pattern** — \"downstream harness가 post-process로 기능 추가\"는 정당한 패턴. 우리가 Phase 1에서 쓰는 script를 메인테이너가 명시적으로 인정함. upstream이 이 cost를 흡수해서 script를 제거할 이유 없음.\n\n#### 카운터 제안 (메인테이너)\n\n**harness variant / build-time option**:\n- `vocabulary/invocations.yml` 불변\n- `harness/opencode-async/` overlay 또는 build-time flag로 OpenCode용 `subagent_spawn` template을 `nexus_spawn({ agent_id, prompt })`로 오버라이드\n- opencode-nexus 사용자는 해당 variant 선택, vanilla OpenCode 사용자는 sync\n- 장점: skill body가 harness-agnostic 유지, async가 harness-level 관심사에 갇힘, downstream은 post-sync 제거 가능\n- 조건: 새 이슈 열고 variant design 협의. 메인테이너가 \"Happy to coordinate\"로 협력 의사 표명\n\n#### 현재 opencode-nexus Phase 1 현황\n\n- `scripts/post-sync-asyncify.mjs` 작동 중 — commit `964b5cb`, 브랜치 `feat/async-subagent-phase1` (미머지/미배포)\n- 치환 대상: `.opencode/skills/{nx-plan,nx-auto-plan}/SKILL.md`에서 8건, `src/agents/*.ts` 9개 파일 permission 18 entries (idempotent)\n- 치환 건수 assertion: 8 / 18 / 9 files 정확 매칭\n- `bun run check`, `bun run test:e2e` PASS\n- README/CHANGELOG/pattern memory에 \"Phase 3 = post-sync 제거\"로 문서화됨 — 이 부분이 이번 cycle에서 수정 대상\n\n#### Lead 평가\n\n메인테이너 3개 논거는 **정당** — 특히 논거 2는 우리 이슈 draft의 Open Question이 이미 자인한 약점. 논거 3은 우리 구현을 인정한 것이라 오히려 긍정적. 사용자 요청 \"우리쪽만의 수정으로 대응 가능한지 검토\"는 메인테이너 논거 3과 정확히 부합 — post-sync가 영구 레이어로 남아도 기술적·정당성 측면에서 문제 없음. \n\n그러나 harness variant 카운터 제안은 여전히 매력적 선택지: opencode-async overlay가 nexus-core에 landing되면 post-sync를 제거할 수 있고, 메인테이너가 협력 의지를 보임. 다만 landing 시점·난이도는 불확실. 우리는 언제나 \"우리쪽만의 대응(post-sync 영구화)\"으로 fallback 가능하다는 사실이 이 전략의 안전망.",
+        "created_at": "2026-04-24T14:03:32.057Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "nexus-core #68 close comment 작성 + gh issue close",
+          "status": "completed",
+          "context": "Issue 3 decision 반영. 메인테이너의 정중한 거절 + 협력 제안에 대한 정중한 종결. Lead가 직접 comment 작성 후 gh로 close. subagent spawn 불필요.",
+          "acceptance": "- moreih29/nexus-core#68에 우리 close comment가 남아 있음.\n- 이슈 상태 = CLOSED (not planned).\n- Comment 톤: 정중, 수용, 우리 결정 명시, 미래 재협의 가능성 유지, PR 제출 약속 없음.",
+          "approach": "1. 영어 comment 작성 (100~200 단어). 톤: 감사·수용·우리 결정 공지·미래 재협의 여지·close 사유.\n2. 구조:\n   - 감사 표명 (\"Thank you for the thoughtful feedback...\")\n   - 3 논거 수용 확인 (\"We find the three arguments compelling — particularly the half-open lifecycle point, which our own Open Question #3 in the draft had already acknowledged.\")\n   - 우리 결정 공지 (\"We have decided to promote `post-sync-asyncify.mjs` to a permanent component of our sync pipeline. Phase 3 of our transition plan is now retired; the script stays in downstream.\")\n   - 협력 여지 보존 (\"We want to acknowledge your offer to coordinate on a variant design. We are not pursuing that path proactively for now — we want to avoid surfacing a half-complete lifecycle. If the cross-harness async landscape matures in the future (e.g., upstream OpenCode adds non-blocking task semantics, or a complete spawn+collect primitive story emerges), we'll be glad to revisit.\")\n   - close 사유\n3. `gh issue comment 68 --repo moreih29/nexus-core --body-file <tempfile>`로 submit (또는 --body 인라인)\n4. `gh issue close 68 --repo moreih29/nexus-core --reason \"not planned\"`로 종결\n5. 결과 확인: `gh issue view 68 --repo moreih29/nexus-core`로 close 상태 확인\n\n실제 실행은 Lead가 bash로 직접 수행. task 완료 기준은 이슈가 closed 상태이고 우리 comment가 기록됨.",
+          "plan_issue": 3,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-24T14:17:35.974Z"
+        },
+        {
+          "id": 2,
+          "title": "post-sync-asyncify.mjs 장기 보강 — 헤더 승격·assertion 메시지·의존 pin·robustness",
+          "status": "completed",
+          "context": "Issue 4 decision의 A/B/C/E 묶음. Phase 3 폐기로 post-sync가 영구 layer가 됐으므로 내구성·유지보수성 강화.",
+          "acceptance": "- scripts/post-sync-asyncify.mjs 헤더 주석에 (a) \"Regular sync pipeline layer\" 포함, (b) Dependency contract 섹션이 invocations.yml:5 언급.\n- Assertion fail 시 stderr에 \"Likely causes:\" 형태의 진단 힌트 출력 (치환 건수·permission 건수 각각).\n- robustness — permission 객체에 comment나 공백 변형이 있어도 idempotent하게 동작 (또는 clear error 메시지).\n- scripts/e2e-nexus-integration.mjs negative test가 \"Likely causes:\" 문구 포함 assertion 추가.\n- bun run check PASS, bun run test:e2e PASS.",
+          "approach": "**A) 헤더 주석 승격**: `scripts/post-sync-asyncify.mjs` 상단 주석에서 \"Phase 1 temporary\" 표현 제거. \"Regular sync pipeline layer — part of opencode-nexus sync pipeline since cycle 12 (2026-04-24). Chained after `nexus-sync --harness=opencode` to inject async spawn semantics and restore Lead-monopoly permissions that the upstream sync overwrites.\" 식으로 승격.\n\n**B) Assertion 메시지 개선**: 현재 기대치와 다를 때 process.exit(1) 전에 stderr로 진단 힌트 출력. 예:\n- 치환 건수 불일치: \"EXPECTED 8 replacements, got N. Likely causes: (1) nexus-core harness/opencode/invocations.yml:5 template changed form of task(...) call; (2) new subagent_spawn usages added to nx-plan/nx-auto-plan skill bodies; (3) user-edited .opencode/skills/* between sync and post-sync.\"\n- permission 건수 불일치: \"EXPECTED 18 entries across 9 files, got X across Y. Likely causes: (1) new agent added to 9-agent set; (2) existing agent.ts file structure changed; (3) permission block not found in file.\"\n- 각 원인 후보에 대한 action hint 포함.\n\n**C) invocations.yml:5 의존 pin**: 스크립트 상단 주석에 `Dependency contract: relies on nexus-core harness/opencode/invocations.yml:5 emitting exactly 'task({ subagent_type: \"{target_role}\", prompt: \"{prompt}\", description: \"{name}\" })'. On nexus-core bump, check this line first — if the template form changes, the regex below must be updated accordingly.` 추가.\n\n**E) Robustness**:\n- 현재 regex는 permission 객체 내부에 comment나 multi-line value 있을 때 안전한가 — 기존 9 agent 파일에는 comment 없지만 향후 추가 가능성. 테스트 케이스 확보.\n- scripts/e2e-nexus-integration.mjs의 negative test 보강: assertion fail 시 stderr message에 \"Likely causes\" 문구가 포함되는지 확인하는 assertion 추가.\n\n구현 완료 후 `bun run check` / `bun run test:e2e` 모두 PASS 확인.",
+          "risk": "regex 변경이 기존 치환 건수 assertion을 우발적으로 깨뜨릴 수 있음. 변경 후 실제 sync 실행으로 8/18 재확인 필수.",
+          "plan_issue": 4,
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_24020bc25ffeQr5A5i5Txhl5Dm"
+          },
+          "created_at": "2026-04-24T14:17:56.708Z"
+        },
+        {
+          "id": 3,
+          "title": "문서 보정 — Phase 3 재정의 · #68 close · 영구 layer 승격",
+          "status": "completed",
+          "context": "Issue 5 decision. Phase 3가 \"migration 제거\"에서 \"유지·진화\"로 재정의됐고, post-sync가 영구 layer가 됐으며, nexus-core #68이 close로 정리됨. 4개 파일 일괄 보정.",
+          "acceptance": "- README.md, README.en.md line 90 post-sync 문단에서 \"Phase 3 제거\" 표현 제거.\n- README async 섹션의 Phase 1~3 계획이 재정의된 내용으로 교체됨.\n- CHANGELOG.md [Unreleased]에 \"변경됨: Phase 3 재설정\" + \"업스트림: #68 closed\" + 보강 항목.\n- pattern memory §8 제목에서 \"(Phase 1 temporary)\" 제거, dependency contract 섹션 추가, Phase 2 phantom scope 언급.\n- 어느 파일에도 \"Phase 3에 제거 예정\" / \"Phase 3 removal\" 같은 표현이 남아 있지 않음.",
+          "approach": "**README.md / README.en.md**:\n- line 90 post-sync 문단: \"...`nexus-core` upstream 매크로([moreih29/nexus-core#68](https://github.com/moreih29/nexus-core/issues/68))가 반영되면 제거됩니다\" 스타일의 표현 제거. \"regular component of opencode-nexus sync pipeline. The nexus-core maintainer recognized this as a legitimate downstream integration pattern (see moreih29/nexus-core#68).\" 식으로 교체.\n- async 실험적 섹션의 Phase 1~3 계획 요약:\n  · Phase 1: 완료된 1차 구현 (Phase 1 complete — A-MVP plugin + post-sync asyncify)\n  · Phase 2: \"DO/CHECK 확대\"는 실체 없는 phantom scope였음. \"On-demand expansion if nexus-core spec introduces new subagent_spawn usages in additional skill bodies.\"로 재정의\n  · Phase 3: 원래 \"post-sync 제거\" → 폐기. 대신 \"post-sync remains as a permanent layer. If the async landscape matures upstream (e.g., opencode native async in task tool, or nexus-core self-initiated harness variant), we will re-evaluate removal on a separate cycle.\"\n\n**CHANGELOG.md [Unreleased] 섹션**:\n- 변경됨 항목 추가: \"Phase 3 전략 재설정 — post-sync asyncify를 opencode-nexus sync 파이프라인의 영구 component로 승격. 원래 'migration 제거' 목표는 폐기. 이유: nexus-core 메인테이너가 vocabulary 확장을 거절하되(정당한 3 논거) downstream post-sync를 legitimate pattern으로 인정.\"\n- 업스트림 항목 추가: \"nexus-core#68 closed — 3 논거 전면 수용. variant 협력 경로는 미래 재협의 자원으로 보존.\"\n- 추가됨 항목 추가: post-sync 보강 (헤더 승격, assertion 진단 힌트, invocations.yml:5 dependency pin, robustness edge cases).\n\n**.nexus/memory/pattern-opencode-plugin-surface.md §8**:\n- 제목: \"## 8. Post-sync asyncify layer (Phase 1 temporary)\" → \"## 8. Post-sync asyncify layer\"\n- 제거 전망 문단 전면 재작성:\n  · 원래 \"Phase 3에 제거\" → 삭제.\n  · 새 내용: \"영구 레이어. nexus-core 메인테이너가 #68에서 downstream post-process 패턴을 legitimate로 명시 인정. upstream이 self-initiated로 harness variant를 도입하면 자동 합류 가능하나 우리가 선제 요청하지는 않음(Issue 2 α1 결정, cycle 12).\"\n- Dependency contract 섹션 추가:\n  · \"nexus-core `harness/opencode/invocations.yml:5` — subagent_spawn template이 정확히 `task({ subagent_type, prompt, description })` 형태임을 전제. nexus-core bump 시 이 파일의 해당 라인이 변경되면 `scripts/post-sync-asyncify.mjs`의 regex도 업데이트 필요. assertion 3개(치환 8 / 파일 9 / entry 18)가 fail-fast로 drift 감지.\"\n- Phase 2 phantom scope 언급: \"Note: Original Phase 2 plan ('expand replacement scope to DO/CHECK agents') was phantom scope — nexus-core spec/agents/*/body.md files do not use subagent_spawn macro (role definitions only, spawning is done from skill bodies). All permission inject is already complete at 9 agents × 2 entries = 18 in Phase 1. If nexus-core spec later introduces subagent_spawn in new skill bodies, we expand on-demand.\"\n\nreviewer는 각 파일에서 Phase 3 관련 표현을 빠짐없이 보정했는지 + 수치·참조(nexus-core#68, invocations.yml:5 등) 정확성 + 톤 일관성 확인.",
+          "risk": "writer가 이전 cycle에서 한 번에 모든 drift를 잡지 못한 전례 — 이번에는 reviewer가 \"Phase 3\" 키워드 grep으로 전수 체크.",
+          "plan_issue": 5,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "writer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_24017d4cbffeNi7br12r1Bx0jU"
+          },
+          "created_at": "2026-04-24T14:18:27.125Z"
+        },
+        {
+          "id": 4,
+          "title": "문서 보정 검증",
+          "status": "completed",
+          "context": "Task 3(writer 문서 보정) auto-pair. Phase 3 관련 표현이 빠짐없이 보정됐는지, 사실 정확성·톤 일관성 확인.",
+          "acceptance": "- 4개 수정 파일(README.md, README.en.md, CHANGELOG.md, pattern-opencode-plugin-surface.md) 각각에서 \"Phase 3 제거\" / \"Phase 3 removal\" / \"will be removed in Phase 3\" 같은 표현이 완전히 제거됐는지 grep으로 전수 확인.\n- nexus-core#68 링크가 모두 정확한지 (https://github.com/moreih29/nexus-core/issues/68).\n- pattern memory §8 제목에서 \"(Phase 1 temporary)\" 제거 확인.\n- dependency contract 섹션이 invocations.yml:5를 명시하는지.\n- Phase 2 phantom scope 언급이 pattern memory에 있는지.\n- CHANGELOG [Unreleased] 구조 유지 (추가됨/변경됨/업스트림/사용자 영향/검증).\n- 영어/한국어 톤 일관.\n- 빠진 항목·오류·부정확한 참조 있으면 writer에게 revision 요청 (최대 2회). 수정 후 Lead가 diff 확인으로 마감.",
+          "plan_issue": 5,
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "reviewer",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_2400e7d53ffeyhWgMxq1T7a7Bo"
+          },
+          "created_at": "2026-04-24T14:18:33.997Z"
+        }
+      ]
     }
   ]
 }

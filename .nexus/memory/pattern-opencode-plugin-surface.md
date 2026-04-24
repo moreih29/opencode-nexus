@@ -18,6 +18,7 @@
 | `config` | `config.agent`에 Nexus agent 주입, `default_agent` 기본값 `lead` | **high** — config schema 변화 시 직결 |
 | `event` | 아래 §1-3 이벤트 타입들 | **high** — 가장 자주 변하는 표면 |
 | `tool.execute.before` | `input.tool === "question"`만 특별 취급 | **medium** — tool name 변화 시 |
+| `tool` (custom tool 등록) | Plugin 반환 객체의 `tool` property로 `nexus_spawn`, `nexus_result` 등록. `nexus_spawn`은 fire-and-forget + 3s watchdog × 1 retry; `nexus_result`는 상태 조회 | **high** — 새 SDK 의존 추가 (`client.session.create`, `promptAsync`, `messages`) |
 | `permission.ask` | notify만 발사 (input/output 미읽음) | **low** — signature만 유지되면 됨 |
 | `chat.message` | `output.parts[]`에서 첫 `text` part rewrite | **medium** — parts 구조 변화 시 |
 
@@ -25,12 +26,12 @@
 
 | Event type | 읽는 필드 | 분기 조건 |
 |---|---|---|
-| `session.created` | `info.parentID`, `info.id` | parentID 없으면 root |
-| `session.deleted` | `info.id` | rootSessions에서 제거 |
-| `session.idle` | `sessionID` | root만 |
-| `session.status` | `status.type` → `busy` / `retry` / `idle` | root만, busy/idle은 pill 제어, retry는 로그 |
-| `message.part.updated` | `part.type` → `step-start` / `text`; `part.sessionID`, `part.text` | root만, step-start는 턴 경계, text는 preview 캐시 |
-| `session.error` | `error.name`, `error.message` | MessageAbortedError 식별 (v0.16.3~) |
+| `session.created` | `info.parentID`, `info.id` | parentID 없으면 root; parentID 있으면 child로 `childSessionToTask` 맵에 등록 |
+| `session.idle` | `sessionID` | root만; child는 별도 sessionID→parent 맵(`childSessionToTask`)으로 분기 |
+| `session.deleted` | `info.id` | rootSessions에서 제거; child cleanup 분기 (맵에 있으면 child로 처리) |
+| `session.status` | `status.type` → `busy` / `retry` / `idle` | root: pill 제어·clear-log / child: `busyObserved` 업데이트(watchdog 신호) |
+| `message.part.updated` | `part.type` → `step-start` / `text`; `part.sessionID`, `part.text` | root만, step-start는 턴 경계, text는 preview 캐시; child 별 캐시 분기 (`childSessionLastText`) |
+| `session.error` | `error.name`, `error.message`, `sessionID` | MessageAbortedError 식별; child status=error 분기 (sessionID로 맵 조회) |
 | `permission.replied` | `sessionID` | root만, pill clear |
 
 **주의**: OpenCode SDK types.gen.d.ts에서 이들은 discriminated union. 새 variant가 추가되거나 기존 variant가 제거되면 TypeScript 레벨에서 fail-fast.
@@ -88,9 +89,14 @@ bump 작업 시 수정 대상: 루트 `package.json`만. `bun install`로 `bun.l
 3. `types.gen.d.ts` diff — 위 §1-3 이벤트 타입들 signature 확인.
 
 ### 6-2. 우리 접점 확인
-1. §1-2의 5개 hook signature 변화 없음 확인. 있으면 `src/plugin.ts` 수정 필요.
+1. §1-2의 6개 hook signature 변화 없음 확인. 있으면 `src/plugin.ts` 수정 필요.
 2. §1-3의 event payload 필드 변화 없음 확인. 특히 `status.type`, `part.type`, `error.name` discriminator.
 3. §2-2의 config schema 키 구조 변화 없음 확인. 바뀌었으면 `lib/install.mjs` / `lib/uninstall.mjs` 업데이트.
+4. Phase 1 async child session SDK API 의존 확인. 변화 시 `src/plugin.ts` 수정 필요:
+   - `client.session.create({parentID})` 반환 shape
+   - `client.session.promptAsync({sessionID, text})` 동작
+   - `client.session.messages({path: {id: sessionID}})` 반환 shape
+   - `session.created` / `session.deleted` 이벤트의 `info.parentID` 필드 보장 및 `childSessionToTask` 맵 유지
 
 ### 6-3. 검증 실행 (releasing.md 체크리스트)
 1. `bun install` — peer dep 충돌 없음
@@ -109,6 +115,26 @@ bump 작업 시 수정 대상: 루트 `package.json`만. `bun install`로 `bun.l
 - `external-opencode-plugin-versions.md` — 업스트림 버전 궤적과 renumbering typo
 - `empirical-cmux-pill-clear-paths.md` — cmux 통합 회귀 방지 원리 (set-clear pair, spawn serialize)
 - `pattern-bug-fix-routing.md` — upstream vs local 경로 분리
+
+## 8. Post-sync asyncify layer
+
+`scripts/post-sync-asyncify.mjs`는 opencode-nexus sync 파이프라인의 정규 layer다. `bun run sync`가 `nexus-sync --harness=opencode`를 실행한 뒤 체이닝되어, (1) subagent_spawn 매크로가 opencode 하네스에서 렌더된 `task({subagent_type,...})`를 `nexus_spawn({agent_id,...})`로 치환하고, (2) upstream sync가 덮어쓰는 9개 agent의 Lead-monopoly permission(`nexus_spawn: "deny"`, `nexus_result: "deny"`)을 재주입한다.
+
+### 장기 유지 정책
+
+nexus-core 메인테이너가 [#68](https://github.com/moreih29/nexus-core/issues/68)(closed, not planned)에서 이 downstream post-process 패턴을 legitimate integration으로 명시 인정했다. 우리는 cycle 12 Issue 2 α1 결정에 따라 이 레이어를 영구 유지하며, variant 협력 이슈를 선제 제기하지 않는다. 자동 합류 조건: opencode runtime이 task tool에 native async를 추가하거나 nexus-core가 self-initiated harness variant를 도입하는 경우 — 그때 별도 cycle에서 제거 재평가.
+
+### Dependency contract
+
+- `nexus-core harness/opencode/invocations.yml:5` — subagent_spawn template이 정확히 `task({ subagent_type: "{target_role}", prompt: "{prompt}", description: "{name}" })` 형태임을 전제. bump 시 이 라인이 변경되면 `scripts/post-sync-asyncify.mjs`의 regex 업데이트 필요.
+- Assertion 3개(치환 8 / 파일 9 / entry 18)가 fail-fast drift 감지. 실패 시 stderr에 "Likely causes:" 진단 힌트 출력.
+- `nexus-core spec/agents/*/body.md` — subagent_spawn 매크로 **미사용**(역할 정의만). Phase 계획 시 이 사실을 추정이 아닌 grep으로 verified evidence로 확인할 것. 근거: `empirical-sync-macro-usage-verification.md`.
+
+### Phase 2 phantom scope 관찰 기록
+
+Note: 원래 Phase 2 계획("expand replacement scope to DO/CHECK agents")은 phantom scope였음. nexus-core spec 구조상 agent body에 subagent_spawn 매크로가 없고, 스폰은 skill body가 담당. 권한 주입은 이미 9 agents × 2 entries = 18 entries로 Phase 1에서 완료. 향후 skill body에 새 subagent_spawn 사용처가 추가되면 on-demand 확대.
+
+관련 경험 기록: [`empirical-opencode-async-session.md`](./empirical-opencode-async-session.md), [`empirical-sync-macro-usage-verification.md`](./empirical-sync-macro-usage-verification.md)
 
 ## 조사 원본
 
