@@ -184,6 +184,7 @@ drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 unin
 
 - `session.idle`(root) → `cmux notify --title "opencode-nexus" --body <...>` + `cmux set-status nexus-state "Needs Input" --icon bell.fill --color "#007AFF"` 둘 다 호출된다. 기본 모드에서는 `--body`에 응답 텍스트의 첫 100자(공백 collapse + 초과 시 `…`)가 들어가고 `[Pre-check]` 블록은 자동 skip된다. `OPENCODE_NEXUS_NOTIFY_PREVIEW=0` 또는 `false` 환경에서는 고정 문자열 `"Response ready"`로 복원된다. 응답 텍스트 캐시가 비어 있거나 Pre-check만 있는 경우에도 `"Response ready"` fallback. pill은 `clear-status`가 아니라 `Needs Input`으로 전환되므로 사이드바에 사용자 턴 신호가 남는다.
 - `session.status` + `status.type === "busy"`(root) → `cmux set-status nexus-state "Running" --icon bolt --color "#007AFF"`가 호출된다. 내부 text 캐시는 이 시점에 건드리지 않는다(v0.16.2 변경). OpenCode가 한 턴에 busy를 여러 번 fire하므로 busy에서 캐시를 지우면 assistant text가 캐시되자마자 다시 삭제되어 session.idle preview가 무너진다.
+- `session.status` + `status.type === "busy"`(root, **idle→running 전이 첫 fire**) → `cmux clear-log`가 `set-status Running` **앞서** 호출된다(v0.16.4 추가). 이전 턴에서 기록된 `[nexus] [error] ...` 엔트리(예: stale MessageAbortedError)가 새 사용자 턴 시작과 함께 자동 제거되도록 하는 turn-boundary reset. 같은 턴 내 후속 busy 이벤트는 `sessionRunning: Set<string>` 기반 dedup으로 `clear-log`를 재호출하지 않는다(OpenCode가 턴당 busy를 ~4회 fire). 턴 종료 이벤트(`session.idle` / `session.status idle` / `session.error` abort·fatal / `session.deleted`)에서 sessionRunning에서 delete되어 다음 busy가 다시 전이로 감지된다. `permission.replied`는 mid-turn 재개이므로 delete하지 않는다. `cmux clear-log` CLI가 `--source` 필터를 지원하지 않아 호출 시 workspace 전 로그가 지워지는 부수 효과는 의도된 트레이드오프(자세히는 `empirical-cmux-log-turn-reset.md`). e2e cmux-t/u/v/w가 이 경로를 회귀 확인한다.
 - `session.status` + busy(non-root) → 어떤 cmux 호출도 발생하지 않는다.
 - `tool.execute.before` + `tool === "question"` → `cmux notify --title "opencode-nexus" --body "Waiting for your input"`와 `cmux set-status nexus-state "Needs Input" --icon bell.fill --color "#007AFF"`가 모두 호출된다.
 - `permission.ask` hook → `cmux notify --title "opencode-nexus" --body "Permission requested"`와 `cmux set-status nexus-state "Needs Input" --icon bell.fill --color "#007AFF"`가 모두 호출된다.
@@ -199,7 +200,7 @@ drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 unin
 #### 5-5-2. cmux 비활성 환경에서 확인 (CMUX_WORKSPACE_ID 미설정 또는 OPENCODE_NEXUS_CMUX=0/false)
 
 - `session.idle`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
-- `session.status` + `status.type === "busy"`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.
+- `session.status` + `status.type === "busy"`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다(set-status뿐만 아니라 v0.16.4에서 추가된 `clear-log`도 마찬가지로 미호출).
 - `tool.execute.before` + `tool === "question"`를 재생해도 `cmux` 바이너리가 호출되지 않는다.
 - `permission.ask` hook을 재생해도 `cmux` 바이너리가 호출되지 않는다.
 - `permission.replied`(root)를 재생해도 `cmux` 바이너리가 호출되지 않는다.

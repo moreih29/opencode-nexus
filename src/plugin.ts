@@ -166,6 +166,10 @@ function cmuxClearStatus(key: string): void {
   cmuxSpawn(["clear-status", key]);
 }
 
+function cmuxClearLog(): void {
+  cmuxSpawn(["clear-log"]);
+}
+
 function cmuxLog(level: "info" | "error" | "warning" | "progress" | "success", source: string, message: string): void {
   cmuxSpawn(["log", "--level", level, "--source", source, "--", message]);
 }
@@ -258,6 +262,14 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
   // accidentally caching the user's input text or other pre-assistant
   // payloads as the preview body.
   const assistantTurnActive = new Map<string, boolean>();
+  // Tracks which root sessions are currently in the "Running" (busy) state.
+  // Used to detect the idle→running transition that marks a new assistant
+  // turn: on that transition we call `cmux clear-log` to wipe stale entries
+  // (e.g. prior-turn MessageAbortedError) from the cmux sidebar log. Dedup
+  // is essential: session.status busy is empirically fired ~4× per turn
+  // (see empirical-cmux-pill-clear-paths.md path 2), so a raw per-busy
+  // clear-log would destroy mid-turn warnings.
+  const sessionRunning = new Set<string>();
 
   return {
     config: async (config) => {
@@ -285,6 +297,7 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
       if (event.type === "session.deleted") {
         const wasRoot = rootSessions.has(event.properties.info.id);
         rootSessions.delete(event.properties.info.id);
+        sessionRunning.delete(event.properties.info.id);
         rootSessionLastText.delete(event.properties.info.id);
         assistantTurnActive.delete(event.properties.info.id);
         if (wasRoot) {
@@ -302,11 +315,13 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         // waiting for the user. A subsequent session.status busy will
         // overwrite this back to "Running".
         cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
+        sessionRunning.delete(event.properties.sessionID);
         rootSessionLastText.delete(event.properties.sessionID);
         assistantTurnActive.delete(event.properties.sessionID);
         return;
       }
       if (event.type === "session.status" && rootSessions.has(event.properties.sessionID)) {
+        const sessionID = event.properties.sessionID;
         const status = event.properties.status;
         if (status.type === "busy") {
           // v0.16.0 had `rootSessionLastText.delete(sessionID)` here to
@@ -316,6 +331,12 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
           // busy events would wipe the freshly cached assistant text, leaving
           // session.idle to fall back to "Response ready". Turn boundaries
           // are now tracked via message.part.updated `step-start`, not busy.
+          // Dedup is also required for clear-log: busy is empirically emitted
+          // ~4× per turn (empirical-cmux-pill-clear-paths.md path 2).
+          if (!sessionRunning.has(sessionID)) {
+            sessionRunning.add(sessionID);
+            cmuxClearLog();
+          }
           cmuxSetStatus(PILL_KEY, RUNNING_VALUE, RUNNING_ICON, PILL_COLOR);
         } else if (status.type === "retry") {
           cmuxLog("warning", LOG_SOURCE, `Retrying (attempt ${status.attempt}): ${status.message}`);
@@ -325,6 +346,7 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
           // event. Same user-turn semantic as session.idle: switch pill to
           // Needs Input so the sidebar indicates the agent is waiting.
           cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
+          sessionRunning.delete(sessionID);
         }
         return;
       }
@@ -385,6 +407,7 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
           // clear immediately.
           cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);
           if (typeof sessionID === "string") {
+            sessionRunning.delete(sessionID);
             rootSessionLastText.delete(sessionID);
             assistantTurnActive.delete(sessionID);
           }
@@ -397,6 +420,9 @@ export const OpencodeNexus: Plugin = async ({ directory }) => {
         // Clear the pill so a prior Running state does not linger after a
         // non-abort fatal error where session.idle may never fire.
         cmuxClearStatus(PILL_KEY);
+        if (typeof sessionID === "string") {
+          sessionRunning.delete(sessionID);
+        }
         return;
       }
       if (event.type === "permission.replied" && rootSessions.has(event.properties.sessionID)) {

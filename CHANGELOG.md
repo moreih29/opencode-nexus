@@ -2,6 +2,35 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.16.4] — 2026-04-24
+
+### 수정됨
+
+- **cmux 사이드바 로그가 새 턴 시작 시 자동으로 초기화된다** — 이전까지 `session.error` 계열 이벤트로 기록된 `[nexus] [error] <...>` 엔트리(특히 v0.16.3 이전의 `MessageAbortedError`)가 cmux 로그 패널에 누적되어 사용자가 `cmux clear-log`를 수동으로 호출해야 치워졌다. v0.16.4는 root 세션이 idle 상태에서 Running으로 전이하는 시점(사용자가 새 입력을 넣어 `session.status busy`가 처음 fire되는 시점)에 `cmux clear-log`를 선행 호출한다. 기존 `set-status nexus-state Running` 호출은 그대로 유지되며, cmuxSpawn의 직렬화 큐(v0.16.0)를 통해 clear-log → set-status 순서가 cmux 서버에 보장된다.
+
+### 추가됨
+
+- **`sessionRunning: Set<string>` 내부 상태** — root 세션별로 "현재 Running 상태인가"를 추적. `session.status busy`가 턴당 4회 발행된다는 empirical 관측(`empirical-cmux-pill-clear-paths.md` 경로 2)을 감안해, 중복 fire에서 clear-log가 여러 번 호출되는 것을 방지. 턴 종료 이벤트(`session.idle`, `session.status idle`, `session.error` abort/fatal, `session.deleted`)에서 delete되며, `permission.replied`는 mid-turn 재개이므로 delete하지 않는다.
+- `.nexus/memory/empirical-cmux-log-turn-reset.md` — append-only 외부 sink(cmux 로그)의 수명 주기 관리 및 turn-boundary reset 설계의 경험적 교훈 기록.
+
+### 사용자 영향
+
+- breaking change 없음. trigger 태그·MCP 인터페이스·CLI·config 전부 동일.
+- **부수 효과(의도된 트레이드오프)**: `cmux clear-log`는 `--source` 필터를 지원하지 않아 호출 시 해당 workspace의 전 로그가 지워진다. 같은 workspace에서 다른 cmux 플러그인(예: `claude_code`)도 로그를 기록 중이라면 그 로그도 함께 제거된다. 이는 "사용자 턴 경계 = UX 리셋 시점"이라는 설계 판단이며, 자세한 논거는 `empirical-cmux-log-turn-reset.md`에 기록.
+- **opt-out**: `OPENCODE_NEXUS_CMUX=0` 또는 `CMUX_WORKSPACE_ID` 미설정 시 기존과 동일하게 cmux 호출 자체가 일어나지 않는다(clear-log 포함).
+- 기존 설치본에서 `opencode-nexus install` 또는 글로벌 업데이트 후 OpenCode 재시작만 하면 반영됨.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS — 기존 cmux-a~s 시나리오 + 신규 cmux-t/u/v/w 4개 시나리오 통과
+  - **cmux-t**: `session.error` fatal → `session.status busy` → `clear-log` 1회 + `set-status Running` 호출
+  - **cmux-u**: 연속 busy 5회 → `clear-log`는 정확히 1회 (sessionRunning Set dedup)
+  - **cmux-v**: `MessageAbortedError` abort → `session.status busy` → `clear-log` 호출 (abort 경로도 turn-end 취급)
+  - **cmux-w**: `OPENCODE_NEXUS_CMUX=0` 및 non-root 세션에서 `clear-log` 미호출 negative regression guard
+- 기존 cmux-b/k/m/n/o/r/s 시나리오는 새 clear-log 호출을 포함한 call count로 조정되어 통과
+- releasing.md §5-5-1 수동 체크 PASS
+
 ## [0.16.3] — 2026-04-23
 
 ### 업스트림
