@@ -2,6 +2,36 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [Unreleased]
+
+### 추가됨
+
+- **`nexus_spawn` / `nexus_result` custom tool** — Lead가 subagent를 비동기로 spawn하고 결과를 조회할 수 있는 A-MVP primary unblock 기능. 구현 위치: `src/plugin.ts`.
+- **9개 subagent permission에 `nexus_spawn: deny`, `nexus_result: deny` 추가** — Lead 독점 원칙 적용.
+- **`scripts/post-sync-asyncify.mjs`** — Phase 1 U2 치환 레이어. `bun run sync` 시 `.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`에서 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})`로 8건 치환. Phase 3에서 제거 예정.
+- **README 비동기 서브에이전트 실험적 섹션** — 한국어/영문 모두 추가.
+
+### 변경됨
+
+- **package.json의 `sync` / `sync:dry` script가 `post-sync-asyncify.mjs`를 이어 실행** — sync 출력 후 asyncify 후처리가 체이닝됨.
+- **`.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`가 sync 시점에 치환됨** — `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` (8건). 이 파일들은 sync 생성물이므로 저장소에서 직접 수정하지 않음.
+
+### 업스트림
+
+- **`@moreih29/nexus-core` 버전 변경 없음**.
+- **nexus-core 저장소에 이슈 제기**: [moreih29/nexus-core#68](https://github.com/moreih29/nexus-core/issues/68) (`subagent_spawn_async` 매크로 제안) — 해결 시 Phase 3 진입.
+
+### 사용자 영향
+
+- **breaking change 없음**. 기존 사용자는 기존 동작 그대로 유지됩니다.
+- Lead가 자율 판단에 따라 `nexus_spawn`을 사용할 수 있게 됩니다. 사용자 체감: HOW 병렬, 장시간 researcher 등 시나리오에서 primary session이 block되지 않음.
+- `nexus_spawn`/`nexus_result`는 Lead 전용이며, subagent는 직접 호출할 수 없습니다 (permission deny).
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` 진행 중 (Task 5가 async e2e 시나리오 추가)
+
 ## [0.16.4] — 2026-04-24
 
 ### 수정됨

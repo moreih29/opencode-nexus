@@ -3,6 +3,8 @@ export const architect = {
   name: "architect",
   description: "Technical design — evaluates How, reviews architecture, advises on implementation approach",
   permission: {
+    nexus_spawn: "deny",
+    nexus_result: "deny",
     edit: "deny",
     nx_task_add: "deny",
     nx_task_update: "deny",

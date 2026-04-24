@@ -87,6 +87,8 @@ It also normalizes these defaults:
 - `agent.build.disable: true`
 - `agent.plan.disable: true`
 
+For development synchronization, `bun run sync` generates skills/agents from `nexus-core` and then chains `post-sync-asyncify` to replace the Lead + four HOW agents' `subagent_spawn` calls with async `nexus_spawn` calls. This is a temporary Phase 1 measure and will be removed once the upstream `nexus-core` macro ([moreih29/nexus-core#68](https://github.com/moreih29/nexus-core/issues/68)) lands.
+
 ## Scope
 
 - `project`: writes to `./opencode.json`
@@ -231,6 +233,32 @@ When `session.error` occurs, the sidebar logs it at the `error` level (`cmux log
 Retries (`session.status: retry`) are logged to the sidebar at the `warning` level without a toast (minimizing noise).
 
 The new status indicators and notifications are also disabled by the same `OPENCODE_NEXUS_CMUX` flag.
+
+## Async subagents (experimental)
+
+Lead can spawn subagents in the background using the `nexus_spawn` custom tool. The primary session is not blocked, so Lead can continue interacting with the user while HOW agents run in parallel or a long-running researcher task is in progress.
+
+- `nexus_spawn({ agent_id, prompt, description? })` → `{ task_id }`  
+  `description` is an optional human-readable label the Lead can attach to the task.
+- `nexus_result({ task_id })` → `{ status, result?, error? }`
+
+### Current limitations
+
+- **No concurrency limit**: Multiple subagents can be spawned simultaneously, but rate limits must be managed manually.
+- **No stuck detection**: The `promptAsync` wake watchdog only provides a 3-second timeout + 1 retry.
+- **No mid-task injection**: There is no way to inject into a running subagent (upstream issues [#17691](https://github.com/anomalyco/opencode/issues/17691), [#16102](https://github.com/anomalyco/opencode/issues/16102), [#17412](https://github.com/anomalyco/opencode/issues/17412)).
+- **Resume remains sync**: Resuming a finished subagent still uses `task({ task_id, prompt })`.
+- **State loss on plugin restart**: Async task state is kept in-memory only and is lost when OpenCode restarts.
+
+### Phase plan
+
+- **Phase 1 (current)**: U2 replacement via `scripts/post-sync-asyncify.mjs`. On `bun run sync`, 8 occurrences of `task({subagent_type,...})` are replaced with `nexus_spawn({agent_id,...})`.
+- **Phase 2**: Expand replacement targets and stabilize.
+- **Phase 3**: Remove the post-sync layer once nexus-core issue [#68](https://github.com/moreih29/nexus-core/issues/68) is resolved. Use the upstream `subagent_spawn_async` macro directly.
+
+### Installation requirements
+
+No special setup is needed; works in a standard OpenCode environment. `nexus_spawn` and `nexus_result` are automatically registered by the plugin. The 9 subagent permissions already include `nexus_spawn: deny` and `nexus_result: deny`, enforcing Lead-exclusive usage.
 
 ## Upgrade
 

@@ -87,6 +87,8 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `agent.build.disable: true`
 - `agent.plan.disable: true`
 
+개발 동기화용 `bun run sync`는 `nexus-core`에서 skill/agent를 생성한 뒤 `post-sync-asyncify`를 이어 실행해 Lead + HOW 4명의 `subagent_spawn` 호출을 `nexus_spawn`(async)로 치환합니다. 이는 Phase 1 임시 조치이며, `nexus-core` upstream 매크로([moreih29/nexus-core#68](https://github.com/moreih29/nexus-core/issues/68))가 반영되면 제거됩니다.
+
 ## Scope
 
 - `project`: 현재 프로젝트의 `./opencode.json`에 기록
@@ -231,6 +233,32 @@ cmux 사이드바에 작업 상태 pill을 함께 표시합니다.
 재시도(`session.status: retry`)는 토스트 없이 사이드바 로그에 `warning` 레벨로만 기록합니다(noise 최소화).
 
 새로 추가된 상태 표시와 알림도 위 `OPENCODE_NEXUS_CMUX` 환경변수로 동일하게 비활성화할 수 있습니다.
+
+## 비동기 서브에이전트 (실험적)
+
+Lead가 `nexus_spawn` custom tool로 서브에이전트를 background에서 실행할 수 있습니다. primary session은 block되지 않으므로, HOW 병렬 실행이나 장시간 researcher 작업 중에도 Lead가 사용자와 상호작용을 유지할 수 있습니다.
+
+- `nexus_spawn({ agent_id, prompt, description? })` → `{ task_id }`  
+  `description`은 Lead가 task에 붙일 사람이 읽기 쉬운 선택적 라벨입니다.
+- `nexus_result({ task_id })` → `{ status, result?, error? }`
+
+### 현재 한계
+
+- **동시성 제한 없음**: 여러 subagent를 동시에 spawn할 수 있지만, rate limit은 수동으로 관리해야 합니다.
+- **stuck detection 없음**: `promptAsync` wake watchdog가 3초 + 1 retry만 제공합니다.
+- **mid-task inject 불가**: 실행 중인 subagent에 중간 개입할 수 없습니다 (upstream 이슈 [#17691](https://github.com/anomalyco/opencode/issues/17691), [#16102](https://github.com/anomalyco/opencode/issues/16102), [#17412](https://github.com/anomalyco/opencode/issues/17412)).
+- **resume은 sync 유지**: 종료된 subagent를 재개할 때는 여전히 `task({ task_id, prompt })`를 사용합니다.
+- **플러그인 재시작 시 상태 유실**: async task 상태는 메모리 내에서만 유지되므로 OpenCode 재시작 시 사라집니다.
+
+### Phase별 계획
+
+- **Phase 1 (현재)**: `scripts/post-sync-asyncify.mjs`로 U2 치환. `bun run sync` 시 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})`로 8건 치환.
+- **Phase 2**: 치환 대상 확대 및 안정화.
+- **Phase 3**: nexus-core 이슈 [#68](https://github.com/moreih29/nexus-core/issues/68) 해결 후 post-sync 레이어 제거. upstream `subagent_spawn_async` 매크로를 직접 사용.
+
+### 설치 필요 환경
+
+특별한 설치 없이 기본 OpenCode 환경에서 동작합니다. `nexus_spawn`과 `nexus_result`는 plugin이 자동으로 등록하며, 9개 subagent permission에 이미 `nexus_spawn: deny`, `nexus_result: deny`가 추가되어 Lead 독점 사용 원칙이 적용되어 있습니다.
 
 ## 업그레이드
 

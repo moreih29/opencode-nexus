@@ -18,6 +18,7 @@
 | `config` | `config.agent`에 Nexus agent 주입, `default_agent` 기본값 `lead` | **high** — config schema 변화 시 직결 |
 | `event` | 아래 §1-3 이벤트 타입들 | **high** — 가장 자주 변하는 표면 |
 | `tool.execute.before` | `input.tool === "question"`만 특별 취급 | **medium** — tool name 변화 시 |
+| `tool` (custom tool 등록) | Plugin 반환 객체의 `tool` property로 `nexus_spawn`, `nexus_result` 등록. `nexus_spawn`은 fire-and-forget + 3s watchdog × 1 retry; `nexus_result`는 상태 조회 | **high** — 새 SDK 의존 추가 (`client.session.create`, `promptAsync`, `messages`) |
 | `permission.ask` | notify만 발사 (input/output 미읽음) | **low** — signature만 유지되면 됨 |
 | `chat.message` | `output.parts[]`에서 첫 `text` part rewrite | **medium** — parts 구조 변화 시 |
 
@@ -25,12 +26,12 @@
 
 | Event type | 읽는 필드 | 분기 조건 |
 |---|---|---|
-| `session.created` | `info.parentID`, `info.id` | parentID 없으면 root |
-| `session.deleted` | `info.id` | rootSessions에서 제거 |
-| `session.idle` | `sessionID` | root만 |
-| `session.status` | `status.type` → `busy` / `retry` / `idle` | root만, busy/idle은 pill 제어, retry는 로그 |
-| `message.part.updated` | `part.type` → `step-start` / `text`; `part.sessionID`, `part.text` | root만, step-start는 턴 경계, text는 preview 캐시 |
-| `session.error` | `error.name`, `error.message` | MessageAbortedError 식별 (v0.16.3~) |
+| `session.created` | `info.parentID`, `info.id` | parentID 없으면 root; parentID 있으면 child로 `childSessionToTask` 맵에 등록 |
+| `session.idle` | `sessionID` | root만; child는 별도 sessionID→parent 맵(`childSessionToTask`)으로 분기 |
+| `session.deleted` | `info.id` | rootSessions에서 제거; child cleanup 분기 (맵에 있으면 child로 처리) |
+| `session.status` | `status.type` → `busy` / `retry` / `idle` | root: pill 제어·clear-log / child: `busyObserved` 업데이트(watchdog 신호) |
+| `message.part.updated` | `part.type` → `step-start` / `text`; `part.sessionID`, `part.text` | root만, step-start는 턴 경계, text는 preview 캐시; child 별 캐시 분기 (`childSessionLastText`) |
+| `session.error` | `error.name`, `error.message`, `sessionID` | MessageAbortedError 식별; child status=error 분기 (sessionID로 맵 조회) |
 | `permission.replied` | `sessionID` | root만, pill clear |
 
 **주의**: OpenCode SDK types.gen.d.ts에서 이들은 discriminated union. 새 variant가 추가되거나 기존 variant가 제거되면 TypeScript 레벨에서 fail-fast.
@@ -88,9 +89,14 @@ bump 작업 시 수정 대상: 루트 `package.json`만. `bun install`로 `bun.l
 3. `types.gen.d.ts` diff — 위 §1-3 이벤트 타입들 signature 확인.
 
 ### 6-2. 우리 접점 확인
-1. §1-2의 5개 hook signature 변화 없음 확인. 있으면 `src/plugin.ts` 수정 필요.
+1. §1-2의 6개 hook signature 변화 없음 확인. 있으면 `src/plugin.ts` 수정 필요.
 2. §1-3의 event payload 필드 변화 없음 확인. 특히 `status.type`, `part.type`, `error.name` discriminator.
 3. §2-2의 config schema 키 구조 변화 없음 확인. 바뀌었으면 `lib/install.mjs` / `lib/uninstall.mjs` 업데이트.
+4. Phase 1 async child session SDK API 의존 확인. 변화 시 `src/plugin.ts` 수정 필요:
+   - `client.session.create({parentID})` 반환 shape
+   - `client.session.promptAsync({sessionID, text})` 동작
+   - `client.session.messages({path: {id: sessionID}})` 반환 shape
+   - `session.created` / `session.deleted` 이벤트의 `info.parentID` 필드 보장 및 `childSessionToTask` 맵 유지
 
 ### 6-3. 검증 실행 (releasing.md 체크리스트)
 1. `bun install` — peer dep 충돌 없음
@@ -109,6 +115,17 @@ bump 작업 시 수정 대상: 루트 `package.json`만. `bun install`로 `bun.l
 - `external-opencode-plugin-versions.md` — 업스트림 버전 궤적과 renumbering typo
 - `empirical-cmux-pill-clear-paths.md` — cmux 통합 회귀 방지 원리 (set-clear pair, spawn serialize)
 - `pattern-bug-fix-routing.md` — upstream vs local 경로 분리
+
+## 8. Post-sync asyncify layer (Phase 1 temporary)
+
+`scripts/post-sync-asyncify.mjs`는 Phase 1의 임시 치환 레이어다. `bun run sync`로 생성된 skill 본문 중 `{{subagent_spawn type="U2" ...}}` 매크로가 OpenCode 하네스에서 `task({subagent_type, ...})`로 치환된 결과를, 다시 `nexus_spawn({agent_id, ...})` 호출로 교체한다.
+
+- **존재 이유**: nexus-core가 아직 `subagent_spawn_async` 매크로를 제공하지 않아서, sync 출력 후 후처리로 async spawn을 주입한다.
+- **치환 대상**: `.opencode/skills/nx-plan/SKILL.md`, `.opencode/skills/nx-auto-plan/SKILL.md` (agent body가 아닌 skill body에 매크로가 있음).
+- **치환 건수 assertion 상수**: 8건.
+- **제거 전망**: Phase 3에서 nexus-core 이슈 [#68](https://github.com/moreih29/nexus-core/issues/68)가 반영되면 제거된다.
+
+관련 경험 기록: [`empirical-opencode-async-session.md`](./empirical-opencode-async-session.md)
 
 ## 조사 원본
 
