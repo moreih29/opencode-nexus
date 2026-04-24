@@ -229,7 +229,10 @@ async function main() {
     assert(existsSync(resolve(relativePath)), `missing synced file: ${relativePath}`);
   }
 
-  for (const relativePath of [".opencode/skills/nx-plan/SKILL.md", ".opencode/skills/nx-auto-plan/SKILL.md"]) {
+  // Verify the bundled skill bodies at `skills/*` (root) — these are the
+  // files shipped via `package.json` `files: ["skills", ...]`, so users
+  // only receive async-enabled skills if the rewrite lands here.
+  for (const relativePath of ["skills/nx-plan/SKILL.md", "skills/nx-auto-plan/SKILL.md"]) {
     const content = readFileSync(resolve(relativePath), "utf8");
     assert(countOccurrences(content, /nexus_spawn\(/g) >= 1, `post-sync-a: ${relativePath} must contain nexus_spawn(`);
     assert(countOccurrences(content, /task\(\{\s*subagent_type:/g) === 0, `post-sync-a: ${relativePath} must not retain task({ subagent_type: patterns`);

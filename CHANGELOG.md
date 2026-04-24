@@ -8,7 +8,7 @@
 
 - **`nexus_spawn` / `nexus_result` custom tool** — Lead가 subagent를 비동기로 spawn하고 결과를 조회할 수 있는 A-MVP primary unblock 기능. `session.create(parentID)` + `session.promptAsync` fire-and-forget + 3초 wake watchdog × 1 retry + `session.messages` 기반 explicit 결과 수거. 구현 위치: `src/plugin.ts`.
 - **9개 subagent permission에 `nexus_spawn: deny`, `nexus_result: deny` 추가** — Lead 독점 원칙 적용.
-- **`scripts/post-sync-asyncify.mjs`** — opencode-nexus sync 파이프라인의 정규 layer. `bun run sync` 시 `.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`에서 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` 8건 치환 + 9개 agent 파일 permission 18 entries 재주입(upstream sync가 덮어쓰는 deny를 복원). 헤더에 Responsibilities/Dependency contract 명시, assertion 실패 시 "Likely causes:" 진단 힌트, permission injection brace-aware scanner(line comment/trailing comma/whitespace 변형 안전).
+- **`scripts/post-sync-asyncify.mjs`** — opencode-nexus sync 파이프라인의 정규 layer. `bun run sync` 시 bundled skill bodies(`skills/nx-plan/SKILL.md`, `skills/nx-auto-plan/SKILL.md` — package.json `files`로 배포되는 것)에서 `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` 8건 치환 + 9개 agent 파일 permission 18 entries 재주입(upstream sync가 덮어쓰는 deny를 복원). 헤더에 Responsibilities/Dependency contract 명시, assertion 실패 시 "Likely causes:" 진단 힌트, permission injection brace-aware scanner(line comment/trailing comma/whitespace 변형 안전). dry-run은 targets/permission 각각 독립적으로 graceful-skip하여 fresh CI 체크아웃에서도 통과.
 - **README 비동기 서브에이전트 실험적 섹션** — 한국어/영문 모두 추가. Phase 1~3 로드맵 서술.
 - **`.nexus/memory/empirical-opencode-async-session.md`** — opencode SDK의 `session.create` / `session.promptAsync` / `session.messages` 실증 + upstream 제약(#21524, #21176, #20460) 분석.
 - **`.nexus/memory/empirical-sync-macro-usage-verification.md`** — Phase 계획 시 sync 매크로 사용처를 추정이 아닌 grep으로 verified evidence로 확인하라는 교훈.
@@ -17,7 +17,7 @@
 ### 변경됨
 
 - **package.json의 `sync` / `sync:dry` script가 `post-sync-asyncify.mjs`를 이어 실행** — sync 출력 후 asyncify 후처리가 체이닝됨.
-- **`.opencode/skills/nx-plan/SKILL.md`, `nx-auto-plan/SKILL.md`가 sync 시점에 치환됨** — `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` (8건). 이 파일들은 sync 생성물이므로 저장소에서 직접 수정하지 않음.
+- **bundled skill bodies (`skills/nx-plan/SKILL.md`, `skills/nx-auto-plan/SKILL.md`)가 sync 시점에 치환됨** — `task({subagent_type,...})` → `nexus_spawn({agent_id,...})` (8건). 배포 artifact(`npm pack`)에 포함되는 파일들이며, install CLI가 사용자의 `.opencode/skills/`로 복사할 때 자동으로 async 버전이 전달됨.
 - **Phase 3 전략 재설정** — post-sync asyncify를 opencode-nexus sync 파이프라인의 영구 component로 승격. 원래 "migration 제거" 목표는 폐기. 이유: nexus-core 메인테이너가 vocabulary 확장 제안(#68)을 정당한 3 논거로 거절하되 downstream post-sync를 legitimate pattern으로 인정.
 
 ### 업스트림

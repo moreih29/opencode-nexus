@@ -54,10 +54,37 @@ DO 에이전트가 "caveat"·"note"로 남기는 관찰은 **주의 신호**다.
 - **role 분류(HOW/DO/CHECK)는 multi-axis**다. 권한, 문서, 스폰 권한, invocation site가 각각 다른 축을 가질 수 있음.
 - **Phase 계획은 "다음에 X를 할 것"**이라는 추상보다 **"현재 Y 상태이고 조건 Z가 되면 X를 할 것"**이라는 구체 계약이 drift를 줄인다.
 
+## 2차 발견 — 치환 타겟 경로 자체도 잘못됐었다 (cycle 12 release, 2026-04-24)
+
+Phase 2 phantom scope를 정정한 cycle 12의 릴리즈 과정에서 **2차 phantom scope**가 드러났다. cycle 11 구현 당시 `scripts/post-sync-asyncify.mjs`가 치환 대상으로 지정한 경로는 `.opencode/skills/*` 였는데, 이것은:
+
+- **install CLI가 bundled skills를 복사한 결과물** — 런타임에서만 존재하는 부산물.
+- 진짜 배포 artifact(`package.json` `files: ["skills", ...]`가 `npm pack`에 포함)는 **루트 `skills/*`**.
+- 로컬에서는 이전 `bun run sync` 실행 때 `.opencode/skills/*`가 이미 async 버전으로 치환돼 있었기 때문에 로컬 e2e는 PASS였음.
+- 하지만 루트 `skills/*`에는 `nexus_spawn(` 등장이 **0건**이었고, 이대로 배포되면 사용자는 async 스킬을 받지 못했을 것.
+
+PR #21의 CI가 fresh checkout에서 `.opencode/skills/*`가 없어 실패하면서 이 불일치가 드러났다. fix:
+- `scripts/post-sync-asyncify.mjs`의 `targets`를 루트 `skills/*`로 정정.
+- `scripts/e2e-nexus-integration.mjs`의 post-sync 검증도 같은 경로로 정정.
+- 이번 교훈: **"sync가 쓰는 위치"와 "install이 복사한 위치"는 다르고, 배포 artifact는 전자에 있다**. post-process 레이어는 배포 artifact 경로 기준으로 작동해야 한다.
+
+### 3단계 verify 절차 (보강)
+
+§ "재발 방지" 3단계에 추가:
+
+**4. `package.json`의 `files` 배열과 대조**
+
+배포 artifact에 포함될 경로가 실제로 치환되고 있는지 확인한다. `npm pack --dry-run`으로 tarball에 들어가는 파일 목록을 보고, 치환 타겟이 그 안에 있는지 교차 확인한다.
+
+```bash
+npm pack --dry-run 2>&1 | grep "skills/"
+# 이 결과 목록과 post-sync-asyncify.mjs의 targets 배열이 정확히 대응해야 함
+```
+
 ## 연관 cycle · 기록
 
 - **cycle 11** (2026-04-24): Phase 2 phantom scope를 포함한 Issue 6 decision 생성. `.nexus/history.json`에 archive됨 (plan_id=11).
-- **cycle 12** (2026-04-24): Phase 2 phantom scope 공식 인정, "on-demand 확대"로 재정의. Issue 4 decision.
+- **cycle 12** (2026-04-24): Phase 2 phantom scope 공식 인정, "on-demand 확대"로 재정의 (Issue 4 decision). 릴리즈 과정에서 2차 phantom scope(치환 타겟 경로 자체) 발견·fix.
 
 ## 연관 메모리
 

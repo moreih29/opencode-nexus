@@ -60,9 +60,9 @@ Understand code, core knowledge, and prior decisions before forming the planning
 
 | Situation | Approach |
 |---|---|
-| Codebase orientation needed | `task({ subagent_type: "explore", prompt: "<file/code search task>", description: "explore" })` for codebase exploration |
-| External research needed | `task({ subagent_type: "researcher", prompt: "<research question>", description: "researcher" })` for web search |
-| Both needed | Spawn `task({ subagent_type: "explore", prompt: "<file/code search task>", description: "explore" })` and `task({ subagent_type: "researcher", prompt: "<research question>", description: "researcher" })` in parallel |
+| Codebase orientation needed | `nexus_spawn({ agent_id: "explore", prompt: "<file/code search task>" })` for codebase exploration |
+| External research needed | `nexus_spawn({ agent_id: "researcher", prompt: "<research question>" })` for web search |
+| Both needed | Spawn `nexus_spawn({ agent_id: "explore", prompt: "<file/code search task>" })` and `nexus_spawn({ agent_id: "researcher", prompt: "<research question>" })` in parallel |
 
 - Researcher subagents return findings to Lead and do not participate in the auto-plan session itself.
 

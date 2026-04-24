@@ -34,18 +34,21 @@ import { resolve } from "node:path";
 
 const dryRun = process.argv.includes("--dry-run");
 
-// Asyncify targets: only the generated skill bodies actually emit
-// `task({ subagent_type, ... })` from the `subagent_spawn` macro. Agent
-// body files (`src/agents/*.ts`) render role definitions and never host
-// the macro — see `.nexus/memory/empirical-sync-macro-usage-verification.md`
-// for why this distinction matters (phantom scope lesson from cycle 12).
-// Keeping only skill-body targets also lets the dry-run graceful-skip
-// condition trigger correctly on fresh CI checkouts where `.opencode/` is
-// gitignored.
+// Asyncify targets: the generated bundled skill bodies at `skills/*` (root).
+// These are what package.json `files` publishes, so the replacement MUST
+// land here for users to receive async-enabled skills on install. The
+// `.opencode/skills/*` copies are created by our install CLI (not by
+// nexus-sync) and are always downstream of `skills/*`, so rewriting
+// bundled skills alone is sufficient.
+//
+// Agent body files (`src/agents/*.ts`) render role definitions and never
+// host the `subagent_spawn` macro — see
+// `.nexus/memory/empirical-sync-macro-usage-verification.md` for the
+// phantom-scope lesson (cycle 12).
 const targets = [
-  ".opencode/skills/nx-plan/SKILL.md",
-  ".opencode/skills/nx-auto-plan/SKILL.md",
-  ".opencode/skills/nx-run/SKILL.md",
+  "skills/nx-plan/SKILL.md",
+  "skills/nx-auto-plan/SKILL.md",
+  "skills/nx-run/SKILL.md",
 ];
 
 const permissionTargets = [
