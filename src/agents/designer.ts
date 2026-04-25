@@ -3,8 +3,6 @@ export const designer = {
   name: "designer",
   description: "UX/UI design — evaluates user experience, interaction patterns, and how users will experience the product",
   permission: {
-    nexus_spawn: "deny",
-    nexus_result: "deny",
     edit: "deny",
     nx_task_add: "deny",
     nx_task_update: "deny",

@@ -1,6 +1,6 @@
 {
   "name": "opencode-nexus",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "private": false,
   "type": "module",
   "description": "OpenCode plugin wrapper for @moreih29/nexus-core",
@@ -43,8 +43,8 @@
     "access": "public"
   },
   "scripts": {
-    "sync": "./node_modules/.bin/nexus-sync --harness=opencode --target=./ && node scripts/post-sync-asyncify.mjs",
-    "sync:dry": "./node_modules/.bin/nexus-sync --harness=opencode --target=./ --dry-run && node scripts/post-sync-asyncify.mjs --dry-run",
+    "sync": "./node_modules/.bin/nexus-sync --harness=opencode --target=./",
+    "sync:dry": "./node_modules/.bin/nexus-sync --harness=opencode --target=./ --dry-run",
     "build": "bun run sync && tsc --noEmit",
     "check": "bun run sync:dry && tsc --noEmit",
     "test:e2e": "bun run sync && bun scripts/e2e-nexus-integration.mjs",
