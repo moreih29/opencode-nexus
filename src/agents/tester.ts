@@ -3,8 +3,6 @@ export const tester = {
   name: "tester",
   description: "Testing and verification — tests, verifies, validates stability and security of implementations",
   permission: {
-    nexus_spawn: "deny",
-    nexus_result: "deny",
     nx_task_add: "deny",
     nx_task_close: "deny",
     task: "deny",

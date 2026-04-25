@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tool, type Plugin } from "@opencode-ai/plugin";
+import type { Plugin } from "@opencode-ai/plugin";
 import { architect } from "./agents/architect.js";
 import { designer } from "./agents/designer.js";
 import { engineer } from "./agents/engineer.js";
@@ -55,31 +55,6 @@ const LOG_SOURCE = "nexus";
 const RESPONSE_READY_FALLBACK = "Response ready";
 const PREVIEW_MAX_LEN = 100;
 const PRE_CHECK_MARKER = "[Pre-check]";
-const ASYNC_WAKE_TIMEOUT_MS = 3_000;
-
-type AsyncTaskStatus = "running" | "completed" | "error";
-
-type AsyncTask = {
-  sessionID: string;
-  parentRootID: string;
-  status: AsyncTaskStatus;
-  result?: string;
-  error?: string;
-  lastActivity: number;
-  busyObserved: boolean;
-};
-
-const NEXUS_ASYNC_AGENT_IDS = new Set([
-  "architect",
-  "designer",
-  "engineer",
-  "postdoc",
-  "researcher",
-  "reviewer",
-  "strategist",
-  "tester",
-  "writer",
-]);
 
 function ensureNexusStructure(root: string) {
   const nexusDir = join(root, ".nexus");
@@ -271,25 +246,7 @@ function buildResponseReadyBody(lastText: string | undefined): string {
   return preview.length > 0 ? preview : RESPONSE_READY_FALLBACK;
 }
 
-function jsonToolOutput(value: unknown) {
-  return JSON.stringify(value);
-}
-
-function extractLatestAssistantText(messages: Array<{ info: { role: string }; parts: Array<{ type: string; text?: string }> }>) {
-  for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
-    const message = messages[idx];
-    if (message.info.role !== "assistant") continue;
-    const text = message.parts
-      .filter((part) => part.type === "text" && typeof part.text === "string")
-      .map((part) => part.text)
-      .join("\n")
-      .trim();
-    if (text.length > 0) return text;
-  }
-  return "";
-}
-
-export const OpencodeNexus: Plugin = async ({ client, directory }) => {
+export const OpencodeNexus: Plugin = async ({ directory }) => {
   // Track root sessions so we only forward `session.idle` to cmux for the
   // top-level session. Subagent sessions also emit `session.idle` whenever
   // they finish a turn, and notifying on each of those would be spam.
@@ -313,154 +270,8 @@ export const OpencodeNexus: Plugin = async ({ client, directory }) => {
   // (see empirical-cmux-pill-clear-paths.md path 2), so a raw per-busy
   // clear-log would destroy mid-turn warnings.
   const sessionRunning = new Set<string>();
-  // Async subagent state. Kept in-memory for the plugin lifetime; callers use
-  // `nexus_result` for explicit result collection instead of parent injection.
-  const asyncTasks = new Map<string, AsyncTask>();
-  const childSessionToTask = new Map<string, string>();
-  const childSessionLastText = new Map<string, string>();
-
-  async function readChildResult(task: AsyncTask) {
-    const messages = await client.session.messages({
-      path: { id: task.sessionID },
-      query: { directory },
-    });
-    return extractLatestAssistantText(messages.data ?? []) || childSessionLastText.get(task.sessionID) || "";
-  }
-
-  async function collectChildResult(taskID: string) {
-    const task = asyncTasks.get(taskID);
-    if (!task || task.status !== "running") return;
-
-    try {
-      const result = await readChildResult(task);
-      task.status = "completed";
-      task.result = result;
-      task.lastActivity = Date.now();
-    } catch (err) {
-      task.status = "error";
-      task.error = extractErrorSummary(err);
-      task.lastActivity = Date.now();
-    }
-  }
-
-  function launchChildPrompt(taskID: string, agentID: string, prompt: string) {
-    const task = asyncTasks.get(taskID);
-    if (!task || task.status !== "running") return;
-
-    try {
-      const pending = client.session.promptAsync({
-        path: { id: task.sessionID },
-        query: { directory },
-        body: {
-          agent: agentID,
-          noReply: false,
-          parts: [{ type: "text", text: prompt }],
-        },
-      });
-      task.lastActivity = Date.now();
-      void pending
-        .then(() => {
-          const current = asyncTasks.get(taskID);
-          if (current && current.status === "running") current.lastActivity = Date.now();
-        })
-        .catch((err) => {
-          const failed = asyncTasks.get(taskID);
-          if (!failed || failed.status !== "running") return;
-          failed.status = "error";
-          failed.error = extractErrorSummary(err);
-          failed.lastActivity = Date.now();
-        });
-    } catch (err) {
-      task.status = "error";
-      task.error = extractErrorSummary(err);
-      task.lastActivity = Date.now();
-    }
-  }
-
-  function startWakeWatchdog(taskID: string, agentID: string, prompt: string) {
-    setTimeout(() => {
-      const task = asyncTasks.get(taskID);
-      if (!task || task.status !== "running" || task.busyObserved) return;
-      task.busyObserved = false;
-      launchChildPrompt(taskID, agentID, prompt);
-      setTimeout(() => {
-        const afterRetry = asyncTasks.get(taskID);
-        if (!afterRetry || afterRetry.status !== "running" || afterRetry.busyObserved) return;
-        afterRetry.status = "error";
-        afterRetry.error = "idle session wake failed";
-        afterRetry.lastActivity = Date.now();
-      }, ASYNC_WAKE_TIMEOUT_MS);
-    }, ASYNC_WAKE_TIMEOUT_MS);
-  }
 
   return {
-    tool: {
-      nexus_spawn: tool({
-        description: "Start a Nexus subagent asynchronously and return a task id for later polling.",
-        args: {
-          agent_id: tool.schema.string(),
-          prompt: tool.schema.string(),
-          description: tool.schema.string().optional(),
-        },
-        execute: async (args, context) => {
-          if (!NEXUS_ASYNC_AGENT_IDS.has(args.agent_id)) {
-            return jsonToolOutput({ status: "error", error: `unknown async agent: ${args.agent_id}` });
-          }
-
-          const created = await client.session.create({
-            query: { directory },
-            body: {
-              parentID: context.sessionID,
-              title: args.description || `Async ${args.agent_id}`,
-            },
-          });
-          const child = created.data;
-          if (!child) return jsonToolOutput({ status: "error", error: "session.create returned no session" });
-          const taskID = child.id;
-          const task: AsyncTask = {
-            sessionID: child.id,
-            parentRootID: context.sessionID,
-            status: "running",
-            lastActivity: Date.now(),
-            busyObserved: false,
-          };
-
-          asyncTasks.set(taskID, task);
-          childSessionToTask.set(child.id, taskID);
-          context.metadata({ title: args.description || `Async ${args.agent_id}`, metadata: { task_id: taskID, session_id: child.id } });
-
-          launchChildPrompt(taskID, args.agent_id, args.prompt);
-          startWakeWatchdog(taskID, args.agent_id, args.prompt);
-
-          return jsonToolOutput({ task_id: taskID });
-        },
-      }),
-      nexus_result: tool({
-        description: "Poll the result of a Nexus async subagent task.",
-        args: {
-          task_id: tool.schema.string(),
-        },
-        execute: async (args) => {
-          const task = asyncTasks.get(args.task_id);
-          if (!task) return jsonToolOutput({ status: "error", error: `unknown task_id: ${args.task_id}` });
-
-          if (task.status === "completed") {
-            // Explicitly re-read child messages for result retrieval; this
-            // avoids relying on parent-session auto injection or stale cache.
-            try {
-              task.result = await readChildResult(task);
-              task.lastActivity = Date.now();
-            } catch {
-              // Preserve the event-collected result if the completed child was
-              // later removed or temporarily unavailable.
-            }
-            return jsonToolOutput({ status: "completed", result: task.result ?? "" });
-          }
-          if (task.status === "error") return jsonToolOutput({ status: "error", error: task.error ?? "unknown" });
-          return jsonToolOutput({ status: "running" });
-        },
-      }),
-    },
     config: async (config) => {
       const configRecord = config as Record<string, unknown>;
       config.agent ??= {};
@@ -484,34 +295,14 @@ export const OpencodeNexus: Plugin = async ({ client, directory }) => {
         return;
       }
       if (event.type === "session.deleted") {
-        const sessionID = event.properties.info.id;
-        const taskID = childSessionToTask.get(sessionID);
-        if (taskID) {
-          asyncTasks.delete(taskID);
-          childSessionToTask.delete(sessionID);
-          childSessionLastText.delete(sessionID);
-          return;
-        }
-
-        const wasRoot = rootSessions.has(sessionID);
-        rootSessions.delete(sessionID);
-        sessionRunning.delete(sessionID);
-        rootSessionLastText.delete(sessionID);
-        assistantTurnActive.delete(sessionID);
-        for (const [id, task] of asyncTasks) {
-          if (task.parentRootID !== sessionID) continue;
-          asyncTasks.delete(id);
-          childSessionToTask.delete(task.sessionID);
-          childSessionLastText.delete(task.sessionID);
-        }
+        const wasRoot = rootSessions.has(event.properties.info.id);
+        rootSessions.delete(event.properties.info.id);
+        sessionRunning.delete(event.properties.info.id);
+        rootSessionLastText.delete(event.properties.info.id);
+        assistantTurnActive.delete(event.properties.info.id);
         if (wasRoot) {
           cmuxClearStatus(PILL_KEY);
         }
-        return;
-      }
-      if (event.type === "session.idle" && childSessionToTask.has(event.properties.sessionID)) {
-        const taskID = childSessionToTask.get(event.properties.sessionID);
-        if (taskID) await collectChildResult(taskID);
         return;
       }
       if (event.type === "session.idle" && rootSessions.has(event.properties.sessionID)) {
@@ -527,17 +318,6 @@ export const OpencodeNexus: Plugin = async ({ client, directory }) => {
         sessionRunning.delete(event.properties.sessionID);
         rootSessionLastText.delete(event.properties.sessionID);
         assistantTurnActive.delete(event.properties.sessionID);
-        return;
-      }
-      if (event.type === "session.status" && childSessionToTask.has(event.properties.sessionID)) {
-        const taskID = childSessionToTask.get(event.properties.sessionID);
-        const task = taskID ? asyncTasks.get(taskID) : undefined;
-        if (!task || task.status !== "running") return;
-
-        task.lastActivity = Date.now();
-        if (event.properties.status.type === "busy") {
-          task.busyObserved = true;
-        }
         return;
       }
       if (event.type === "session.status" && rootSessions.has(event.properties.sessionID)) {
@@ -597,18 +377,6 @@ export const OpencodeNexus: Plugin = async ({ client, directory }) => {
           );
         }
         const partSessionID = (part as { sessionID?: unknown }).sessionID;
-        if (typeof partSessionID === "string" && childSessionToTask.has(partSessionID)) {
-          const taskID = childSessionToTask.get(partSessionID);
-          const task = taskID ? asyncTasks.get(taskID) : undefined;
-          if (task) task.lastActivity = Date.now();
-          if (part.type === "text") {
-            const text = (part as { text?: unknown }).text;
-            if (typeof text === "string" && text.length > 0) {
-              childSessionLastText.set(partSessionID, text);
-            }
-          }
-          return;
-        }
         if (typeof partSessionID !== "string" || !rootSessions.has(partSessionID)) return;
         if (part.type === "step-start") {
           // New assistant step begins — flag the turn and drop any stale
@@ -628,16 +396,6 @@ export const OpencodeNexus: Plugin = async ({ client, directory }) => {
       }
       if (event.type === "session.error") {
         const sessionID = event.properties.sessionID;
-        if (typeof sessionID === "string" && childSessionToTask.has(sessionID)) {
-          const taskID = childSessionToTask.get(sessionID);
-          const task = taskID ? asyncTasks.get(taskID) : undefined;
-          if (task) {
-            task.status = "error";
-            task.error = extractErrorSummary(event.properties.error);
-            task.lastActivity = Date.now();
-          }
-          return;
-        }
         if (sessionID && !rootSessions.has(sessionID)) return;
 
         if (isAbortError(event.properties.error)) {

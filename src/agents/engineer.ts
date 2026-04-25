@@ -3,8 +3,6 @@ export const engineer = {
   name: "engineer",
   description: "Implementation — writes code, debugs issues, follows specifications from Lead and architect",
   permission: {
-    nexus_spawn: "deny",
-    nexus_result: "deny",
     nx_task_add: "deny",
     nx_task_close: "deny",
     task: "deny",

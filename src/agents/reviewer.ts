@@ -3,8 +3,6 @@ export const reviewer = {
   name: "reviewer",
   description: "Content verification — validates accuracy, checks facts, confirms grammar and format of non-code deliverables",
   permission: {
-    nexus_spawn: "deny",
-    nexus_result: "deny",
     nx_task_add: "deny",
     nx_task_close: "deny",
     task: "deny",
