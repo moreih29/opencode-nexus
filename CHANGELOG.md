@@ -2,6 +2,48 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.18.0] — 2026-04-26
+
+### 변경됨
+
+- **`opencode-nexus models` 인터랙티브 wizard 전면 재작성**. 기존 `ink` + `react` 기반 한 화면 영구 레이아웃에서 `@clack/prompts` 기반 라인 누적 다회 사이클 wizard로 교체. 한 사이클 흐름: agents `multiselect`(Space 토글, Enter 제출) → provider `select` → model `select` → 매핑 결과 `note` → 사이클-끝 `select`(`Done` / `Continue mapping` / `Cancel`). 빈 multiselect submit으로 종료(`required: false` 패턴). 한 세션에 여러 그룹을 다른 모델에 매핑 가능 — `Continue mapping`은 메모리 누적, `Done` 한 번에 저장.
+- **`opencode-nexus install` / `uninstall`의 scope select 및 confirm 프롬프트도 `@clack/prompts`로 교체**. 외부 시그니처와 비-TTY 동작은 동일.
+- **9 subagent에 `mode: "subagent"` 기본값 fallback 추가** (`src/plugin.ts`). 최근 opencode 버전에서 `mode` 미정의 agent가 tab 순환에 등장하는 회귀 fix. `lead`만 명시적 `"primary"` 유지. 사용자가 `opencode.json`에 별도 `mode` override를 두면 그쪽이 우선.
+- 기존 ink wizard의 **Esc=back 키 동작은 제거** (clack native 미지원). 잘못된 매핑은 `Continue mapping`으로 같은 agent 재선택 후 다른 모델 적용 = 덮어쓰기 워크플로우.
+- 사이클-끝 select와 inherit 옵션 등 사용자 노출 메시지를 영어로 통일.
+
+### 추가됨
+
+- **`models` provider select에 `inherit` 옵션** (첫 항목). 선택 시 model select를 건너뛰고 선택한 agent들의 `agent.<id>.model` 키만 제거 — 빈 `agent.<id>` / `agent` 컨테이너도 자동 cleanup. 전역 default(`config.model`) 또는 provider default로 폴백.
+- 개발자용 import smoke gate (`scripts/clack-smoke.mjs`). bun + node 양쪽에서 `@clack/prompts` 모든 named import가 살아있는지 검증. npm 패키지에는 미포함.
+
+### 제거됨
+
+- **`ink` (`^7.0.1`) 및 `react` (`^19.2.5`) dependencies** + 30+ transitive 패키지 (`yoga-layout`, `react-reconciler`, `scheduler`, `chalk`, `cli-cursor`, `cli-truncate` 등). install footprint 슬림화.
+- **`lib/ink-select.mjs`** — 사용처 없음.
+
+### 추가된 dependencies
+
+- `@clack/prompts` `1.2.0` (exact pin).
+
+### 업스트림
+
+- `@moreih29/nexus-core` `0.20.0` 유지(변경 없음).
+
+### 사용자 영향
+
+- **기존 `opencode-nexus install` / `uninstall` 사용자에게 회귀 없음** — 외부 동작 동일. 비-TTY 환경(CI / 스크립트)도 영향 없음.
+- **`opencode-nexus models` 인터랙티브 사용 경험 큰 변화** — 한 화면 메뉴가 라인 누적 다단계 wizard로 바뀜. Esc=back 키 사라짐, 빈 multiselect submit이 종료, 사이클-끝에 별도 select 한 번 더 추가. 사용자가 가시적으로 다르게 느낌.
+- **opencode TUI tab 순환에서 Lead 외 subagent들이 사라짐** — 최근 opencode 버전에서 회귀였던 동작 회복. user-side `opencode.json`에 `agent.<id>.mode: "primary"` 같은 explicit override가 있다면 그 사용자 의도가 우선.
+- 글로벌 설치 footprint 감소 — `npm install -g opencode-nexus`가 `ink` 트리(30+ 패키지)를 더 이상 끌어오지 않음.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS (4개 비-TTY 시나리오 A~D 전체)
+- `node scripts/clack-smoke.mjs`, `bun scripts/clack-smoke.mjs` PASS (Bun #508 호환성 게이트)
+- 사용자 manual TUI 검증: tab 순환에 lead만 등장, models inherit 동작, 영어 사이클-끝 라벨 모두 확인됨
+
 ## [0.17.1] — 2026-04-25
 
 ### 제거됨
