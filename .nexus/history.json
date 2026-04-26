@@ -1959,6 +1959,364 @@
           "created_at": "2026-04-24T14:18:33.997Z"
         }
       ]
+    },
+    {
+      "completed_at": "2026-04-25T10:56:20.973Z",
+      "branch": "main",
+      "plan": {
+        "id": 13,
+        "topic": "CLI에 `update` 커맨드 추가 — 글로벌/로컬 설치 환경별 업그레이드 전략",
+        "issues": [
+          {
+            "id": 1,
+            "title": "update 커맨드의 기본 시맨틱 결정: self-update 실행 vs 안내 메시지 vs 하이브리드",
+            "status": "pending",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "Conditional 결론. PM 감지는 npm_config_user_agent 있을 때 / __dirname에 .bun/install/global 있을 때만 신뢰도 높음. pnpm/yarn/Volta는 중간 이하. Windows EBUSY는 단명 CLI여도 race 발생 가능. detached child도 완전 회피 못함. 추천: 기본은 안내(현재 버전 + 감지된 PM + 권장 명령), --yes 등 명시 옵션 + 감지 확신도 높은 npm/bun/pnpm POSIX 케이스에서만 자동 실행 허용. Windows 자동 실행 비지원. e2e는 spawn args 검증과 감지 함수 unit성 테스트 한계.",
+                "recorded_at": "2026-04-25T10:31:26.596Z",
+                "agent_id": "ses_23bcf351dffeUiLGkLJj77D2x9"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "글로벌 설치 환경에서의 패키지 매니저 감지 전략",
+            "status": "pending"
+          },
+          {
+            "id": 3,
+            "title": "로컬 설치 환경에서의 동작 정의",
+            "status": "pending"
+          },
+          {
+            "id": 4,
+            "title": "update가 opencode.json의 plugin pin도 함께 갱신할지 여부",
+            "status": "pending"
+          },
+          {
+            "id": 5,
+            "title": "권한/플랫폼 실패 모드(EACCES, Windows EBUSY) 대응 정책",
+            "status": "pending"
+          },
+          {
+            "id": 6,
+            "title": "테스트 및 문서 정합성 갱신 범위",
+            "status": "pending"
+          }
+        ],
+        "research_summary": "researcher 조사 (artifacts/research-cli-self-update.md)와 explore 조사 결과:\n\n**업계 패턴**:\n- 대부분의 인기 CLI(vercel, expo, gatsby, supabase, create-react-app, npm)는 `update` 서브커맨드를 구현하지 않음. 사용자가 직접 `npm i -g <pkg>@latest` 실행하는 것이 표준.\n- pnpm은 self-update 명령 제공 (Corepack 연계).\n- oclif는 standalone tarball 기반(npm 우회) — 본 프로젝트엔 비현실적.\n- npm-check-updates 사례: env vars(`npm_config_user_agent`, `npm_execpath`)는 PM 통해 실행 시에만 존재, 직접 실행 시에는 `__dirname` 경로 sniffing(`/.bun/`, `/pnpm/` 등)으로 fallback.\n\n**위험**:\n- Windows EBUSY/EPERM (자기 자신을 덮어쓰는 프로세스).\n- macOS/Linux EACCES (sudo 필요한 글로벌 prefix).\n- 교차 PM 호출 시 별도 설치본이 생성되어 버전 혼동.\n\n**이 프로젝트 현황**:\n- `lib/install-spec.mjs`에 `PACKAGE_NAME`, `PACKAGE_VERSION`, `PACKAGE_SPEC` 이미 존재.\n- `install`은 `PACKAGE_SPEC` 기반으로 plugin pin을 갱신/정규화하는 로직을 이미 갖추고 있음. drift된 mcp/default_agent는 force 없이는 보존.\n- README는 현재 \"CLI 업그레이드 후 install 재실행\" 모델로 안내. PM 감지 코드는 현재 없음.\n- bin은 두 개(`opencode-nexus`, `nexus-mcp`). 테스트는 `scripts/e2e-nexus-integration.mjs`가 사실상 단일 진실. 별도 unit test 없음.\n- `bin/opencode-nexus.mjs`는 parseArgs 기반 단순 dispatch 구조라 새 서브커맨드 추가는 깔끔함.",
+        "created_at": "2026-04-25T10:26:47.570Z"
+      },
+      "tasks": []
+    },
+    {
+      "completed_at": "2026-04-26T04:58:15.321Z",
+      "branch": "chore/clack-prompt-migration",
+      "plan": {
+        "id": 14,
+        "topic": "opencode-nexus CLI 에 doctor 커맨드 도입",
+        "issues": [
+          {
+            "id": 1,
+            "title": "doctor가 점검할 카테고리 범위 (현재 CLI/플러그인 환경 중 어디까지 진단할 것인가)",
+            "status": "decided",
+            "decision": "doctor 점검 범위는 B (Plugin + Host) 채택. 5개 카테고리 그룹으로 구성: (1) Host — opencode 바이너리 reachability + 버전, Node >= 22, (2) Config — opencode.json 존재 및 plugin pin / mcp.nx / default_agent / agent.build.disable / agent.plan.disable 정합성, (3) Skills — .opencode/skills/{nx-auto-plan,nx-plan,nx-run}/SKILL.md 존재 + frontmatter name/description 유효성 (releasing.md §5-1 규약), (4) MCP — nexus-mcp 바이너리 PATH 노출 + JSON-RPC initialize handshake 응답 확인 (releasing.md §5-3b), (5) Version drift — 설치된 글로벌 opencode-nexus 버전과 opencode.json plugin pin 버전 비교. 네트워크/권한/캐시/cmux 등은 범위 외 (brew doctor 노이즈 패턴 회피).</decision>\n</invoke>\n<invoke name=\"nx_nx_plan_status\">\n</invoke>"
+          },
+          {
+            "id": 2,
+            "title": "자동 수정 정책 (read-only 진단 vs --fix 자동 수정 지원 범위)",
+            "status": "decided",
+            "decision": "A안 채택: doctor는 read-only 진단 도구로 한정. --fix 같은 자동 수정 옵션을 제공하지 않는다. 발견된 문제마다 정확한 다음 명령어를 안내한다 (gh auth status / rustup check 패턴). 예: Config/Skills/Version drift → 'Run: opencode-nexus install --scope=<X> --force' 안내. Host/MCP 글로벌 영역 → 사용자에게 적절한 수동 조치(npm i -g, Node 업그레이드 등) 안내. 이유: (1) 외부 메이저 doctor 도구 합의(brew 0%, gh 0%, rustup 0%, npm/flutter는 매우 좁은 범위만)와 가장 정합. (2) install 커맨드가 이미 검증된 수정 경로(--force, interactive, dry-run)를 제공하므로 doctor가 그 경로를 중복 구현할 이유가 없음 — 도구 합성 일관성 유지. (3) 사용자 의도와 충돌 위험을 원천 회피.</decision>\n</invoke>"
+          },
+          {
+            "id": 3,
+            "title": "출력/UX 형식 (시각 indicator, JSON 모드, exit code 정책)",
+            "status": "decided",
+            "decision": "B안(풀 사양) 채택. (1) 시각 indicator: TTY일 때 [✓] / [✗] / [!] + ANSI 컬러, 비-TTY는 [OK] / [FAIL] / [WARN] plain fallback. process.stdout.isTTY 체크 필수. (2) Verbose: 기본은 그룹 단위 요약(예: '[✓] Skills (3 OK)'), -v/--verbose 시 항목별 상세 출력 (flutter doctor -v 패턴). (3) JSON 모드: --json 플래그 지원. 스키마: { version, summary: {ok, warn, error}, groups: [{ name, status, checks: [{ id, status, message, remedy }] }] }. (4) Exit code 정책: 텍스트 모드는 error 있으면 1, warning만 있으면 0 (warning은 non-blocking 신호); JSON 모드는 gh auth status 패턴을 따라 항상 exit 0 (호출자가 JSON으로 상태 판단, 파이프라인 안전). 검사 결과는 내부적으로 구조화된 객체로 통일 수집 후 출력 시점에 텍스트/JSON 분기.</decision>\n</invoke>"
+          },
+          {
+            "id": 4,
+            "title": "선택 실행 / Skip 인터페이스 (예: doctor [group], --only=, --skip=)",
+            "status": "decided",
+            "decision": "B안 채택: positional group 인터페이스 (npm doctor 노선). 사용법: 'opencode-nexus doctor'는 5개 그룹 전부 실행, 'opencode-nexus doctor mcp'는 MCP 그룹만, 'opencode-nexus doctor mcp skills'는 두 그룹 선택. 그룹 키 5개: host, config, skills, mcp, version (lowercase). Unknown group은 'Unknown doctor group: foo. Available: host, config, skills, mcp, version' 에러 + exit 1로 종료 (기존 install/uninstall의 'Unknown command' 톤과 일관). JSON 모드와 조합 시 선택된 그룹만 groups 배열에 포함되고 summary도 부분집합 기준 계산. -v와 자유 조합 가능. --skip= / --only= 같은 추가 인터페이스는 YAGNI 원칙으로 보류 — 5개 중 4개를 돌리는 시나리오가 자주 발생하면 그때 도입.</decision>\n</invoke>"
+          },
+          {
+            "id": 5,
+            "title": "구현 위치와 코드 구조 (bin dispatcher 등록 + lib/doctor.mjs 분리 방식, 기존 install/uninstall 로직 재사용 vs 중복)",
+            "status": "pending",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "runner + checks + renderer 분리 구조 권장. 파일 트리: bin/opencode-nexus.mjs(파싱+exit code만), lib/doctor.mjs(group registry + runDoctor 오케스트레이션), lib/doctor-render.mjs(텍스트/JSON 출력), lib/doctor/utils.mjs(readJsonFile, parseSkillFrontmatter, makeCheckResult), lib/doctor/checks/{host,config,skills,mcp,version}.mjs(그룹별 검사). 검사 결과 표준 객체: {id, group, status, message, remedy, details?}. 상태 집계 규칙: error 우선 > warning > ok. install-spec.mjs의 public constants/path helpers는 직접 재사용, install.mjs 내부 helper(readJson/sameJson)는 export하지 말고 doctor utils에 read-only 자체 구현 (install 회귀 회피). 향후 공통화 필요 시 lib/opencode-config.mjs로 승격. MCP handshake는 spawn/env/setTimeout을 deps 주입으로 받아 ENOENT/timeout/invalid JSON/fatal stderr를 각각 다른 message+remedy로 매핑, timeout 시 child process kill 필수. 모든 check는 (cwd, env, deps) 순수-ish async function — fake deps로 단위 테스트 가능. e2e는 CLI 경유 (node bin/opencode-nexus.mjs doctor --json). 색상은 chalk 없이 ANSI escape 직접 사용 + NO_COLOR 환경변수 존중. Open risk: 글로벌 설치 버전 판정 방식 (npm ls -g vs PACKAGE_VERSION self-report) 결정 필요.",
+                "recorded_at": "2026-04-25T14:24:49.774Z",
+                "agent_id": "ses_23afa1ef2ffe0bYL5JSZRbKbPb"
+              }
+            ]
+          }
+        ],
+        "research_summary": "코드베이스 조사: bin/opencode-nexus.mjs가 단일 dispatcher이며 install/uninstall/models/version만 보유. 검사 로직(opencode.json 검증, .opencode/skills frontmatter, MCP handshake, bin PATH 노출, cmux 활성 환경)은 .nexus/context/releasing.md와 scripts/e2e-nexus-integration.mjs에 실질적으로 정리되어 있으나, 재사용 가능한 doctor 공통 모듈로는 추출되어 있지 않음. lib/install-spec.mjs, lib/agent-models.mjs, lib/ink-select.mjs는 부분 재사용 가능. 외부 doctor 패턴 조사: brew(진단 only, 광범위, 노이즈 많음), flutter(GroupedValidator+✓✗! 컬러+--android-licenses 반자동 수정+timeout), npm(group 단위 선택 실행 + verifyCachedFiles 자동 수정 + Windows OS-aware skip), gh auth status(host 그룹화+JSON 모드 시 항상 exit 0+token 마스킹+정확한 next command 안내), rustup check(병렬 검사 + UPDATES_AVAILABLE non-zero exit), next info(YAML-like 정보 덤프). 베스트 프랙티스 5: 카테고리 그룹화 / 선택 실행 / ✓✗! 시각화 + verbose / 안전한 것만 --fix + 나머지는 next command 안내 / JSON 모드는 항상 exit 0, 텍스트 모드는 의미있는 exit code.",
+        "created_at": "2026-04-25T10:56:21.016Z"
+      },
+      "tasks": []
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-26T05:44:53.414Z",
+      "branch": "chore/clack-prompt-migration",
+      "plan": {
+        "id": 15,
+        "topic": "CLI custom TTY(ink/react) → @clack/prompts 마이그레이션",
+        "issues": [
+          {
+            "id": 1,
+            "title": "clack 도입 패키지 정책 (버전 핀, ink/react 의존성 제거 단위, ESM 호환)",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "의존성 정책 권고: `@clack/prompts`는 **exact `1.2.0`** 핀(다른 deps 핀 정책과 정합 — `@moreih29/nexus-core 0.20.0`도 exact). `ink`/`react`는 **최종 마이그레이션 commit에서 제거** — clack 기능이 동작 검증된 후. devDependencies 영향 없음(`@types/react` 미설치 + tsconfig가 .mjs 미스코프). `react`는 `package.json` dependencies에서만 쓰이고 src/ 어디에도 import 없음(향후 plugin 코드가 React 안 쓸 거라는 가정 명시). 산출물: `artifacts/architecture/clack-migration.md`.",
+                "recorded_at": "2026-04-26T05:16:27.227Z",
+                "agent_id": "ses_237d792b0ffevJZX46pE7thDLP"
+              }
+            ],
+            "decision": "**`@clack/prompts` exact `1.2.0` 핀 추가, ink/react는 step (2) 마이그레이션 commit에서 완전 제거.**\n\n- 패키지 추가: `package.json` dependencies에 `\"@clack/prompts\": \"1.2.0\"` (caret 없는 exact pin).\n- 제거 대상(step 2): `\"ink\": \"^7.0.1\"`, `\"react\": \"^19.2.5\"` 두 줄. `bun.lock`은 `bun install`로 자동 정리.\n- src/(plugin 코드), scripts/, bin/ 어디에도 react/ink import 사용처 없음(grep 검증됨) — 안전 제거.\n- devDependencies는 무영향: `@types/react` 미설치 + `tsconfig.json`이 `src/**/*.ts`만 스코프(.mjs 무시).\n- 향후 plugin 코드가 React를 다시 필요로 할 가능성은 낮고(현재 plugin은 OpenCode SDK hook 코드), 필요 시 별 cycle에서 재도입.\n\n**기각:**\n- caret `^1.2.0` — clack 1.x major 안에서 multiselect API가 안정적이긴 하나 minor 자동 갱신 시 시맨틱 변경 위험을 우리가 즉시 알아챌 수단이 없음(unit test 없음). exact가 우리 nexus-core 정책과도 정합.\n- 한 commit으로 ink 제거 + clack 도입 — step (1) 동작 검증 기회 상실 + 큰 diff 롤백 비용."
+          },
+          {
+            "id": 2,
+            "title": "Bun ESM #508(cancel import) 호환성 검증 게이팅 — 어디서 어떻게 smoke test",
+            "status": "decided",
+            "decision": "**step (1) 시작 직전 `scripts/clack-smoke.mjs` 작성·실행으로 게이팅. PASS 시에만 마이그레이션 진행.**\n\n스크립트 내용 사양:\n- `@clack/prompts`에서 named import: `intro, outro, select, multiselect, confirm, text, note, cancel, isCancel, group, spinner`.\n- 각 import가 `typeof === \"function\"`인지 또는 `typeof === \"symbol\"`(`isCancel`)인지 단순 체크.\n- `bun scripts/clack-smoke.mjs` + `node scripts/clack-smoke.mjs` 양쪽 실행해 둘 다 exit 0이어야 PASS.\n- 어떤 import라도 누락/throw/undefined면 stderr에 어떤 심볼이 깨졌는지 출력 후 exit 1.\n- e2e에는 통합 안 함(일회성 게이트). 스크립트 자체는 commit해서 누구나 재현 가능.\n\n**FAIL 시 행동:** 마이그레이션 차단 → Lead가 사용자에게 에스컬레이션 → 대안 검토(`@inquirer/prompts` 등 대체 라이브러리 또는 ink 유지). 리서치 결과상 `@inquirer/prompts`가 가장 가까운 대안이지만 빈 submit 패턴 지원이 다름.\n\n**기각:**\n- smoke 없이 바로 step (1) 진행 — Bun #508가 hit하면 큰 diff 롤백.\n- e2e에 통합 — 매 PR마다 도는 비용 vs 일회성 검증으로 충분."
+          },
+          {
+            "id": 3,
+            "title": "단일 select/confirm 매핑 정책 (install scope, configure-now y/n, uninstall scope, uninstall confirm)",
+            "status": "decided",
+            "decision": "**단일 select/confirm 5곳 매핑표:**\n\n| 현재 (ink) | clack 매핑 | 비고 |\n|------------|-----------|------|\n| `selectInstallScopeInteractive` (project/user) | `select({ message, options:[{value:'project',label:'project',hint:'...'}, {value:'user',label:'user',hint:'...'}], initialValue:'project' })` | hint 메시지는 기존 subtitle 톤 보존 |\n| `selectConfigureModelsNowInteractive` (yes/no) | `confirm({ message:'Configure agent models now?', initialValue:false })` | boolean 시맨틱이라 confirm이 적합 |\n| `selectUninstallScopeInteractive` (project/user) | `select(...)` install scope와 동일 패턴 | both는 플래그 전용 (정책 보존) |\n| `confirmUninstallInteractive` (y/N, 기본 N) | `confirm({ message: 'Remove opencode-nexus config from <scope>?', initialValue:false })` | scope==='both'면 메시지 'project AND user' (uninstall.mjs 정책 보존) |\n| agent-models scope (project/user) | `select(...)` install과 동일 | configureAgentModelsInteractive 진입 시 |\n\n**cancel 처리 통일:** 모든 prompt 결과를 `isCancel(value)`로 분기 → 기존 ink가 `null` 반환했던 caller 코드는 `isCancel`이면 `null` 매핑 또는 직접 cancel-and-finish 흐름으로 옮긴다. 외부 시그니처(예: `confirmUninstallInteractive` 반환값)는 변경하지 않음.\n\n**기각:**\n- yes/no를 `select`로 둔 채 옮김 — clack에 confirm이 있는데 select를 쓰는 건 의도적 후퇴. y/N 시맨틱은 confirm이 표준.\n- `text()` prompt 추가(scope 자유 입력) — 기존에도 select였고 사용자 결정 4 \"전체 마이그레이션\" 범위에 자유 입력은 없음."
+          },
+          {
+            "id": 4,
+            "title": "agent-models 다회 사이클 UX 설계 (사용자 결정: 매 사이클 Done/Continue/Cancel select) 구체화",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "designer",
+                "summary": "다회 사이클 UX 권고: 한 사이클 = `multiselect(에이전트, required:false)` → (선택값 있으면) `select(provider)` → `select(model)` → `note(매핑 결과)` → `select(사이클-끝: 마침/계속 매핑/취소)`. 첫 진입 빈 submit 처리는 **옵션 C** 채택: dirty=false면 즉시 `outro` 종료(둘러보기 사용자 1키 탈출), dirty=true(이미 매핑 적어도 하나)면 사이클-끝 select 띄움. 저장 시점은 **Done 한 번만**(ink 시맨틱 보존). 사이클-끝 select 라벨: `마침 / 계속 매핑 / 취소`(install-ui 톤). 멀티셀렉트 option `hint`에 현재 모델 표시(`hint: \"현재: openai/gpt-4\"` or `\"inherit\"`). Continue 시 multiselect의 `initialValues`는 비움(ink와 동일). 사이클 시작 시 현재 매핑 압축 요약 `note`로 한 줄 출력(에이전트 12개 모두 나열은 작은 터미널에 부담). 산출물: `artifacts/design/clack-ux.md`.",
+                "recorded_at": "2026-04-26T05:16:44.991Z",
+                "agent_id": "ses_237de6d16ffeCFFVF77OsSStxj"
+              }
+            ],
+            "decision": "**다회 사이클 흐름 (designer 권고 채택 + Lead 보강):**\n\n**한 사이클 step:**\n1. `note(현재 매핑 요약 한 줄, '에이전트 모델 매핑')` — 변경된 에이전트만 표시. 첫 사이클은 `'No changes yet'`. 사이클 N(N>1)은 `'Updated: lead, engineer → openai/gpt-4'` 같이 직전 매핑 위주 압축. 12개 전체 나열 안 함.\n2. `multiselect({ message, options, required:false })`:\n   - `message`: `'에이전트를 선택하세요 (\\x1b[7m Space \\x1b[27m=토글, \\x1b[7m Enter \\x1b[27m=완료, 빈 선택=마침)'`\n   - `options`: 12개 에이전트, 각 `hint`에 현재 모델 표시(`hint: '현재: openai/gpt-4'` 또는 `'inherit'`)\n   - `initialValues`: 빈 배열(매 사이클 초기화, ink 동일)\n3. **첫 진입 빈 submit 처리(옵션 C):** dirty=false면 `outro('변경 사항 없이 종료합니다.')` 후 `process.exit(0)`. dirty=true면 사이클-끝 select로 점프(저장 또는 폐기 선택).\n4. 선택값 비어있지 않으면: `select(provider)` → `select(model)` → 매핑 적용 + `dirty=true`.\n5. 사이클-끝 `select({ message:'다음 단계를 선택하세요', options:[{value:'done',label:'마침'},{value:'continue',label:'계속 매핑'},{value:'cancel',label:'취소'}], initialValue:'continue' })`.\n   - `done`: dirty면 writeFileSync, `outro('저장했습니다: <path>')`, exit 0.\n   - `continue`: 다음 사이클 시작 (step 1로).\n   - `cancel`: dirty 폐기, `cancel('변경 사항을 취소했습니다')`, exit 0.\n\n**저장 시점:** `done` 한 번만 (ink 시맨틱 보존). `continue`는 메모리상 누적만, 디스크 미반영.\n\n**ANSI inverse 적용 범위:** `Space`와 `Enter` 키 토큰만. WCAG 1.4.1(색만으로 정보 전달 금지) 준수 위해 `=토글`/`=완료` 텍스트 라벨 병행.\n\n**기각:**\n- 단계 시작 시 12개 에이전트 전체 나열 — 작은 터미널(40 col)에서 wrap 부담 + 정보 노이즈 큼.\n- Continue 시 직전 선택을 `initialValues`로 유지 — ink는 매번 초기화였고, 같은 에이전트에 다른 모델 다시 매핑하는 시나리오는 toggle 한 번이면 충분.\n- 매 사이클 끝마다 자동 저장 — \"취소\" 의미가 약해짐(\"저장 후 종료\"와 구분 모호)."
+          },
+          {
+            "id": 5,
+            "title": "back/cancel/status feedback UX 보존 정책 (Esc=back 대체, Ctrl+C/q 처리, status 메시지 자리)",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "designer",
+                "summary": "back/cancel/status 권고: Esc=back은 **clack에서 native 미지원이므로 폐기** — 각 select에 명시적 \"← Back\" 옵션을 넣지 않고 단순화. 정당화: clack의 라인 누적 UI 특성상 \"이전 화면으로 돌아간다\"는 ink의 한 화면 영구 레이아웃 시맨틱 자체가 부재. Ctrl+C는 `isCancel`로 받아 사이클 중간(provider/model 단계)에서 누르면 **사이클-끝 select로 점프**해 사용자가 \"여기까지 저장 후 종료\" vs \"전부 폐기\" 선택. 단순 cancel(=폐기 종료)은 사이클-끝 select에서 명시적으로 선택. status feedback은 **사이클 끝 `note()` + 다음 사이클 시작 `note()`** 양쪽에 출력(누적 history는 터미널 스크롤백이 자동 보존). ANSI inverse는 키 토큰(Space, Enter)에만 적용 + 텍스트 마커(`백틱`) 병행해 WCAG 1.4.1 준수. 산출물: `artifacts/design/clack-ux.md`.",
+                "recorded_at": "2026-04-26T05:16:52.872Z",
+                "agent_id": "ses_237de6d16ffeCFFVF77OsSStxj"
+              }
+            ],
+            "decision": "**back/cancel/status 정책 (designer 권고 + Lead 추가 판단):**\n\n1. **Esc=back 폐기, Back 옵션도 미추가.**\n   - 정합성 원칙: 출구는 사이클-끝 select 한 곳으로 모은다. Back 옵션을 추가하면 출구가 늘어 정합성 약화.\n   - 잘못된 매핑은 Continue로 같은 에이전트 재선택 후 다른 모델 적용 → 덮어쓰기. 충분히 회복 가능.\n   - 회귀 인정: ink 사용자가 Esc=back에 익숙했다면 한 cycle 학습 비용. 다회 사이클 자체가 \"여러 번 시도\" 모델이라 큰 부담은 아님.\n\n2. **Ctrl+C 라우팅:**\n   - multiselect 단계: `isCancel` → 사이클-끝 select로 점프(작업 보존, dirty면 저장/폐기 선택, dirty=false면 즉시 종료).\n   - provider/model 단계: `isCancel` → 사이클-끝 select로 점프(직전까지 매핑 보존).\n   - 사이클-끝 select에서 Ctrl+C: 명시적 `cancel` 선택과 동일 — dirty 폐기 + exit.\n\n3. **status feedback 표시:** 매 사이클 시작 `note`(직전 사이클 매핑 결과를 압축 한 줄) + 매 사이클 끝 `note`(이번 사이클에서 매핑한 항목). 누적 history는 터미널 스크롤백이 자동 보존(ink의 한 화면 영구 레이아웃 대비 자연스러운 라인 누적 UX). 별도 \"전체 매핑 표\"를 마지막에 출력하지 않음 — 사이클 종료 outro에 저장 경로만 출력.\n\n4. **q 키 처리:** clack은 키 인터셉트 API가 noisy → q를 별도로 잡지 않음. Ctrl+C 한 가지 출구만 노출. 기존 ink의 q=cancel은 회귀.\n\n**기각:**\n- provider/model에 \"← Back\" 옵션 추가 — 정합성 약화 + 다회 사이클로 회복 가능.\n- Ctrl+C를 즉시 폐기 종료 — 작업 손실 위험. 사용자가 의도적 폐기를 원하면 사이클-끝 select에서 명시적 \"취소\" 선택.\n- \"전체 매핑 요약 표\" 마지막 출력 — `note` 누적으로 충분 + 12개 전체 표는 작은 터미널에 부담."
+          },
+          {
+            "id": 6,
+            "title": "마이그레이션 commit 분할 + 검증 전략 (E2E 비-TTY 회귀, TTY 수동 체크리스트, releasing.md §7 갱신)",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "commit 분할 권고: **2-step** 채택. (1) clack 도입 + smoke test + 단일 select 사용처 5곳 교체(install scope, configure-now y/n, uninstall scope, uninstall confirm, agent-models scope). (2) agent-models 멀티스텝 wizard 교체 + ink/react 제거. 중간 단계는 ink+clack 일시 공존이지만 build/check/e2e 모두 PASS 보장. **Bun #508 게이팅**: step (1) 시작 직전 `scripts/clack-smoke.mjs` 작성·실행해 `cancel` 등 named import가 bun 1.3.9에서 깨지지 않는지 사전 확인. FAIL 시 차단. 회귀: 기존 e2e 시나리오 A~D 변경 없이 통과해야. TTY 자동 검증은 비용 대비 이득이 작아 이번 cycle 보류(node-pty 도입은 별 cycle), 대신 `releasing.md` §7에 clack 기준 수동 체크리스트 갱신. 롤백: step (2) 단계에서 문제가 나면 ink 제거 commit만 revert해 단일 select는 clack, 멀티스텝은 ink로 일시 회귀 가능. 산출물: `artifacts/architecture/clack-migration.md`.",
+                "recorded_at": "2026-04-26T05:16:37.219Z",
+                "agent_id": "ses_237d792b0ffevJZX46pE7thDLP"
+              }
+            ],
+            "decision": "**2-step commit 분할 + smoke gate + 회귀 검증 + releasing.md §7 갱신.**\n\n**Step (1) — clack 도입 + smoke + 단일 select 5곳 교체 (1 commit):**\n- `scripts/clack-smoke.mjs` 작성 + bun/node 양쪽 PASS 확인.\n- `package.json`에 `\"@clack/prompts\": \"1.2.0\"` 추가 (`bun install` 로 lock 갱신).\n- `lib/install-ui.mjs`, `lib/uninstall-ui.mjs`, `lib/agent-models.mjs::configureAgentModelsInteractive` 내부 scope select를 clack `select`/`confirm`으로 교체.\n- `lib/ink-select.mjs`는 step (1) 끝에 **삭제**(다른 사용처 없음, agent-models의 메인 wizard도 자기 안에 React 컴포넌트로 따로 들어가 있음).\n- `bun run check`, `bun run test:e2e` 모두 PASS 확인.\n- commit 메시지: `chore: migrate single-select prompts to @clack/prompts`.\n\n**Step (2) — agent-models wizard 교체 + ink/react 제거 (1 commit):**\n- `lib/agent-models.mjs`의 `AgentModelsApp` React 컴포넌트와 관련 ink/react import 전부 제거.\n- 다회 사이클 wizard를 issue 4 사양대로 clack 구문으로 재작성(top-level async function).\n- `package.json`에서 `ink`, `react` 제거 + `bun install`로 lock 정리.\n- `bun run check`, `bun run test:e2e` PASS.\n- `.nexus/context/releasing.md` §7 갱신: install/uninstall TTY 항목은 clack 기준으로 문구 갱신, agent-models 항목 추가(다회 사이클, Done/Continue/Cancel select 확인). Esc=back 항목은 제거.\n- commit 메시지: `chore: replace ink-based agent-models wizard with clack`.\n\n**검증:**\n- 비-TTY 회귀: e2e 시나리오 A(install→uninstall), B(빈 cleanup), C(drift+force), D(non-TTY+force) 모두 변경 없이 통과. 특히 D의 stderr 메시지 `Use --force for non-interactive removal` 문자열은 보존(우리 코드에서 throw하는 문구라 clack 영향 없음, 그래도 회귀 확인 task에 명시).\n- TTY 자동 검증: 이번 cycle 보류(node-pty 도입은 별 cycle). 대신 `releasing.md` §7에 수동 시연 체크리스트 추가 — install/uninstall scope 선택, configure-now confirm, agent-models 첫 진입 빈 submit, 다회 사이클, Ctrl+C 라우팅 5개 항목.\n\n**롤백 시나리오:**\n- step (2) 후 문제 발견 → step (2) commit만 revert → 단일 select는 clack, wizard는 ink로 일시 회귀 가능(중간 상태로 release 가능).\n- step (1) 후 smoke가 통과했는데도 깨짐 발견 → step (1) revert → main 동등 상태 회복.\n- Bun #508 hit(smoke FAIL) → 마이그레이션 자체 차단, plan 재검토.\n\n**미해결 위험:**\n- clack의 `outro()`/`cancel()` 출력이 stdout인지 stderr인지 사용처에 따라 다를 수 있음(researcher 미상세). step (1) 시작 시 확인.\n- 비-TTY에서 clack을 호출하면 어떻게 동작할지 명세 미확인 — 우리는 `canUseInteractiveTerminal()` 가드로 호출 자체를 막고 있으므로 영향 없을 예상이지만 step (1) e2e에서 확인.\n\n**기각:**\n- 단일 commit — 큰 diff에 Bun #508 hit하면 롤백 단가 큼.\n- 3-step(smoke 별도 commit) — 게이트 commit 자체가 코드 변경 없는 검증용이라 commit 분리 가치 낮음. smoke script 작성은 step (1)에 포함.\n- TTY 자동 검증을 이번 cycle에 포함 — node-pty 도입 비용 + 학습 곡선 + 본질적으로 별 cycle 가치."
+          }
+        ],
+        "research_summary": "**현재 상태 (코드 조사):**\n- 우리 \"커스텀 TTY\"는 `@clack/prompts`가 아니라 자체 ink+react 구현. 두 파일에 집중: (1) `lib/ink-select.mjs`의 `promptSelectInteractive` (단일 select 공통 컴포넌트, 108줄), (2) `lib/agent-models.mjs`의 `AgentModelsApp` (다회 사이클 멀티셀렉트+drilldown, 약 300줄).\n- 사용처: `lib/install-ui.mjs::selectInstallScopeInteractive` (project/user), `lib/install-ui.mjs::selectConfigureModelsNowInteractive` (yes/no), `lib/uninstall-ui.mjs::selectUninstallScopeInteractive` (project/user/both?), `lib/uninstall-ui.mjs::confirmUninstallInteractive` (yes/no), `lib/agent-models.mjs::configureAgentModelsInteractive` 내부 scope 선택 + 메인 multi-select 화면.\n- 의존성: `ink ^7.0.1` + `react ^19.2.5`. ink는 30+ transitive deps(yoga-layout, ws, react-reconciler 등). 제거 시 install footprint 큰 폭 슬림.\n- 멀티셀렉트는 단 1군데(agent-models 12개 에이전트 선택)이고, 나머지는 모두 단일 select 또는 yes/no.\n- E2E(`scripts/e2e-nexus-integration.mjs`)는 모두 비-TTY 경로만 검증. TTY 인터랙티브 흐름은 자동 검증 없음.\n\n**현재 UX 형태 (보존/대체 결정 필요):**\n- AgentModelsApp 흐름: agents Space-toggle → Next 클릭 → provider select → model select → 메인 화면 복귀(다른 그룹에 다른 모델 부여 반복) → Done 클릭 → 저장 후 종료. Cancel은 아무 시점에서 가능.\n- Esc=back, q/Ctrl+C=cancel.\n- 상태 피드백: \"Updated lead, engineer -> openai/x\" 화면 한 켠 표시.\n- 다른 select들에는 \"Back\" 옵션이 명시적으로 들어 있고 Esc로도 동등 동작.\n\n**clack 검증 (researcher 보고 — `artifacts/research/clack-prompts.md` 292줄):**\n- `@clack/prompts@1.2.0` (최신 안정), ESM-only, Node ≥20.12.0, MIT, weekly downloads 약 840만, bombshell-dev org. 우리 Node 22+ESM 환경 호환.\n- `multiselect({ required: false })`: 공식 소스/README 모두 확인. 빈 선택 + Enter → `[]` 반환. `required` 기본값은 `true`. cancel은 `Ctrl+C` → `isCancel` 심볼 반환.\n- API: `select`, `multiselect`, `confirm`, `text`, `password`, `note`, `intro`, `outro`, `cancel`, `isCancel`, `group`, `spinner`. 옵션 형식 `{ value, label, hint }` 통일.\n- **알려진 한계**: (1) `group()`은 단계 간 백 네비를 지원하지 않음 → 우리 Esc=back 동작은 native로 구현 불가. (2) **Bun #508**: `bun` 환경에서 `cancel` named import 오류 보고됨, 우리 bun 1.3.9에 직접 영향 가능 → **사전 smoke test로 게이팅 필요**. (3) `cursorAt` 미작동(#193). (4) multiselect에 `validate` 미지원(#164).\n- codex-cli에서 `multiselect+required:false` 패턴 사용은 발견되지 않음(researcher가 명시) — 사용자가 본 11줄 코드는 다른 프로젝트(codex-nexus 또는 clack README) 추정. 하지만 기법 자체는 공식 사양.\n\n**기존 memory/context:**\n- `.nexus/memory/`에 UI/prompt 관련 결정 없음.\n- `.nexus/context/releasing.md` §7에 install/uninstall TTY UX 체크 항목 존재 → 마이그레이션 후 갱신 필요.\n- `.nexus/history.json`에는 직전 cycle(0.15.x doctor 미완료 plan과 0.16.x cmux log reset)이 archive됨.\n\n**사용자 사전 결정:**\n- 범위: 전체(ink/react 제거 + 모든 prompt를 clack)\n- 다회 사이클 UX: 매 사이클 끝에 Done/Continue/Cancel select\n- 브랜치: `chore/clack-prompt-migration` (이미 이동 완료)\n- doctor 미완료 plan은 history archive로 닫음(이번 plan 시작 시 자동 archive 처리됨)\n\n**사용자 제시 8개 UX 원칙(요약):**\n1. multiselect({ required: false, message: \"... Enter with no selection finishes\" })\n2. Space toggle, Enter submit\n3. selected.length === 0 ⇒ Done/Save/Exit\n4. 선택값 있으면 다음 단계\n5. 다회 설정 시 다음 화면에서 Done/Next/Cancel\n6. message에 ANSI inverse로 Space/Enter 강조\n7. 별도 Done option 추가 금지(Space로 선택돼서 버튼 동작 안 됨)\n8. 빈 submit=Done 설계로 custom TTY 없이 clack만으로 충분",
+        "created_at": "2026-04-26T04:58:15.364Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "clack 도입 + Bun #508 smoke gate",
+          "status": "completed",
+          "context": "이슈 1, 2 결정 종합. 현재 main에서 분기한 chore/clack-prompt-migration 브랜치. package.json dependencies에 ink ^7.0.1, react ^19.2.5만 있고 @clack/prompts는 미설치. researcher 보고서: artifacts/research/clack-prompts.md에 Bun #508(cancel import) 이슈 명시 — 우리 bun 1.3.9 환경에서 직접 hit 가능성 있음.",
+          "acceptance": "- package.json에 \"@clack/prompts\": \"1.2.0\" exact pin 존재.\n- bun.lock에 @clack/prompts 1.2.0 항목 존재.\n- scripts/clack-smoke.mjs 파일 존재, 11개 named import 모두 검증, FAIL 시 어떤 심볼이 깨졌는지 stderr 출력.\n- `node scripts/clack-smoke.mjs` exit 0.\n- `bun scripts/clack-smoke.mjs` exit 0.\n- `bun run check` 회귀 없이 PASS (이 task만으로는 .ts 코드 변경 없음).",
+          "approach": "1. package.json dependencies에 \"@clack/prompts\": \"1.2.0\" 추가 (exact pin, caret 없음). \n2. `bun install`로 bun.lock 갱신.\n3. `scripts/clack-smoke.mjs` 작성: @clack/prompts에서 named import — intro, outro, select, multiselect, confirm, text, note, cancel, isCancel, group, spinner. 각각 typeof === \"function\" (또는 isCancel은 typeof === \"symbol\") 체크. 하나라도 깨지면 stderr에 어떤 심볼이 깨졌는지 출력 후 exit 1.\n4. `node scripts/clack-smoke.mjs` 실행 → exit 0 확인.\n5. `bun scripts/clack-smoke.mjs` 실행 → exit 0 확인.\n6. 양쪽 PASS면 다음 task 진행 가능. 한쪽이라도 FAIL이면 Lead에 보고 후 차단.",
+          "risk": "Bun #508 hit 시 step (1) 시작 자체가 차단됨. 그 경우 마이그레이션 plan 재검토 필요(대안: @inquirer/prompts).",
+          "plan_issue": 2,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T05:20:03.961Z"
+        },
+        {
+          "id": 2,
+          "title": "단일 select 5곳 + ink-select.mjs 삭제 (step1 코드)",
+          "status": "completed",
+          "context": "이슈 3 결정의 매핑표를 그대로 적용. 영향 파일: lib/install-ui.mjs, lib/uninstall-ui.mjs, lib/agent-models.mjs(진입 scope select 부분만), lib/ink-select.mjs(삭제). bin/opencode-nexus.mjs는 import 시그니처 보존되므로 변경 없음. 외부 함수 시그니처(예: confirmUninstallInteractive 반환값)는 변경하지 않음 — 기존 caller 코드 영향 최소화.",
+          "acceptance": "- lib/install-ui.mjs, lib/uninstall-ui.mjs에 ink/ink-select 관련 import 없음, @clack/prompts import 존재.\n- lib/agent-models.mjs의 configureAgentModelsInteractive 진입부 scope select가 @clack/prompts로 교체됨. AgentModelsApp 본체는 미변경(task 5에서 처리).\n- lib/ink-select.mjs 파일 부재.\n- 외부 함수 시그니처 보존: selectInstallScopeInteractive() 리턴 타입(string|null), confirmUninstallInteractive({scope}) 리턴 타입(boolean|null), selectConfigureModelsNowInteractive() 리턴 타입(boolean|null) — caller 코드(bin/opencode-nexus.mjs) 무수정.\n- 모든 prompt에서 isCancel(value) 처리: 기존 ink null 반환 대응.\n- `bun run check` PASS.",
+          "approach": "1. lib/install-ui.mjs: \n   - selectInstallScopeInteractive를 clack `select({ message, options:[{value:'project',label:'project',hint:'...'},{value:'user',label:'user',hint:'...'}], initialValue:'project' })`로 교체. 결과가 `isCancel(value)`면 null 반환(기존 시그니처 보존).\n   - selectConfigureModelsNowInteractive를 clack `confirm({ message:'Configure agent models now?', initialValue:false })`로 교체. cancel은 false 반환.\n   - import 라인에서 `./ink-select.mjs` 제거하고 `@clack/prompts`로 교체.\n2. lib/uninstall-ui.mjs:\n   - selectUninstallScopeInteractive를 clack `select`로 교체(install scope와 동일 패턴, 라벨/hint만 uninstall 톤).\n   - confirmUninstallInteractive를 clack `confirm({ message: scope==='both' ? 'Remove opencode-nexus config from project AND user?' : `Remove opencode-nexus config from ${scope}?`, initialValue:false })`로 교체. cancel은 false(=취소).\n3. lib/agent-models.mjs의 configureAgentModelsInteractive 함수 진입부 scope select(현재 promptSelectInteractive 호출, 약 534줄 근방)를 clack `select`로 교체. resolvedScope === null 조건은 isCancel로 분기. AgentModelsApp(메인 wizard)는 이번 task에선 손대지 않음 — task 5에서 처리.\n4. lib/ink-select.mjs 파일 **삭제**. 다른 사용처 grep 검증 후 진행.\n5. bin/opencode-nexus.mjs는 import 라인 변경 없음(시그니처 보존). 동작 검증.\n\nBun #508 회피: cancel 함수는 import만 하고 호출은 isCancel + outro로 처리(name conflict 회피용). 깔끔히 cancel만 임포트해도 smoke가 PASS하면 사용 가능. smoke 결과에 따라 결정.",
+          "risk": "- isCancel 분기 누락 시 prompt cancel 시 throw 또는 undefined 반환. 모든 호출부에 isCancel 가드 필수.\n- bin/opencode-nexus.mjs caller가 null 체크하는 패턴이 깨질 가능성.",
+          "plan_issue": 3,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_237c11b03ffem01i3IJsUlVXcp"
+          },
+          "created_at": "2026-04-26T05:20:25.265Z"
+        },
+        {
+          "id": 3,
+          "title": "step1 검증 (비-TTY 회귀)",
+          "status": "completed",
+          "context": "step1은 단일 select만 교체하고 외부 시그니처를 보존하므로 비-TTY 경로는 영향 받지 말아야 함. 특히 e2e 시나리오 D는 우리 코드가 throw하는 'Use --force for non-interactive removal' 문자열을 stderr에 기대 — clack 영향 없어야 함.",
+          "acceptance": "- bun run check exit 0.\n- bun run test:e2e exit 0, 모든 assert PASS.\n- e2e D 시나리오의 stderr에 'Use --force for non-interactive removal' 문자열 존재.\n- scripts/clack-smoke.mjs 양쪽 PASS 유지.\n- artifacts/test/step1-verification.md에 ALL PASS 또는 FAIL 분석 기록.",
+          "approach": "다음 명령을 순차 실행하고 결과 기록:\n1. `bun install` — clack 1.2.0 설치 확인.\n2. `bun run check` — sync:dry + tsc --noEmit. PASS 기대.\n3. `bun run test:e2e` — 기존 시나리오 A(install→uninstall), B(빈 cleanup), C(drift+force), D(non-TTY+force) 모두 PASS 기대. 추가 규제: 시나리오 D의 stderr 문자열 'Use --force for non-interactive removal' 그대로 출력되는지 명시 확인.\n4. `node scripts/clack-smoke.mjs` 한 번 더 — 변경 후에도 import surface 깨지지 않는지.\n5. 어떤 단계라도 FAIL이면 어떤 시나리오/어떤 assert가 깨졌는지 stderr snippet과 함께 task 5(engineer)로 돌려보냄.\n\n산출물: artifacts/test/step1-verification.md에 결과 기록(각 명령, exit code, 핵심 stdout/stderr).",
+          "plan_issue": 6,
+          "deps": [
+            2
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_237bf8df6ffeSnyf5053UeCiVZ"
+          },
+          "created_at": "2026-04-26T05:20:37.014Z"
+        },
+        {
+          "id": 4,
+          "title": "step1 commit",
+          "status": "completed",
+          "context": "step1 검증 PASS 후 commit. step2는 별도 commit이라 step1만 깨끗이 격리. .nexus/history.json은 미커밋 archive(+51 line)가 main에서부터 들고 온 상태 — step1 commit엔 포함하지 않음(별 사이클의 archive). 이번 cycle 종료 시 nx_task_close가 history 갱신 + 그때 한 번에 묶음.",
+          "acceptance": "- HEAD가 새 commit, message가 \"chore: migrate single-select prompts to @clack/prompts\"로 시작.\n- commit에 .nexus/history.json 미포함.\n- working tree에 step1 관련 미커밋 변경 없음(step2 위해 .nexus/history.json만 modified로 남음).",
+          "approach": "1. `git status` 로 변경 파일 확인.\n2. step1 변경: package.json, bun.lock, scripts/clack-smoke.mjs, lib/install-ui.mjs, lib/uninstall-ui.mjs, lib/agent-models.mjs (진입 scope만), lib/ink-select.mjs(삭제).\n3. .nexus/history.json은 step1 commit에 **포함하지 않음** — 별 사이클의 archive 상태로 두고 cycle 종료 시 별도 commit.\n4. `git add` 명시적 path: package.json, bun.lock, scripts/clack-smoke.mjs, lib/install-ui.mjs, lib/uninstall-ui.mjs, lib/agent-models.mjs, lib/ink-select.mjs(삭제).\n5. `git commit -m \"chore: migrate single-select prompts to @clack/prompts\"`. 본문엔 - 단일 select 5곳 매핑 - clack 1.2.0 exact pin - smoke gate 추가 - lib/ink-select.mjs 삭제 - 외부 시그니처 보존 명시.\n6. `git status`로 cleanly committed 확인.",
+          "plan_issue": 6,
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T05:20:46.980Z"
+        },
+        {
+          "id": 5,
+          "title": "agent-models 다회 사이클 wizard clack 재작성",
+          "status": "completed",
+          "context": "이슈 4, 5 결정 종합. 현재 lib/agent-models.mjs::AgentModelsApp(약 300줄 React 컴포넌트)을 삭제하고 top-level async function으로 재작성. 사용자 8원칙(Space toggle, Enter submit, 빈 submit=Done 단일 사이클, 다회 사이클은 별 select, 별도 Done 옵션 금지, ANSI inverse 키 강조) + designer 권고(매 사이클 끝 Done/Continue/Cancel select, 사이클 시작/끝 note status, 첫 진입 빈 submit=dirty면 select dirty=false면 즉시 outro) + Lead 판단(Back 옵션 미추가, Ctrl+C는 사이클-끝 select로 점프).",
+          "acceptance": "- lib/agent-models.mjs에서 react, ink 관련 import 라인 부재.\n- AgentModelsApp 등 React 컴포넌트 함수 부재.\n- configureAgentModelsInteractive 본체가 multiselect → select(provider) → select(model) → note → 사이클-끝 select 흐름으로 재작성됨.\n- 빈 submit + dirty=false → outro 후 즉시 종료 분기 존재.\n- 빈 submit + dirty=true → 사이클-끝 select 분기 존재.\n- isCancel 분기가 multiselect/provider/model 모두에 존재.\n- 외부 시그니처 보존: configureAgentModelsInteractive 리턴 { configPath, saved, config }.\n- bin/opencode-nexus.mjs의 caller 코드 무수정 PASS.\n- `bun run check` PASS.",
+          "approach": "1. lib/agent-models.mjs를 다음 구조로 재작성:\n   - 기존 React/ink import 제거. 새 import: `import { intro, outro, note, select, multiselect, confirm, isCancel, cancel } from \"@clack/prompts\";`\n   - 헬퍼 보존: AGENT_IDS, getAgentModelSpec, formatAgentLabel, withAgentModelSpec, parseAgents, listAvailableModels, runCommand, parseModelLines, readJson, writeJson, ensureDir, stripAnsi, resolveConfigPath, canUseInteractiveTerminal, configureAgentModelsDirect 모두 그대로.\n   - configureAgentModelsInteractive 본체 재작성:\n     a. canUseInteractiveTerminal() guard.\n     b. scope 미정 시 clack `select` (이미 task 2에서 교체됨) — 그대로 호출.\n     c. const config = readJson(configPath); const providersById = await listAvailableModels(cwd);\n     d. let workingConfig = { ...config, agent: ... }; let dirty = false; let lastUpdated = null;\n     e. intro('Configure Nexus agent models');\n     f. while(true) 루프:\n       i. note(buildSummary(lastUpdated, dirty)). 첫 사이클은 'No changes yet', 이후는 'Updated: <agents> → <model>'.\n       ii. const selected = await multiselect({ message: `에이전트를 선택하세요 (\\x1b[7m Space \\x1b[27m=토글, \\x1b[7m Enter \\x1b[27m=완료, 빈 선택=마침)`, options: AGENT_IDS.map(id => ({ value:id, label: id, hint: formatHintForAgent(workingConfig, id) })), required: false });\n       iii. if (isCancel(selected)) → 사이클-끝 select로 점프(아래 step ix로).\n       iv. if (selected.length === 0) → if (!dirty) { outro('변경 사항 없이 종료합니다.'); return { configPath, saved:false, config:workingConfig }; } else → 사이클-끝 select로 점프.\n       v. const provider = await select({ message: `Choose a provider for ${selected.join(', ')}`, options: ... }); if (isCancel(provider)) → 사이클-끝 select 점프.\n       vi. const modelId = await select({ message: `Choose a model from ${provider}`, options: ... }); if (isCancel(modelId)) → 사이클-끝 select 점프.\n       vii. workingConfig = withAgentModelSpec(workingConfig, selected, `${provider}/${modelId}`); dirty = true; lastUpdated = { agents: selected, model: `${provider}/${modelId}` };\n       viii. note(`Updated ${selected.join(', ')} → ${provider}/${modelId}`).\n       ix. const next = await select({ message: '다음 단계를 선택하세요', options: [{value:'done',label:'마침'},{value:'continue',label:'계속 매핑'},{value:'cancel',label:'취소'}], initialValue:'continue' });\n       x. if (isCancel(next) || next === 'cancel') → cancel('변경 사항을 취소했습니다'); return { configPath, saved:false, config };\n       xi. if (next === 'done') → if (dirty) writeJson(configPath, workingConfig); outro(dirty ? `저장했습니다: ${configPath}` : '변경 사항 없이 종료합니다.'); return { configPath, saved:dirty, config: workingConfig };\n       xii. continue → 루프 처음으로.\n   - 외부 시그니처 보존: configureAgentModelsInteractive 리턴 형태 { configPath, saved, config } 동일. caller(bin/opencode-nexus.mjs:247 근방) 무수정.\n\n2. AgentModelsApp, MainScreen, ChoiceScreen, TextLine, getViewport 등 React 컴포넌트 함수 모두 제거.\n3. React/ink import 라인 모두 제거.\n4. 사용 안 하게 되는 헬퍼(MAIN_ACTIONS, BACK 등) 제거. AGENT_LABEL_WIDTH는 사용 안 하면 제거.",
+          "risk": "- clack의 outro/cancel이 stdout vs stderr 사용처 차이로 비-TTY 시나리오에서 의도치 않은 출력 가능 — canUseInteractiveTerminal() 가드로 진입 자체를 막아 회피.\n- multiselect의 hint 길이가 길어 작은 터미널에서 wrap → 모델 이름은 마지막 부분만(`hint: formatAgentLabel`)로 압축. 기존 ink와 동일.\n- ANSI escape literal이 정확히 \\x1b[7m...\\x1b[27m로 들어가야 함.",
+          "plan_issue": 4,
+          "deps": [
+            4
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_237c11b03ffem01i3IJsUlVXcp"
+          },
+          "created_at": "2026-04-26T05:21:19.736Z"
+        },
+        {
+          "id": 6,
+          "title": "ink/react deps 제거 + bun.lock 정리",
+          "status": "completed",
+          "context": "task 5에서 ink/react import가 모두 제거된 직후. package.json에서 정리. step2 commit에 함께 묶임.",
+          "acceptance": "- package.json dependencies에 \"ink\", \"react\" 키 부재.\n- bun.lock에 ink, react, react-reconciler, yoga-layout 항목 부재.\n- 코드(src/, lib/, bin/, scripts/)에 ink 또는 react import 없음 (grep 검증).\n- `bun run check` PASS.",
+          "approach": "1. package.json dependencies에서 \"ink\": \"^7.0.1\"과 \"react\": \"^19.2.5\" 두 줄 제거.\n2. `bun install` 실행하여 bun.lock에서 ink/react 및 30+ transitive deps(react-reconciler, yoga-layout, ws, scheduler, chalk, cli-cursor 등) 자동 제거.\n3. `bun run check` 한 번 더 실행해 회귀 없음 확인(이미 task 5에서 PASS했어야 하지만 deps 정리 후 재확인).\n4. grep으로 ink/react import가 코드 어디에도 없음 재확인 (`rg \"from ['\\\"](ink|react)['\\\"]\"` → 결과 없음).",
+          "risk": "bun.lock 자동 정리에서 예상 외의 deps 제거(예: 다른 패키지가 react를 peer로 요구) → bun install이 경고하면 수동 확인 필요. 우리 deps에 react peer 의존하는 건 ink뿐이라 안전 예상.",
+          "plan_issue": 1,
+          "deps": [
+            5
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T05:21:30.113Z"
+        },
+        {
+          "id": 7,
+          "title": "releasing.md §7 갱신",
+          "status": "completed",
+          "context": ".nexus/context/releasing.md §7은 install/uninstall TTY UX 점검 항목. clack 마이그레이션 후 행동이 달라진 부분(Esc=back 폐기, 빈 submit=Done, Done/Continue/Cancel 사이클-끝 select, 다회 사이클 status note)을 반영. 기존 install/uninstall 항목은 유지하되 표현 업데이트, agent-models 항목은 신설.",
+          "acceptance": "- .nexus/context/releasing.md §7에 clack 기반 표현으로 갱신된 install/uninstall 항목 존재.\n- §7-x(또는 적절한 새 번호) \"models 인터랙티브 UX 점검\" 섹션 신설, 8개 이상 점검 항목 포함.\n- Esc=back 동작 항목은 명시적으로 부재(또는 \"없음 — 회귀 인정\" 명시).\n- 기존 §7 다른 항목 보존 (install --dry-run, scope=both, --force, --yes 등).\n- 한국어 톤이 기존 §5, §5-4와 일관.\n- 검증 가능한 형태(예: \"Ctrl+C로 사이클-끝 select 점프 확인\")로 점검 항목 구성.",
+          "approach": ".nexus/context/releasing.md §7 섹션 갱신:\n\n1. 기존 install/uninstall scope 선택 항목: ink \"↑↓ + Enter, Esc=cancel\" 표현을 clack \"↑↓ + Enter (Ctrl+C로 cancel)\"로 갱신. select UI 자체는 동등 동작이므로 큰 변경 없음.\n2. 기존 confirm 항목: clack confirm은 y/N 외에 ↑↓로 토글 가능. 기본값 false 동작 유지 명시.\n3. **agent-models 신규 §7-x 섹션 추가** (\"models 인터랙티브 UX 점검\"):\n   - 첫 진입 후 빈 multiselect submit + dirty=false → 'No changes' 후 즉시 종료, exit 0, 파일 미변경.\n   - multiselect에서 일부 에이전트 토글 후 Enter → provider select → model select → note 'Updated ...' 출력 → 사이클-끝 select 노출.\n   - 사이클-끝 select에서 'continue' → 다음 사이클 multiselect로 복귀, 직전 매핑은 note 한 줄로 보존.\n   - 'done' → writeFileSync + outro '저장했습니다: <path>'.\n   - 'cancel' → cancel '변경 사항을 취소했습니다' + 파일 미변경.\n   - Ctrl+C 라우팅: multiselect/provider/model 단계에서 누르면 사이클-끝 select로 점프(즉시 종료 아님).\n   - Esc=back 동작은 **없음** (clack native 미지원). Continue로 같은 에이전트 재선택해 다른 모델 적용 = 덮어쓰기 가능.\n4. §7 상단(또는 적절 위치)에 \"ink → clack 마이그레이션 후의 점검\" 한 줄 안내 헤더 추가, 변경 이력은 CHANGELOG에 위임.\n\n기존 §7 다른 항목(install --dry-run, scope=both 메시지 등)은 보존, 위 항목만 추가/갱신.",
+          "plan_issue": 6,
+          "deps": [
+            6
+          ],
+          "owner": {
+            "role": "writer",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_237b96b6bffezG1JNh9oPtLFJ9"
+          },
+          "created_at": "2026-04-26T05:21:50.048Z"
+        },
+        {
+          "id": 8,
+          "title": "step2 통합 검증 (e2e + smoke 회귀)",
+          "status": "completed",
+          "context": "step2 코드(task 5, 6) + 문서(task 7) 모두 적용된 상태에서 회귀 검증. 비-TTY 회귀 + clack smoke 둘 다 확인.",
+          "acceptance": "- bun run check exit 0.\n- bun run test:e2e exit 0, 모든 assert PASS.\n- e2e D의 stderr에 'Use --force for non-interactive removal' 보존.\n- node + bun smoke 양쪽 PASS.\n- npm pack --dry-run에 lib/agent-models.mjs, bin/opencode-nexus.mjs 포함, 추가/제거된 파일 list 확인 가능.\n- artifacts/test/step2-verification.md에 ALL PASS 또는 FAIL 분석 기록.",
+          "approach": "1. `bun install` 한 번 더(혹시 lock 정합성 문제 있을 시).\n2. `bun run check` PASS 확인.\n3. `bun run test:e2e` PASS 확인 — 시나리오 A~D 모두. 시나리오 D의 'Use --force for non-interactive removal' stderr 회귀 명시 확인.\n4. `node scripts/clack-smoke.mjs` 한 번 더 — clack import surface 깨지지 않음 확인.\n5. `bun scripts/clack-smoke.mjs` 한 번 더.\n6. `npm pack --dry-run` 실행해 패키지 포함 파일에서 ink/react 흔적 없는지(`packed files`에 react/ink가 안 보이는지) 확인. 단, npm pack은 deps 자체는 보지 않으므로 lib/agent-models.mjs와 bin/이 정상 포함되는지만 체크.\n7. 산출물 `artifacts/test/step2-verification.md`에 결과 기록(각 명령, exit code, 핵심 출력).\n8. 어떤 단계라도 FAIL이면 어떤 task로 돌릴지 지목(task 5 wizard / task 6 deps / task 7 docs).",
+          "plan_issue": 6,
+          "deps": [
+            6
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_237b3a793ffeOdb9Uzu4tE6fh2"
+          },
+          "created_at": "2026-04-26T05:22:01.693Z"
+        },
+        {
+          "id": 9,
+          "title": "releasing.md §7 갱신 검증",
+          "status": "completed",
+          "context": "writer task 7의 산출물 검증. 사용자 8원칙 + designer 권고 + 이슈 4/5 결정과 일관되는지, 기존 §7 항목 회귀 없이 보존되는지 점검.",
+          "acceptance": "- 이슈 4/5 결정의 모든 핵심 행동이 §7 점검 항목으로 매핑됨.\n- 기존 §7 항목 회귀 없음.\n- 코드와 문서 표현 일치.\n- 결함 ZERO 또는 deviations.md에 명확히 기록.",
+          "approach": ".nexus/context/releasing.md §7 점검:\n1. 결정 표 대조: 이슈 4/5의 모든 행동(빈 submit+dirty=false 즉시 종료, 사이클-끝 Done/Continue/Cancel select, Esc=back 폐기, Ctrl+C 사이클-끝 점프, status note)이 점검 항목으로 등장하는지.\n2. 기존 §7 항목(install scope 선택, --dry-run, --force, --yes, scope=both 메시지) 모두 보존.\n3. clack 표현으로 갱신된 부분이 실제 코드(lib/install-ui.mjs, lib/uninstall-ui.mjs, lib/agent-models.mjs)와 일치.\n4. 한국어 톤이 §5, §5-4와 일관.\n5. 검증 가능한 형태(observable behaviour) — \"Ctrl+C로 점프 확인\" 같이 구체적.\n6. 결함 발견 시 artifacts/review/releasing-deviations.md에 위치/현상/기대값/제안 4단 구조로 기록.\n7. PASS면 artifacts/review/releasing-§7-review.md에 PASS 기록.",
+          "plan_issue": 6,
+          "deps": [
+            7
+          ],
+          "owner": {
+            "role": "reviewer",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_237b3495effeRlN5aWl3DV0dPU"
+          },
+          "created_at": "2026-04-26T05:22:10.625Z"
+        },
+        {
+          "id": 10,
+          "title": "step2 commit + cycle close",
+          "status": "in_progress",
+          "context": "step2의 코드/deps/docs 모두 검증 완료 후 commit. 그 다음 cycle close에서 .nexus/history.json 갱신과 함께 묶음.",
+          "acceptance": "- nx_task_close 성공.\n- HEAD가 새 commit, message가 \"chore: replace ink-based agent-models wizard with clack\"로 시작.\n- commit에 .nexus/history.json 포함(이전 cycle archive + 이번 cycle archive 모두).\n- working tree clean (no untracked/modified except artifacts/는 정책 따라).\n- 사용자 보고서가 nx-run §4 형식(Changes/Key decisions/Next steps/Open questions/Risks)으로 출력.",
+          "approach": "1. `git status`로 step2 변경 파일 확인.\n   변경 예상: lib/agent-models.mjs, package.json, bun.lock, .nexus/context/releasing.md, artifacts/* (선택), .nexus/history.json (이전 사이클의 미커밋 archive + 이번 cycle의 nx_task_close 결과).\n2. nx_task_close 호출 — plan.json + tasks.json archive → .nexus/history.json에 갱신.\n3. `git add` 명시적 path: lib/agent-models.mjs, package.json, bun.lock, .nexus/context/releasing.md, .nexus/history.json. \n   artifacts/는 .gitignore 정책 따라(현재 추가하지 않음 추정 — 확인 후 결정).\n4. `git commit -m \"chore: replace ink-based agent-models wizard with clack\"`. 본문엔\n   - agent-models 다회 사이클 wizard clack 재작성 (이슈 4/5)\n   - ink/react deps 제거 (이슈 1)\n   - releasing.md §7 갱신\n   - 외부 시그니처 보존\n   - cycle archive (.nexus/history.json) 동봉\n   명시.\n5. `git status`로 cleanly committed 확인.\n6. 사용자에게 cycle 완료 보고: 변경 파일, 핵심 결정, next steps(release 단가, npm pack 결과), risks/uncertainties.",
+          "plan_issue": 6,
+          "deps": [
+            8,
+            9
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T05:22:23.319Z"
+        }
+      ]
     }
   ]
 }

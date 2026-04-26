@@ -221,20 +221,34 @@ drift 상태(`default_agent`나 `mcp.nx.command`를 수정핸 상태)에서 unin
 
 이 항목은 사람이 손으로 눌러보는 대신, 가능한 한 재현 가능한 방식으로 확인한다.
 
+### 7.1 install
+
 - install interactive 첫 화면이 scope 선택으로 시작하는지 확인
-- models interactive 첫 화면이 scope 선택으로 시작하는지 확인
-- models 메인 화면에 다음이 모두 보이는지 확인
-  - `lead`
-  - `general`
-  - `explore`
-  - Nexus subagent 전체
-- 각 agent 줄이 `[ ] name  > current-model` 형태로 보이는지 확인
-- 메인 화면에 `Next`, `Done`, `Cancel`이 함께 보이는지 확인
-- provider 선택 -> model 선택 -> 메인 화면 복귀 흐름이 유지되는지 확인
+- `--scope=both` 호출 시 확인 프롬프트와 dry-run 헤더에 `project AND user`가 명시되는지 확인
+
+### 7.2 uninstall
+
+- uninstall 인터랙티브 실행 시 `--scope` 미지정이면 scope 선택 화면이 project/user 두 옵션으로 먼저 뜨는지 확인
+- `--force` 없을 때 TTY에서 `Remove opencode-nexus config from <scope>?` 확인 프롬프트가 기본값 "Cancel"(no)로 뜨는지 확인
+
+### 7.3 models (agent-models 다회 사이클)
+
+- models interactive 진입 시 scope 선택 화면이 먼저 뜨는지 확인
+- multiselect 옵션에 `lead`, `general`, `explore` 및 Nexus subagent 전체가 포함되는지 확인
+- 첫 진입 후 아무 에이전트도 선택하지 않고 Enter(빈 submit) 시 `변경 사항 없이 종료합니다.` outro가 노출되고 파일이 변경되지 않는지 확인
+- 이미 한 번 이상 매핑한 상태(dirty=true)에서 다시 multiselect로 돌아와 아무 에이전트도 선택하지 않고 Enter를 누르면 즉시 종료가 아니라 사이클-끝 select(`마침`/`계속 매핑`/`취소`)로 점프하는지 확인
+- multiselect 메시지에 `Space`와 `Enter`가 ANSI inverse(반전)로 강조되어 노출되는지 확인
+- multiselect 옵션 hint에 `현재: <provider>/<model>` 또는 `inherit`이 표시되는지 확인
+- 에이전트를 하나 이상 선택한 뒤 Enter를 누르면 provider 선택 → model 선택 순서로 진행되는지 확인
+- provider와 model 선택 후 `Updated <agents> → <provider>/<model>` note가 한 줄로 노출되는지 확인
+- 사이클-끝 select에 `마침`, `계속 매핑`, `취소` 세 옵션이 있고 기본값(initialValue)이 `계속 매핑`인지 확인
+- `계속 매핑`을 선택하면 다음 사이클의 multiselect가 노출되고, 직전 매핑 결과가 사이클 시작 note에 `Updated <agents> → <provider>/<model>` 형태로 보존이 되는지 확인
+- `마침`을 선택하면 누적된 변경 사항이 파일에 기록되고 `저장했습니다: <path>` outro가 노출되는지 확인(dirty가 false면 저장 없이 종료)
+- `취소`를 선택하면 `변경 사항을 취소했습니다.` cancel 메시지가 노출되고 파일이 변경되지 않는지 확인
+- multiselect, provider 선택, model 선택 단계에서 Ctrl+C를 누르면 사이클-끝 select(`마침`/`계속 매핑`/`취소`)로 점프하는지 확인
+- 사이클-끝 select에서 Ctrl+C를 누르면 `취소`와 동일하게 변경 사항을 폐기하고 종료하는지 확인
+- Esc 키로 이전 단계로 돌아가는(back) 동작이 없는지 확인 — clack native 미지원, 잘못 선택한 에이전트는 `계속 매핑`으로 같은 에이전트를 다시 선택해 덮어쓰기
 - direct mode로 `lead`, `general`, `explore` 모델 override가 실제 파일에 기록되는지 확인
-- uninstall 인터랙티브 실행 시 `--scope` 미지정이면 scope 선택 화면이 project/user 두 옵션으로 먼저 뜨는지(install과 동일 패턴)
-- `--force` 없을 때 TTY에서 `Remove opencode-nexus config from <scope>?` 확인 프롬프트가 기본값 "Cancel"(no)로 뜨는지
-- `--scope=both` 호출 시 확인 프롬프트와 dry-run 헤더에 `project AND user`가 명시되는지
 
 UI를 변경한 릴리즈라면 `expect` 같은 도구로 첫 화면 캡처까지 남기는 것이 좋다.
 

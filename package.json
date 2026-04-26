@@ -54,9 +54,7 @@
   "dependencies": {
     "@clack/prompts": "1.2.0",
     "@moreih29/nexus-core": "0.20.0",
-    "@opencode-ai/plugin": "1.14.21",
-    "ink": "^7.0.1",
-    "react": "^19.2.5"
+    "@opencode-ai/plugin": "1.14.21"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
