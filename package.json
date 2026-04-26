@@ -52,6 +52,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@clack/prompts": "1.2.0",
     "@moreih29/nexus-core": "0.20.0",
     "@opencode-ai/plugin": "1.14.21",
     "ink": "^7.0.1",
