@@ -2317,6 +2317,102 @@
           "created_at": "2026-04-26T05:22:23.319Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-04-26T06:15:39.963Z",
+      "branch": "chore/clack-prompt-migration",
+      "plan": {
+        "id": 16,
+        "topic": "agent-models inherit + 영어 라벨 + subagent mode 회귀 수정",
+        "issues": [
+          {
+            "id": 1,
+            "title": "agent-models provider 선택 단계에 'inherit' 옵션 추가 시맨틱 (키 제거 vs sentinel value, 모델 선택 단계 skip 여부)",
+            "status": "decided",
+            "decision": "**provider select에 'inherit' 옵션을 첫 번째로 추가. 선택 시 `agent.<id>.model` 키 제거(unset) + model select skip + 사이클-끝 select로 진행.**\n\n구현 사양:\n1. `lib/agent-models.mjs`의 provider select options 구성 시 첫 항목으로 `{ value: '__inherit__', label: 'inherit', hint: '기본 모델 상속(키 제거)' }` 삽입. Sentinel string `'__inherit__'`은 prompt 내부 신호용.\n2. 새 헬퍼 `withAgentModelUnset(config, agentIds)` 추가:\n   - 각 agentId에 대해 `delete config.agent[id].model`\n   - 결과 `config.agent[id]`가 빈 객체면 `delete config.agent[id]`\n   - 결과 `config.agent`가 빈 객체면 `delete config.agent`\n   - 새 객체 반환(불변성 유지, 기존 `withAgentModelSpec` 패턴과 동일)\n3. wizard 흐름:\n   - provider select 결과가 `'__inherit__'`이면 → model select 건너뛰고 `withAgentModelUnset(workingConfig, selected)` 적용 → `dirty = true` → `note('Reset <agents> → inherit')` (또는 한국어 톤 보존: `'Reset <agents> → 기본 상속'`) → 사이클-끝 select로\n   - provider select 결과가 일반 provider이면 → 기존 흐름(model select)대로\n\n**기각:**\n- `null` sentinel (예: `agent.<id>.model = null`) — SDK `AgentConfig.model?: string` 옵셔널 string. null은 type 위반.\n- model select에 'inherit' 옵션 추가 — 사용자 mental model이 \"model을 안 정한다\"라서 provider 단계가 정합. model 단계는 이미 provider 결정 후 model 좁히기.\n- provider list 마지막에 배치 — inherit는 \"되돌리기\"로 자주 쓰일 액션. 첫 항목이 cursor 기본 위치라 빠른 접근. 사용자 8원칙엔 inherit 위치 명시 없음 → Lead 판단.\n- `withAgentModelSpec(config, ids, null)`에 null 처리 분기 — 단일 함수에 set/unset 두 시맨틱이 섞이면 가독성 저하. 별도 `withAgentModelUnset` 헬퍼가 명시적.\n\n**가정:** opencode가 `agent.<id>.model` 키 부재 시 `config.model`(전역 default) → provider/global default fallback 순으로 해석. memory `pattern-opencode-plugin-surface.md` 52줄 \"사용자 preference로 보존\" 정합."
+          },
+          {
+            "id": 2,
+            "title": "사이클-끝 select + 관련 메시지 영어화 범위 (사이클-끝 label만 vs intro/outro/cancel/note 전체)",
+            "status": "decided",
+            "decision": "**사이클-끝 select(message + 3 options)만 영어로 변경. 다른 메시지(multiselect message, intro/outro/cancel/note)는 손대지 않음.**\n\n영어 라벨:\n- message: `'What's next?'` (간결, install-ui 톤은 짧은 의문문 패턴이 흔함)\n- options:\n  - `{ value: 'done', label: 'Done', hint: 'save and exit' }`\n  - `{ value: 'continue', label: 'Continue mapping', hint: 'map another batch' }`\n  - `{ value: 'cancel', label: 'Cancel', hint: 'discard changes and exit' }`\n- `initialValue: 'continue'` (변경 없음, 기존 결정 보존)\n\n`hint`는 신규 추가(원래 라벨만 있었음) — 영어 short-form이 의미 보강에 유리. message가 짧아진 만큼 hint로 행동 설명 보충.\n\n**범위 결정 근거:**\n- 사용자 메시지: \"마지막에 다음 작업 선택하는 부분만 한글이라서 오히려 어색함. 그냥 영어로.\" — 명시 범위가 사이클-끝 select.\n- 다른 메시지(multiselect '에이전트를 선택하세요', outro '변경 사항 없이 종료합니다.', cancel '변경 사항을 취소했습니다', note 'Updated …')는 사용자가 어색하다고 짚지 않음. 추측 영어화는 사용자 의도 초과.\n- multiselect message에 한국어 + ANSI inverse 강조는 사용자가 직접 봤을 때 익숙한 형태(직전 cycle 사용자 검증 통과). 변경 시 회귀 위험.\n\n**기각:**\n- 사이클-끝 select만 라벨 변경 (현행 `다음 단계를 선택하세요` 한국어 message + 영어 options) — message/options 톤이 안 맞아 본질적으로 더 어색.\n- outro/cancel/note까지 영어화 — 사용자 명시 범위 초과. 한국어 유지 분명히 어색하지 않은 곳까지 손대는 건 추측.\n- `Done`/`Continue`/`Cancel` 단어만(hint 미추가) — 사용자가 영어로 안 익숙할 수 있어 hint로 의미 보강이 안전."
+          },
+          {
+            "id": 3,
+            "title": "9 subagents에 mode: 'subagent' 명시 추가 + opencode 기본값 회귀 대응",
+            "status": "decided",
+            "decision": "**9 subagents 모두에 `mode: \"subagent\"` 명시 추가. lead만 `mode: \"primary\"` 유지.**\n\n수정 대상 파일(9개):\n- `src/agents/architect.ts`\n- `src/agents/designer.ts`\n- `src/agents/engineer.ts`\n- `src/agents/postdoc.ts`\n- `src/agents/researcher.ts`\n- `src/agents/reviewer.ts`\n- `src/agents/strategist.ts`\n- `src/agents/tester.ts`\n- `src/agents/writer.ts`\n\n각 파일에서 `description` 라인 직후, `permission` 라인 직전에 `mode: \"subagent\",` 한 줄 추가(lead.ts 동일 패턴).\n\n**기각:**\n- 일부에만 `subagent` 적용 — 사용자 결정 명시 \"lead만 primary\". 일관성.\n- `mode: \"all\"` 적용 — `all`은 primary + subagent 모두라 tab 순환 유지됨 → 회귀 미해결.\n- opencode docs / git history 추가 research — empirical 증거(사용자 직접 관찰 + SDK type 옵셔널 + 우리 9개 파일에 필드 부재) 충분. 수정이 forward/backward compatible(어떤 opencode default든 안정).\n- opencode.json 사용자 파일 마이그레이션 — 우리 plugin이 runtime마다 `mergeAgentConfig`로 주입. `mode` undefined → \"subagent\"로 바뀜. 기존 사용자 config 무수정 PASS.\n- install-spec.mjs에 `agent.<id>.mode` 처리 추가 — 위 plugin runtime 주입 경로로 충분. install-spec 확장은 범위 외.\n\n**리스크 흡수:**\n- 사용자가 이전에 user-side `opencode.json`에 `agent.architect.mode: \"primary\"` 같은 override를 명시했다면 우리 값이 덮어 쓰여 \"subagent\"로 바뀜 → 의도된 override가 무시될 수 있음. `mergeAgentConfig`(line 99~108) 코드 재확인: `merged = { ...base, ...override }`. **base가 우리 값, override가 user config** → user config가 우선. 따라서 user override는 보존됨. 안전.\n\n**가정:** opencode가 `mode: \"subagent\"`를 받으면 tab 순환에서 그 agent를 제외. SDK type만으로는 default 동작 미상이지만, 사용자 empirical 관찰(\"tab으로 모든 서브에이전트 전환 가능\")의 반대 케이스를 만들면 회귀 해소된다는 가정. 수정 후 사용자가 직접 검증 필요(자동 검증 어려움)."
+          }
+        ],
+        "research_summary": "**컨텍스트:** 직전 cycle(clack 마이그레이션, commit b3a5f79)로 step1/step2 commit 완료, working tree clean. 사용자 직접 테스트 후 3개 추가 요구사항. 같은 브랜치(`chore/clack-prompt-migration`) 내 추가 commit 묶음.\n\n**Issue 1 — agent-models inherit 옵션:**\n- 현재 `lib/agent-models.mjs` 흐름: multiselect(에이전트) → select(provider) → select(model) → mapping. provider list는 `listAvailableModels()` 결과 sorted Map.\n- `getAgentModelSpec(config, id)`는 이미 3 source 분기: `'agent'`(개별 model 설정), `'global'`(config.model 전역 설정), `'unset'`(아무것도 없음).\n- `formatAgentLabel`은 'inherit' 문자열을 `value: null` 케이스에 표시.\n- `withAgentModelSpec(config, agentIds, modelSpec)`은 항상 `agent.<id>.model = modelSpec` 형태로 set만 함. unset 헬퍼 없음.\n- 결정 필요: inherit \"선택\" 시 어떻게 표현할지 — (a) `delete config.agent[id].model` (키 제거), (b) `config.agent[id].model = null` 등 sentinel. opencode SDK `AgentConfig.model?: string` 옵셔널이라 키 제거가 정합. memory `pattern-opencode-plugin-surface.md`도 `agent.<id>.model`을 사용자 preference로 보존하라고 명시.\n- 또한: provider select에서 'inherit' 선택 시 다음 model select 단계는 skip. multiselect로 선택한 에이전트에서 model 키만 unset.\n\n**Issue 2 — 영어 라벨 통일 범위:**\n- 현재 `lib/agent-models.mjs`에 한국어 메시지가 섞여 있음:\n  - multiselect message: `'에이전트를 선택하세요 (\\x1b[7m Space \\x1b[27m=토글, \\x1b[7m Enter \\x1b[27m=완료, 빈 선택=마침)'`\n  - 사이클 시작 note 빈 상태: `'No changes yet'` (영어)\n  - 사이클 끝 note: `'Updated <agents> → <model>'` (영어 + 한글 화살표)\n  - 사이클-끝 select message: `'다음 단계를 선택하세요'`, options: `'마침'`/`'계속 매핑'`/`'취소'`\n  - outro/cancel: `'변경 사항 없이 종료합니다.'`/`'저장했습니다: <path>'`/`'변경 사항을 취소했습니다'`\n- 사용자 명시: \"마지막에 다음 작업 선택하는 부분만 한글이라서 오히려 어색함. 그냥 영어로.\" → 사이클-끝 select(message + 3 options)을 영어로.\n- 톤 일관성 — outro/cancel 한국어, 사이클-끝 영어로 분리되면 오히려 더 어색해질 수 있음. 하지만 사용자가 그것까지 요청하진 않음. 결정 필요.\n- 다른 한국어 표현(install-ui scope label 등)은 우리 install-ui.mjs 내 한국어 톤이라 별 작업.\n\n**Issue 3 — subagent primary 회귀:**\n- 코드 확인 (Lead 직접 grep + node_modules 인스펙션):\n  - `src/agents/lead.ts`: `mode: \"primary\"` 명시 (line 5).\n  - `src/agents/{architect,designer,engineer,postdoc,researcher,reviewer,strategist,tester,writer}.ts`: **`mode` 필드 부재**. 모두 `id`/`name`/`description`/`permission`/`system`만 export.\n  - `src/plugin.ts::toAgentConfig`(line 90): `mode: agent.mode`를 그대로 매핑. undefined면 undefined로 패스.\n  - `src/plugin.ts::config` hook(line 277): `mergeAgentConfig`로 우리 NEXUS_AGENTS와 user config를 병합. user 기본 config에 `mode`가 없으면 우리 값(undefined)이 들어감.\n  - `@opencode-ai/sdk/dist/gen/types.gen.d.ts:835~877` `AgentConfig.mode?: \"subagent\" | \"primary\" | \"all\"`. 옵셔널.\n- opencode 측 default 처리: 사용자 empirical 관찰(\"tab으로 모든 서브에이전트 전환 가능\")이 회귀 증거. opencode가 undefined를 'all' 또는 'primary'로 처리. 옛날 default는 'subagent'였을 가능성(이전엔 정상 동작했다고 사용자가 인지하고 있었음).\n- 수정 방향: 9 subagents에 `mode: \"subagent\"` 명시 추가. opencode default가 무엇이든 (forwards/backwards compat) 안정.\n- `mergeAgentConfig`에서 user override 정책: user config에 `mode: \"primary\"` 명시하면 user 우선이라 우리 값 덮어쓸 수 있음. 본 fix 범위 외(사용자 의도된 override).\n- opencode.json 사용자 파일 수정은 필요 없음 — plugin runtime injection 경로.\n\n**기존 memory:**\n- `pattern-opencode-plugin-surface.md` 52줄: `agent.<id>.model`은 사용자 preference로 보존. inherit 처리 시 키 삭제가 정합.\n- 다른 memory에 mode/primary 직접 기록 없음.\n\n**범위 외(이 cycle 안 다룸):**\n- install/uninstall에서 `agent.<id>.mode` 처리 추가 (현재 install-spec에 없음). plugin runtime이 매 세션 주입하므로 굳이 install 단가 없음.\n- README/CHANGELOG 업데이트 — chore commit이라 Unreleased 섹션 갱신은 다음 release cycle에서.\n- TTY 자동 검증 도입 — 별 cycle.",
+        "created_at": "2026-04-26T06:05:46.460Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "agent-models: inherit 옵션 + 영어 사이클-끝 라벨",
+          "status": "completed",
+          "context": "이슈 1, 2 결정 종합. `lib/agent-models.mjs` 단일 파일 수정. 진입부 scope select(이미 clack), multiselect, provider/model select, 사이클-끝 select 흐름은 직전 cycle commit b3a5f79에서 갖춰져 있음. 본 task는 두 분기 추가: (a) provider list 첫 항목 'inherit' 옵션, (b) 사이클-끝 select label/message 영어화.",
+          "acceptance": "- `lib/agent-models.mjs`에 `withAgentModelUnset(config, agentIds)` 헬퍼 함수 존재.\n- provider select options 첫 항목이 `value: '__inherit__'`, `label: 'inherit'`.\n- provider 결과가 `'__inherit__'`이면 model select 호출 없이 바로 `withAgentModelUnset` 적용 + dirty=true 분기 존재.\n- 사이클-끝 select message가 `'What's next?'`, options이 정확히 `Done`/`Continue mapping`/`Cancel` (각 hint 포함), initialValue 'continue'.\n- 다른 메시지(multiselect, outro, cancel, note 본문)는 직전 cycle 결과 그대로(한국어 보존).\n- `bun run check` exit 0.\n- `bun run test:e2e` exit 0(비-TTY 회귀, 시나리오 D 'Use --force …' 보존).",
+          "approach": "1. **새 헬퍼 추가** (`withAgentModelUnset`):\n   ```js\n   function withAgentModelUnset(config, agentIds) {\n     const next = { ...config, agent: typeof config.agent === 'object' && config.agent !== null ? { ...config.agent } : {} };\n     for (const id of agentIds) {\n       if (typeof next.agent[id] === 'object' && next.agent[id] !== null) {\n         const { model, ...rest } = next.agent[id];\n         if (Object.keys(rest).length === 0) {\n           delete next.agent[id];\n         } else {\n           next.agent[id] = rest;\n         }\n       }\n     }\n     if (Object.keys(next.agent).length === 0) {\n       delete next.agent;\n     }\n     return next;\n   }\n   ```\n\n2. **provider select options 변경**: `[...providersById.entries()].map(...)` 결과 앞에 `{ value: '__inherit__', label: 'inherit', hint: '기본 모델 상속(키 제거)' }` 삽입.\n\n3. **wizard 흐름에 inherit 분기 추가**: provider select 결과 `=== '__inherit__'`이면:\n   - model select 건너뛰고\n   - `workingConfig = withAgentModelUnset(workingConfig, selected)`\n   - `dirty = true`\n   - `lastUpdated = { agents: selected, model: 'inherit' }` (note 표시용)\n   - `note('Reset ' + selected.join(', ') + ' → inherit')`\n   - 사이클-끝 select로 진행\n\n4. **사이클-끝 select 영어화**:\n   - `message: 'What\\'s next?'`\n   - options:\n     - `{ value: 'done', label: 'Done', hint: 'save and exit' }`\n     - `{ value: 'continue', label: 'Continue mapping', hint: 'map another batch' }`\n     - `{ value: 'cancel', label: 'Cancel', hint: 'discard changes and exit' }`\n   - `initialValue: 'continue'` 유지\n\n5. **다른 메시지 무수정**: multiselect message, outro/cancel/note 본문 한국어 유지(이슈 2 결정).",
+          "risk": "- inherit 결과 `agent.<id>` 빈 객체 처리 누락 시 opencode.json에 빈 `{}` 잔재. cleanup 분기 필수.\n- provider select `'__inherit__'` sentinel string이 실제 provider id와 충돌 가능성 — `__` prefix는 일반 provider id에 안 쓰이지만 grep으로 한 번 확인.\n- 영어 라벨이 너무 짧아져 사용자가 동작 헷갈림 — hint로 보강 처리됨.",
+          "plan_issue": 1,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T06:07:39.384Z"
+        },
+        {
+          "id": 2,
+          "title": "9 subagents에 mode: \"subagent\" 명시 추가",
+          "status": "completed",
+          "context": "이슈 3 결정. lead만 mode: \"primary\", 9 subagents(architect, designer, engineer, postdoc, researcher, reviewer, strategist, tester, writer)는 현재 mode 필드 부재. opencode 최근 버전이 undefined를 'all' 또는 'primary'로 처리해 tab 순환에 모두 등장하는 회귀. 9 파일에 동일 패턴 한 줄 추가.",
+          "acceptance": "- 9 파일 모두에 `mode: \"subagent\",` 라인이 description 직후, permission 직전 위치에 존재.\n- src/agents/lead.ts는 `mode: \"primary\"` 보존.\n- `grep -c 'mode: \"subagent\"' src/agents/*.ts` 결과 9 (lead.ts 제외).\n- `grep -c 'mode: \"primary\"' src/agents/*.ts` 결과 1 (lead.ts).\n- `bun run check` exit 0 (TypeScript 타입 검증).\n- 의존하는 sync 결과 회귀 없음 — `bun run sync:dry`도 PASS 기대.",
+          "approach": "9개 파일 각각에 `description` 라인 직후 `mode: \"subagent\",` 한 줄 추가. lead.ts 동일 패턴(line 4: description, line 5: mode).\n\n영향 파일:\n- src/agents/architect.ts\n- src/agents/designer.ts\n- src/agents/engineer.ts\n- src/agents/postdoc.ts\n- src/agents/researcher.ts\n- src/agents/reviewer.ts\n- src/agents/strategist.ts\n- src/agents/tester.ts\n- src/agents/writer.ts\n\n각 파일에서 정확히 동일한 변경:\n```ts\n  description: \"...\",\n+ mode: \"subagent\",\n  permission: { ... },\n```\n\n수정 후 grep으로 9 파일 모두 `mode: \"subagent\"` 보유 확인. lead.ts는 `mode: \"primary\"` 그대로.\n\n`src/plugin.ts`는 이미 `mode: agent.mode`를 매핑하므로 무수정. opencode.json 사용자 파일도 무수정(plugin runtime injection).",
+          "risk": "- 사용자가 user-side opencode.json에 `agent.architect.mode: \"primary\"` 등 override를 가지고 있다면 우리 값이 그대로 안 먹힘 → primary 유지(기존 user 의도). plugin.ts mergeAgentConfig 동작상 안전.\n- TypeScript에서 mode 필드의 string literal type narrowing이 깨질 가능성 — `as const` 또는 string literal 직접 OK 예상. check로 검증.",
+          "plan_issue": 3,
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T06:07:52.944Z"
+        },
+        {
+          "id": 3,
+          "title": "step3 검증 (회귀 + 사용자 manual 안내)",
+          "status": "completed",
+          "context": "task 1, 2 코드 변경 후 자동 검증 가능 부분(check + e2e + smoke). mode: \"subagent\" 효과는 opencode TUI 환경에서 사용자가 tab 키로 검증 — 자동 검증 불가, 수동 안내만.",
+          "acceptance": "- bun run check exit 0.\n- bun run test:e2e exit 0, 시나리오 A~D 모두 PASS, D 메시지 보존.\n- node + bun smoke 양쪽 PASS.\n- grep 카운트 모두 일치.\n- artifacts/test/step3-verification.md에 ALL PASS 또는 FAIL 기록 + mode 회귀의 사용자 수동 검증 안내.",
+          "approach": "1. `bun run check` PASS 확인.\n2. `bun run test:e2e` PASS 확인 — 시나리오 A~D 모두. 시나리오 D 'Use --force for non-interactive removal' 문자열 보존 확인.\n3. `node scripts/clack-smoke.mjs` PASS.\n4. `bun scripts/clack-smoke.mjs` PASS.\n5. 코드-레벨 grep:\n   - `grep -c 'mode: \"subagent\"' src/agents/*.ts` → 정확히 9 라인.\n   - `grep -c 'mode: \"primary\"' src/agents/*.ts` → 정확히 1 라인(lead).\n   - `grep -n 'withAgentModelUnset' lib/agent-models.mjs` → 정의 + 호출 양쪽 등장.\n   - `grep -n \"value: '__inherit__'\" lib/agent-models.mjs` → provider options 안에 등장.\n   - `grep -n \"What's next\" lib/agent-models.mjs` → 사이클-끝 message 등장.\n6. 산출물 `artifacts/test/step3-verification.md`에 결과 기록.\n7. 사용자 manual 검증 안내(보고서에 명시): mode 회귀 수정은 opencode TUI에서 tab 키로 직접 확인 필요. 본 task는 자동 검증 가능 부분만.",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2
+          ],
+          "owner": {
+            "role": "tester",
+            "resume_tier": "ephemeral",
+            "agent_id": "ses_237959d50ffeoL27vZR07dWtlF"
+          },
+          "created_at": "2026-04-26T06:08:04.073Z"
+        },
+        {
+          "id": 4,
+          "title": "commit + cycle close",
+          "status": "in_progress",
+          "context": "검증 PASS 후 단일 commit으로 묶음. 같은 PR(`chore/clack-prompt-migration`) 내 추가 commit. 직전 cycle archive와 함께 nx_task_close가 .nexus/history.json 갱신.",
+          "acceptance": "- nx_task_close 성공.\n- HEAD 새 commit, message가 \"chore: add inherit option, English cycle-end labels, and explicit subagent mode\"로 시작.\n- commit에 11개 파일 변경 + .nexus/history.json 포함.\n- working tree clean.\n- 사용자 보고서에 3개 변경, manual tab 검증 안내, 후속 PR 머지 단가 포함.",
+          "approach": "1. `git status`로 변경 파일 확인 (예상): `lib/agent-models.mjs`, `src/agents/architect.ts`, `src/agents/designer.ts`, `src/agents/engineer.ts`, `src/agents/postdoc.ts`, `src/agents/researcher.ts`, `src/agents/reviewer.ts`, `src/agents/strategist.ts`, `src/agents/tester.ts`, `src/agents/writer.ts`, `.nexus/history.json` (cycle close 후 추가).\n2. nx_task_close 호출 → plan + tasks archive → .nexus/history.json 갱신.\n3. `git add` 명시적 path: lib/agent-models.mjs + 9 src/agents/*.ts + .nexus/history.json.\n4. `git commit -m \"chore: add inherit option, English cycle-end labels, and explicit subagent mode\"`. 본문에 3 변경 분리 서술.\n5. `git status`로 cleanly committed 확인.\n6. 사용자에게 cycle 완료 보고: 변경, 결정, manual 검증 안내(opencode TUI에서 tab으로 lead만 등장하는지 확인).",
+          "plan_issue": 3,
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-04-26T06:08:13.883Z"
+        }
+      ]
     }
   ]
 }
