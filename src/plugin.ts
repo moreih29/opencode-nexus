@@ -88,9 +88,14 @@ function stripLeadingTag(text: string, tag: string) {
 }
 
 function toAgentConfig(agent: { description?: string; mode?: string; permission?: Record<string, unknown>; system?: string }) {
+  // Default to "subagent" so opencode's tab cycling shows only agents that
+  // explicitly opt in to "primary" (e.g. lead). The upstream nexus-core sync
+  // ships our 9 subagents without a `mode` field, and recent opencode
+  // versions treat undefined as tab-cyclable, which surfaced as a UX
+  // regression. Users can still override per-agent via opencode.json.
   return {
     description: agent.description,
-    mode: agent.mode,
+    mode: agent.mode ?? "subagent",
     permission: agent.permission,
     prompt: agent.system,
   };
