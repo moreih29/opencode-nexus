@@ -49,7 +49,7 @@ bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
-To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.18.0`).
+To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.18.1`).
 
 Check the installed CLI version with `opencode-nexus --version` or `opencode-nexus version`.
 
@@ -66,12 +66,12 @@ It then applies the following:
 - copies Nexus skills into `.opencode/skills/`
 - pins the plugin to the exact currently running CLI version
 
-`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.18.0`, it writes:
+`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.18.1`, it writes:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.18.0"],
+  "plugin": ["opencode-nexus@0.18.1"],
   "mcp": {
     "nx": {
       "type": "local",

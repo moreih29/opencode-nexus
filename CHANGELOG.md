@@ -2,6 +2,33 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.18.1] — 2026-04-30
+
+### 업스트림
+
+- **`@moreih29/nexus-core` `0.20.0` → `0.20.1`**. spec-only 변경 (upstream PR #69 — chore(spec): tighten HOW collaboration in plan/auto-plan skills). public interface, MCP tool signature, runtime behavior 변경 없음.
+  - `nx-auto-plan`: Core Rule을 3개 → 4개로 확장. "HOW/researcher/explore와 협업해 안건을 분석한다"가 새 Rule #1로 격상되어 Lead 단독 추론으로 안건을 결정하지 않도록 강제. "never stop"을 "사용자 확인 대기 금지"와 "HOW 결과 대기 허용"으로 명시 분리.
+  - `nx-plan`: Supplementary Rule에 "권고안을 제시하기 전에 다각도 근거를 확보한다(MUST gather multi-angle evidence before presenting a recommendation)" 추가.
+
+### 변경됨
+
+- `bun run sync` 산출물 재생성. `skills/nx-auto-plan/SKILL.md`, `skills/nx-plan/SKILL.md` 본문이 위 업스트림 spec과 정확히 일치. `skills/nx-run/SKILL.md`와 10개 generated agent 정의는 변경 없음.
+- README (ko/en)의 illustrative 버전 표기 `0.18.0` → `0.18.1` (releasing.md §1-1).
+
+### 사용자 영향
+
+- **기존 사용자에게 breaking change 없음** — wrapper의 CLI 시그니처, `opencode.json` 스키마, MCP 인터페이스 모두 동일.
+- 신규 설치 시 번들된 `.opencode/skills/nx-plan`, `nx-auto-plan` 본문이 강화된 HOW 협업 규칙을 포함. Lead가 plan/auto-plan 스킬을 호출할 때 단독 추론보다 HOW 서브에이전트 호출을 더 강하게 default로 잡는다.
+- 의존성 footprint 변동 없음.
+
+### 검증
+
+- `bun run check` PASS
+- `bun run test:e2e` PASS
+- `npm pack --dry-run` PASS (26 files, 72.9 kB)
+- 격리된 prefix에서 `npm install -g opencode-nexus-0.18.1.tgz` → `nexus-mcp` JSON-RPC `initialize` handshake 응답 확인 (`serverInfo.name=nexus-core`, `version=0.20.1`)
+- 격리된 디렉터리에서 install (plugin pin `opencode-nexus@0.18.1`, `mcp.nx`, `default_agent: lead`, `agent.build/plan.disable: true`, 3개 스킬 복사) → uninstall --force (모든 산출물 제거 + 두 번째 호출 멱등) 모두 통과
+
 ## [0.18.0] — 2026-04-26
 
 ### 변경됨
