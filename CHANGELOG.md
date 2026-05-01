@@ -2,6 +2,25 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.19.0] — 2026-05-01
+
+### 신규 기능
+
+- **비동기 백그라운드 서브에이전트 지원**. 내장 `task` 툴을 오버라이드해 `async: bool` 파라미터(기본값 `true`)를 추가. `async: true`로 백그라운드 spawn 시 부모 세션이 블록되지 않고 즉시 `task_id`를 반환하며, 완료 시 `<system-reminder>`로 자동 알림.
+- **`nx_bg_output`**, **`nx_bg_cancel`** 툴 추가. 백그라운드 작업의 결과 조회 및 취소 가능.
+- **10분 타임아웃 워치독** (`OPENCODE_NEXUS_BG_TIMEOUT_MS` 환경변수로 조정 가능). stuck 세션 자동 abort.
+- **결과 pipelining**: 개별 bg task 완료 시마다 Lead가 깨어나 바로 해당 결과로 작업 이어갈 수 있음.
+
+### 구조 개선
+
+- **플러그인 모듈 분할**. 464줄 monolithic `src/plugin.ts` → 3개 디렉터리(`tools/`, `hooks/`, `infra/`) + 28줄 진입점. 모든 파일 220줄 이하.
+- `cmux` 알림 파이프라인을 `createCmuxClient()` 팩토리로 전환해 테스트 격리 보장.
+
+### 버그 수정
+
+- 백그라운드 task resume 시 `ses_*` session ID로도 조회 가능하도록 dual lookup 추가.
+- resume 경로가 이전 결과만 반환하던 문제 수정 — 새 prompt가 있으면 기존 세션에 메시지를 주입해 컨텍스트를 유지한 채 계속 작업.
+
 ## [0.18.1] — 2026-04-30
 
 ### 업스트림
