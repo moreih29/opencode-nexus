@@ -68,7 +68,7 @@ Retrieve this completed result with task(task_id="${task.sessionId}") and contin
     try {
       await client.session.promptAsync({
         path: { id: task.parentSessionId },
-        body: { noReply: false, parts: [{ type: "text", text: notification }] },
+        body: { parts: [{ type: "text", text: notification }] },
       });
     } catch {
       // best-effort notification; swallow failures
