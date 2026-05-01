@@ -4,15 +4,6 @@ import { Effect } from "effect";
 import type { TaskRegistry } from "./registry.js";
 import type { BgTaskState } from "./bg-state.js";
 
-function randomTaskId(): string {
-  const chars = "0123456789abcdef";
-  let result = "nx_bg_";
-  for (let i = 0; i < 8; i++) {
-    result += chars[Math.floor(Math.random() * 16)];
-  }
-  return result;
-}
-
 function extractLastAssistantText(messages: Array<{ info: { role: string }; parts: Array<{ type: string; text?: string }> }>): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].info.role === "assistant") {
@@ -44,13 +35,10 @@ export function createTaskTool(deps: {
   bgState: BgTaskState;
 }): ToolDefinition {
   return tool({
-    description: "Launch or resume background subagent tasks",
+    description: "Launch or resume background subagent tasks. Use the session_id returned in metadata as task_id to resume.",
     args: taskArgs,
     async execute(args, ctx) {
-      let regEntry = args.task_id ? deps.registry.getByTaskId(args.task_id) : undefined;
-      if (!regEntry && args.task_id) {
-        regEntry = deps.registry.getBySessionId(args.task_id);
-      }
+      const regEntry = args.task_id ? deps.registry.getBySessionId(args.task_id) : undefined;
 
       if (args.task_id && regEntry) {
         // Resume with new prompt → continue the existing session
@@ -65,21 +53,21 @@ export function createTaskTool(deps: {
 
           if (isAsync) {
             deps.registry.register({
-              taskId: args.task_id,
+              taskId: regEntry.sessionId,
               sessionId: regEntry.sessionId,
               parentSessionId: ctx.sessionID,
               agent: args.subagent_type || regEntry.agent,
               description: args.description || regEntry.description,
             });
             await deps.bgState.spawnTask(
-              args.task_id, regEntry.sessionId, ctx.sessionID,
+              regEntry.sessionId, regEntry.sessionId, ctx.sessionID,
               args.subagent_type || regEntry.agent,
               args.description || regEntry.description,
               args.prompt,
             );
             return {
-              output: `Resumed background task: ${args.task_id} (${args.subagent_type || regEntry.agent})`,
-              metadata: { task_id: args.task_id, session_id: regEntry.sessionId, status: "running" },
+              output: `Resumed: ${regEntry.sessionId} (${args.subagent_type || regEntry.agent})`,
+              metadata: { session_id: regEntry.sessionId, status: "running" },
             };
           }
 
@@ -96,29 +84,27 @@ export function createTaskTool(deps: {
 
         // Status query (no prompt) → return stored state
         if (regEntry.status === "idle") {
-          const result = await deps.bgState.getResult(args.task_id);
+          const result = await deps.bgState.getResult(regEntry.sessionId);
           return {
             output: result.result ?? "",
-            metadata: { task_id: args.task_id, status: result.status },
+            metadata: { session_id: regEntry.sessionId, status: result.status },
           };
         }
         if (regEntry.status === "running") {
           return {
-            output: `Task ${args.task_id} still running`,
-            metadata: { task_id: args.task_id, status: "running" },
+            output: `Task ${regEntry.sessionId} still running`,
+            metadata: { session_id: regEntry.sessionId, status: "running" },
           };
         }
         return {
           output: regEntry.error ?? "Unknown error",
-          metadata: { task_id: args.task_id, status: "error" },
+          metadata: { session_id: regEntry.sessionId, status: "error" },
         };
       }
 
       const isAsync = args.async !== false;
 
       if (isAsync) {
-        const taskId = args.task_id ? args.task_id : randomTaskId();
-
         await Effect.runPromise(ctx.ask({
           permission: "task",
           patterns: ["*"],
@@ -132,7 +118,7 @@ export function createTaskTool(deps: {
         const session = res.data;
 
         deps.registry.register({
-          taskId,
+          taskId: session.id,
           sessionId: session.id,
           parentSessionId: ctx.sessionID,
           agent: args.subagent_type,
@@ -140,17 +126,13 @@ export function createTaskTool(deps: {
         });
 
         await deps.bgState.spawnTask(
-          taskId,
-          session.id,
-          ctx.sessionID,
-          args.subagent_type,
-          args.description,
-          args.prompt,
+          session.id, session.id, ctx.sessionID,
+          args.subagent_type, args.description, args.prompt,
         );
 
         return {
-          output: `Background task started: ${taskId} (${args.subagent_type})`,
-          metadata: { task_id: taskId, session_id: session.id, status: "running" },
+          output: `Background task started: ${session.id} (${args.subagent_type})`,
+          metadata: { session_id: session.id, status: "running" },
         };
       }
 
@@ -192,15 +174,15 @@ export function createBgOutputTool(deps: {
     async execute(args, _ctx) {
       const result = await deps.bgState.getResult(args.task_id);
       if (result.status === "idle" && result.result !== undefined) {
-        return { output: result.result, metadata: { task_id: args.task_id, status: "idle" } };
+        return { output: result.result, metadata: { session_id: args.task_id, status: "idle" } };
       }
       if (result.status === "error" && result.error !== undefined) {
-        return { output: result.error, metadata: { task_id: args.task_id, status: "error" } };
+        return { output: result.error, metadata: { session_id: args.task_id, status: "error" } };
       }
       if (result.status === "running") {
-        return { output: `Task ${args.task_id} is still running`, metadata: { task_id: args.task_id, status: "running" } };
+        return { output: `Task ${args.task_id} is still running`, metadata: { session_id: args.task_id, status: "running" } };
       }
-      return { output: `Task ${args.task_id} not found`, metadata: { task_id: args.task_id, status: "unknown" } };
+      return { output: `Task ${args.task_id} not found`, metadata: { session_id: args.task_id, status: "unknown" } };
     },
   });
 }
@@ -216,9 +198,9 @@ export function createBgCancelTool(deps: {
       task_id: z.string(),
     },
     async execute(args, _ctx) {
-      const entry = deps.registry.getByTaskId(args.task_id);
+      const entry = deps.registry.getBySessionId(args.task_id);
       if (!entry) {
-        return { output: `Task ${args.task_id} not found`, metadata: { task_id: args.task_id, status: "unknown" } };
+        return { output: `Task ${args.task_id} not found`, metadata: { session_id: args.task_id, status: "unknown" } };
       }
 
       deps.client.session.delete({ path: { id: entry.sessionId } }).catch(() => {});
@@ -226,7 +208,7 @@ export function createBgCancelTool(deps: {
 
       return {
         output: `Task ${args.task_id} cancelled`,
-        metadata: { task_id: args.task_id, status: "cancelled" },
+        metadata: { session_id: args.task_id, status: "cancelled" },
       };
     },
   });

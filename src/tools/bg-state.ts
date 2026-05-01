@@ -49,20 +49,20 @@ export function createBgTaskState(deps: {
     if (noReply) {
       notification = `<system-reminder>
 [BACKGROUND TASK COMPLETED]
-**ID:** \`${task.taskId}\`
+**ID:** \`${task.sessionId}\`
 **Agent:** ${task.agent}
 **Description:** ${task.description}
 
 **${remaining.length} task(s) still in progress.**
 Do NOT poll — continue productive work.
-Use task(task_id="${task.taskId}") to retrieve this result when ready.
+Use task(task_id="${task.sessionId}") to retrieve this result when ready.
 </system-reminder>`;
     } else {
       notification = `<system-reminder>
 [ALL BACKGROUND TASKS COMPLETE]
-- ${task.taskId}: ${task.agent} — ${task.description}
+- ${task.sessionId}: ${task.agent} — ${task.description}
 
-Use task(task_id="${task.taskId}") to retrieve each result.
+Use task(task_id="${task.sessionId}") to retrieve each result.
 </system-reminder>`;
     }
 
