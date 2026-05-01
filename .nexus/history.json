@@ -2413,6 +2413,192 @@
           "created_at": "2026-04-26T06:08:13.883Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-05-01T10:44:20.734Z",
+      "branch": "feat/async-subagent-plugin-split",
+      "plan": {
+        "id": 17,
+        "topic": "플러그인 모듈 분할 + 비동기 서브에이전트(task override) 구현",
+        "issues": [
+          {
+            "id": 1,
+            "title": "모듈 분할 경계 — plugin.ts를 3개 디렉터리(tools/hooks/infra) + 진입점으로 나눌 때 각 파일의 책임과 공개 API",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "파일 분할 설계 승인 + 상세 권고. tools/task.ts를 tools/task.ts + tools/bg-state.ts로 분할 권장 (단일파일 300줄 초과 우려). cmuxQueue는 모듈레벨 상태가 아닌 createCmuxClient() 팩토리 패턴으로 e2e 테스트 격리 보장. hooks/session.ts는 분할 불필요 (~189줄). bgState → hooks 연동은 DI 패턴(HookDeps.bgState)으로 순환참조 방지. 최종 파일맵: plugin.ts(50), infra/nexus.ts(90), infra/cmux.ts(180), hooks/session.ts(190), tools/bg-state.ts(120), tools/task.ts(130). 의존성 단방향 검증 완료.",
+                "recorded_at": "2026-05-01T10:05:42.899Z",
+                "agent_id": "ses_21d081035ffebuFIZt7URosW6n"
+              }
+            ],
+            "decision": "**architect 권고 채택. plugin.ts → 3개 디렉터리(tools, hooks, infra) + 진입점으로 분할.**\n\n**파일 구조 (6개 파일, 각 200줄 이내):**\n\n| 파일 | 예상 줄수 | 책임 |\n|------|----------|------|\n| `infra/nexus.ts` | ~90 | NEXUS_GITIGNORE, TAG_INSTRUCTIONS, NEXUS_AGENTS, ensureNexusStructure, extractLeadingTag, stripLeadingTag, toAgentConfig, mergeAgentConfig |\n| `infra/cmux.ts` | ~180 | createCmuxClient() 팩토리 → cmuxNotify, cmuxSetStatus, cmuxClearStatus, cmuxClearLog, cmuxLog, extractErrorSummary, isAbortError, buildResponseReadyBody, isPreviewDebugEnabled + 모든 PILL/RUNNING/NEEDS_INPUT 상수 |\n| `hooks/session.ts` | ~190 | createHooks(deps) 팩토리 → config, event, chat.message, tool.execute.before, permission.ask. 내부에 rootSessions Set, rootSessionLastText Map, assistantTurnActive Map, sessionRunning Set 보유 |\n| `tools/bg-state.ts` | ~120 | createBgTaskState(deps) 팩토리 → bgTasks Map, spawn/monitor/complete/notify. BgTaskState 인터페이스 export |\n| `tools/task.ts` | ~130 | createTaskOverride(bgState) → 커스텀 task 툴. nxBgOutputTool, nxBgCancelTool. bg-state.ts를 import |\n| `plugin.ts` | ~50 | OpencodeNexus 진입점. 모듈 팩토리 호출, Hooks 객체 조립 |\n\n**핵심 설계 결정:**\n\n1. **cmuxQueue → createCmuxClient() 팩토리** — 모듈레벨 상태 공유 방지, e2e 테스트 격리 보장 (architect Finding #1, critical). factory가 인스턴스별 cmuxQueue Promise를 클로저에 가둠.\n\n2. **bgState → hooks 연동: DI 패턴** — HookDeps에 `bgState?: BgTaskState` 옵셔널 필드. hooks/session.ts는 tools/bg-state.ts를 import하지 않음. plugin.ts가 양쪽을 조립. 순환참조 제로.\n\n3. **이벤트 핸들러 bg 세션 분기**: session.idle 핸들러에서 bgState 검사를 rootSessions 검사보다 먼저 수행 → early return:\n   ```ts\n   if (deps.bgState?.isBgSession(sessionID)) { deps.bgState.onIdle(sessionID); return; }\n   if (rootSessions.has(sessionID)) { /* 기존 로직 */ }\n   ```\n\n4. **hooks/session.ts 분할 불필요** — 이벤트 핸들러가 내부 if-chain으로 자연스럽게 읽히고, 분할 시 4개 상태 Map을 파라미터로 전달하는 보일러플레이트가 이득을 상쇄.\n\n**의존성 그래프 (단방향, 무순환):**\n```\nLayer 1 (leaf):  infra/nexus.ts, infra/cmux.ts  [프로젝트 의존성 0]\nLayer 2:         tools/bg-state.ts               [→ infra/cmux.ts]\nLayer 3:         hooks/session.ts                [→ infra/nexus.ts, infra/cmux.ts]\nLayer 4 (root):  plugin.ts                      [→ all modules]\n```\n\n**기각:**\n- tools/task.ts 단일 파일로 통합 — ~300줄 예상으로 200줄 목표 초과. bgTasks 상태머신(120줄)과 툴 정의(130줄)는 SRP상 분리 타당.\n- bg-state.ts를 infra/로 배치 — bgTasks 상태머신은 도메인 로직이지 인프라가 아님. infra는 cmux CLI, nexus dir 같은 플랫폼 접점만.\n- hooks/session.ts를 onSessionIdle, onSessionError 등으로 분할 — 189줄이면 한 파일에 충분. 분할 시 4개 상태 Map을 매개변수로 주고받는 계약 비용이 가독성 이득을 초과."
+          },
+          {
+            "id": 2,
+            "title": "task 툴 오버라이드 설계 — built-in task를 대체하는 커스텀 task 툴의 파라미터 스키마, sync/async 경로 분기, 세션 생성 방식",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "Option A(event-hook completion injection) 권고. 파라미터: description, prompt, subagent_type, async(z.boolean().optional().default(true)), task_id?, command?. sync 경로: client.session.create → client.session.prompt() 동기 호출 → 결과 반환. async 경로: session.create + promptAsync + TaskRegistry 등록 → task_id 즉시 반환. 완료 감지: session.idle 이벤트 → injectTaskCompletion() → parent에 <system-reminder> 주입. Resume: task_id로 TaskRegistry 조회. Permission: ctx.ask()로 spawn 전 허가. TaskRegistry는 인메모리 Map. 파일: src/tools/task.ts + src/tools/registry.ts.",
+                "recorded_at": "2026-05-01T10:14:57.364Z",
+                "agent_id": "ses_21cfe638effepYQsvuN3ExizyW"
+              }
+            ],
+            "decision": "**architect Option A 채택. 커스텀 task 툴로 내장 task 오버라이드.**\n\n**파라미터 스키마 (Zod v4 raw shape):**\n```ts\nargs: {\n  description:   z.string(),                            // required\n  prompt:        z.string(),                            // required\n  subagent_type: z.string(),                            // required\n  async:         z.boolean().optional().default(true),  // default true = background\n  task_id:       z.string().optional(),                 // resume/tracking\n  command:       z.string().optional(),                 // deferred\n}\n```\n\n**세 경로 분기:**\n\n| 경로 | 트리거 | 동작 |\n|------|--------|------|\n| **async** | `async: true` (default) + task_id 없음 | `session.create({parentID})` → `TaskRegistry.register()` → `promptAsync()` → `task_id` 즉시 반환. parent는 블록 안 됨. |\n| **sync** | `async: false` | `session.create({parentID})` → `session.prompt()` 동기 호출 → assistant text 추출 → 결과 반환. parent 블록됨. |\n| **resume** | `task_id` 제공됨 | TaskRegistry 조회. running이면 상태 반환. idle이면 `session.messages()`로 결과 반환. 없으면 새 task로 생성. |\n\n**세션 생성 방식:**\n- `client.session.create({ body: { parentID: ctx.sessionID, title: args.description } })` — built-in task 툴과 동일한 upstream precedent\n- `agent` 파라미터로 `subagent_type` 전달 → child 세션이 해당 agent의 model/permission/prompt를 상속\n- model override 없음 — agent config의 기본 model 사용 (기존 toAgentConfig 패턴과 정합)\n\n**Permission:** `ctx.ask()`로 spawn 전 허가 요청 (resume은 skip). built-in task 툴과 동일 패턴.\n\n**ToolResult 형식:**\n```\nasync:  { output: \"Task spawned: nx_bg_<id>\", metadata: { task_id, session_id, status: \"running\" } }\nsync:   { output: \"<assistant text>\", metadata: { task_id, session_id, status: \"completed\" } }\nresume: { output: \"<result or status>\", metadata: { task_id, status } }\n```\n\n**TaskRegistry (src/tools/registry.ts):**\n- 인메모리 `Map<taskId, TaskEntry>`\n- `register()`, `getByTaskId()`, `getBySessionId()`, `removeBySessionId()`, `removeByParentSessionId()`\n- TaskEntry: `{ taskId, sessionId, parentSessionId, status: \"running\"|\"idle\"|\"error\", error?, result? }`\n- **비영속** — 플러그인 재시작/세션 재시작 시 소멸 (MVP 허용 범위)\n\n**기각:**\n- `async`를 required로 — Nexus의 primary value prop이 병렬 orchestration이므로 default true가 자연스러움. 명시적 `false`가 필요한 케이스(순차 의존 작업)만 opt-out.\n- Polling loop 방식 (Option B) — tool execute가 Promise를 반환해야 하는 계약 위반. async fire-and-forget 불가.\n- sync subagent proxy 방식 (Option C) — parent LLM 턴을 블록해 Nexus orchestration 가치 소멸.\n- 별도 task_status 툴 분리 (Option D) — 툴 2개 유지보수 부담. 단일 task 툴이 resume으로 상태 조회도 겸함."
+          },
+          {
+            "id": 3,
+            "title": "bgTasks 상태머신 — 백그라운드 작업 추적(Map), 라이프사이클(session.idle 감지 → 완료 → 알림 주입), notification 템플릿",
+            "status": "decided",
+            "decision": "**TaskRegistry 기반 상태머신. 수명주기: running → idle | error.**\n\n**상태 전이:**\n\n```\nregister(taskId, sessionId, parentSessionId)\n  → status: \"running\"\n      ↓ (session.idle event + messages fetch 성공)\n  → status: \"idle\", result = <assistant text>\n      ↓ (session.error event)\n  → status: \"error\", error = <error summary>\n      ↓ (session.deleted event)\n  → registry entry 제거\n```\n\n**TaskRegistry API:**\n| 메서드 | 동작 |\n|--------|------|\n| `register(taskId, sessionId, parentSessionId)` | 새 entry 생성, status=\"running\" |\n| `getByTaskId(taskId)` | task_id로 조회 |\n| `getBySessionId(sessionId)` | session.idle 이벤트 발생 시 child 세션을 task로 매핑 |\n| `setIdle(sessionId, result)` | status=\"idle\" + result 저장 |\n| `setError(sessionId, error)` | status=\"error\" + error 저장 |\n| `removeBySessionId(sessionId)` | session.deleted 시 정리 |\n| `removeByParentSessionId(parentId)` | 부모 세션 삭제 시 자식 전체 정리 |\n\n**완료 알림(injectTaskCompletion):**\n\n1. `session.messages({ path: { id: sessionId } })` → 마지막 assistant text 추출\n2. 부모 세션의 남은 running task 카운트 확인\n3. `client.session.promptAsync({ path: { id: parentSessionId }, body: { parts, noReply } })`:\n   - 다른 bg task 진행 중 → `noReply: true` (알림만, 응답 트리거 안 함)\n   - 모든 bg task 완료 → `noReply: false` (자동 응답 트리거)\n4. parts: `[{ type: \"text\", text: \"<system-reminder>...</system-reminder>\" }]`\n\n**Notification 템플릿:**\n\n일부 완료 (`noReply: true`):\n```\n<system-reminder>\n[BACKGROUND TASK COMPLETED]\n**ID:** `nx_bg_<id>`\n**Agent:** engineer\n**Description:** <description>\n\n**N task(s) still in progress.**\nDo NOT poll — continue productive work.\nUse task(task_id=\"nx_bg_<id>\") to retrieve this result when ready.\n</system-reminder>\n```\n\n전체 완료 (`noReply: false`):\n```\n<system-reminder>\n[ALL BACKGROUND TASKS COMPLETE]\n- nx_bg_<id>: engineer — <description>\n- nx_bg_<id>: researcher — <description>\n\nUse task(task_id=\"<id>\") to retrieve each result.\n</system-reminder>\n```\n\n**task_id 형식:** `nx_bg_<8자 hex>` (예: `nx_bg_a1b2c3d4`)\n"
+          },
+          {
+            "id": 4,
+            "title": "이벤트 훅 통합 — 기존 root-session-only 필터를 유지하면서 bg session 이벤트를 처리하는 방식",
+            "status": "decided",
+            "decision": "**기존 root-session-only 필터 유지. bg session 이벤트는 root 검사 이전에 early return으로 처리.**\n\n**session.created:** 기존 로직 유지 (parentID 없으면 rootSessions 등록). child session도 created 이벤트가 발생하지만, parentID가 있으므로 rootSessions에 들어가지 않아 기존 필터에 자연스럽게 걸러짐. → **변경 없음.**\n\n**session.idle (핵심 변경):**\n```ts\nif (event.type === \"session.idle\") {\n  const sid = event.properties.sessionID;\n  // 1. bg task 세션 먼저 검사\n  if (deps.bgState?.isBgSession(sid)) {\n    await deps.bgState.onIdle(sid);\n    return;  // early return — root 로직 건너뜀\n  }\n  // 2. 기존 root session 로직\n  if (rootSessions.has(sid)) {\n    const lastText = rootSessionLastText.get(sid);\n    cmuxNotify(\"opencode-nexus\", buildResponseReadyBody(lastText));\n    cmuxSetStatus(PILL_KEY, NEEDS_INPUT_VALUE, NEEDS_INPUT_ICON, PILL_COLOR);\n    // ... 기존 cleanup\n    return;\n  }\n}\n```\n\n**session.error:** 동일 패턴 — bg session 먼저 검사 후 early return:\n```ts\nif (deps.bgState?.isBgSession(sessionID)) {\n  deps.bgState.onError(sessionID, error);\n  return;\n}\n// ... 기존 root session error 로직\n```\n\n**session.deleted:** bg session cleanup 추가:\n```ts\nif (deps.bgState?.isBgSession(info.id)) {\n  deps.bgState.removeBySessionId(info.id);\n  // rootSessions에 없으면 여기서 return (추가 cleanup 불필요)\n}\n// ... 기존 root session deleted 로직\n```\n\n**session.status:** bg session은 busy/retry/idle 무시 — cmux pill 제어는 root만. → **변경 없음** (isBgSession 검사 추가하지 않음 — 불필요한 오버헤드).\n\n**message.part.updated:** bg session의 text part는 캐시하지 않음 — 완료 시 `session.messages()`로 풀 페치. → **변경 없음** (기존 rootSessions.has() 필터가 child를 자동 배제).\n\n**HookDeps 인터페이스:**\n```ts\ninterface BgTaskState {\n  isBgSession(sessionID: string): boolean;\n  onIdle(sessionID: string): Promise<void>;\n  onError(sessionID: string, error: unknown): void;\n  removeBySessionId(sessionID: string): void;\n}\n```\n`hooks/session.ts`는 `tools/bg-state.ts`를 import하지 않고, `BgTaskState` 인터페이스를 `HookDeps`의 옵셔널 필드로 받음 (DI 패턴, 순환참조 제로)."
+          },
+          {
+            "id": 5,
+            "title": "워치독 & 오류 복구 — promptAsync idle wake 실패(#21524), stuck session, 타임아웃, cleanup 전략",
+            "status": "decided",
+            "decision": "**3단계 방어: best-effort 타임아웃 + resume fallback + orphan cleanup.**\n\n**1. promptAsync wake 실패 방어 (#21524):**\n- 새 child session을 `session.create` 직후 즉시 `promptAsync`로 prompt — idle session wake race 회피 (empirical memory §4.8 권고).\n- `promptAsync` 호출 직후 짧은 지연(500ms) 후 child session status 확인: busy 상태로 전이했으면 정상, 아니면 wake-failed로 간주.\n- wake-failed 시: 1회 retry (promptAsync 재호출). 그래도 실패하면 task status = \"error\", parent에 실패 알림 주입.\n\n**2. Stuck session 타임아웃:**\n- 기본 타임아웃: 10분 (환경변수 `OPENCODE_NEXUS_BG_TIMEOUT_MS`로 오버라이드 가능).\n- `setTimeout`으로 타임아웃 스케줄링. 타임아웃 시:\n  - `session.abort()` 호출 (cooperative-only — #21176 제약 인지)\n  - status = \"error\", error = \"timeout\"\n  - parent에 타임아웃 알림 주입 (noReply: true)\n\n**3. Orphan cleanup:**\n- `session.deleted` 이벤트: removeBySessionId() + removeByParentSessionId()로 registry 정리.\n- parent recursive delete → child가 먼저 deleted 이벤트 발생 (empirical memory §4.5 확인 완료). 이벤트 순서 의존하지 않고 양쪽 id 기반 정리.\n\n**4. No persistence (MVP 범위):**\n- TaskRegistry는 인메모리. 플러그인 재시작 시 모든 bg task 추적 소멸.\n- orphan session은 OpenCode가 자체적으로 session 목록에 유지 — 수동 정리 가능.\n- 추후 `.nexus/state/bg-tasks.json` 파일 기반 영속화는 별도 cycle.\n\n**구현 간소화:**\n- watchdog/retry는 `tools/bg-state.ts` 내부 `scheduleWatchdog(taskId, sessionId, timeoutMs)` 함수로 캡슐화.\n- `clearWatchdog(taskId)` → idle/error/completed 시 타임아웃 해제.\n- watchdog 로직은 bg-state.ts의 private 구현 — 외부 모듈에 노출하지 않음."
+          }
+        ],
+        "research_summary": "**컨텍스트:** 사용자 요청 — OpenCode 내장 task 툴을 오버라이드해 `async: bool` 파라미터를 추가, 백그라운드 비동기 서브에이전트 호출 지원. 동시에 464줄 monolithic plugin.ts를 tools/hooks/infra 3개 디렉터리로 분할. oh-my-openagent의 구현 패턴(툴 오버라이드 + promptAsync 알림 주입)을 참고.\n\n**기존 지식:**\n- `empirical-opencode-async-session.md` (552줄) — SDK 1.14.21에서 `session.create({parentID})`, `session.promptAsync()`, `session.messages()` 동작 검증 완료. child session 이벤트가 plugin event hook으로 전달됨 확인. promptAsync idle wake 불안정(#21524) — watchdog 필수. parent silent notification primitive 없음(#20460).\n- `pattern-opencode-plugin-surface.md` — 현재 plugin이 이미 `childSessionToTask` 맵, `childSessionLastText` 맵, `busyObserved` 추적을 운용 중 (Phase 1 async spawn).\n- `external-opencode-plugin-versions.md` — SDK 1.14.21, plugin 1.14.21. hook/event signature 안정적(1.4.9~1.14.21 불변).\n\n**SDK 검증 완료 API:**\n- `client.session.create({ body: { parentID, title } })` → child `Session` 반환, `parentID` 필드 포함\n- `client.session.promptAsync({ path: { id }, body: { parts: [{type:\"text\", text}], noReply, agent } })` → 204 즉시 반환, fire-and-forget\n- `client.session.messages({ path: { id } })` → 완료 후 결과 조회\n- `session.idle`, `session.deleted`, `message.part.updated` 이벤트 — child session도 plugin hook으로 전달됨\n- `session.children({ path: { id } })` → 부모의 자식 세션 목록 조회\n\n**알려진 제약:**\n1. #21524: promptAsync noReply:false가 idle session을 깨우지 못할 수 있음 (간헐적)\n2. #21176: session.abort()는 cooperative-only, force-kill 없음\n3. #20460: parent에 silent notification 주입 프리미티브 없음 → promptAsync로 명시적 턴 소비 필요\n4. #17412: plugin event hook은 observational only, AI-visible message injection 불가\n\n**omo 레퍼런스:**\n- 내장 task 툴을 플러그인에서 `delegateTask`로 오버라이드\n- `run_in_background: boolean` 파라미터 추가\n- 완료 감지 → `client.session.promptAsync()`로 부모 세션에 `<system-reminder>` 주입\n- `noReply: true` (일부 완료) / `noReply: false` (전체 완료 → 자동 응답)\n\n**범위:** plugin.ts 분할 + task override + bg task 시스템. 기존 cmux 알림, agent config merge, 태그 파싱 등은 그대로 이전.",
+        "created_at": "2026-05-01T09:56:02.448Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "infra/nexus.ts — 환경 초기화 + agent config 모듈 추출",
+          "status": "completed",
+          "context": "plugin.ts(464줄)에서 순수 유틸리티와 상수를 infra/nexus.ts로 추출. 새 로직 추가 없음 — 기존 코드를 그대로 모듈화.",
+          "acceptance": "- src/infra/nexus.ts 파일 존재.\n- NEXUS_GITIGNORE, TAG_INSTRUCTIONS, NEXUS_AGENTS export.\n- ensureNexusStructure(), extractLeadingTag(), stripLeadingTag() export.\n- toAgentConfig(), mergeAgentConfig() export.\n- PILL_KEY, RUNNING_ICON 등 UI 상수는 infr/cmux.ts로 이동하므로 여기에 포함하지 않음.\n- bun run check exit 0 (타입 오류 없음).\n- 기존 plugin.ts에서 해당 코드가 제거되고 import로 대체됨 (task 7에서 plugin.ts 재작성).",
+          "approach": "plugin.ts의 module-level 상수·함수를 infra/nexus.ts로 복사 후 export. agent import는 그대로 유지 (src/agents/*).",
+          "risk": "agents import 경로가 상대경로 `../agents/`로 변경되어야 함 (현재 `./agents/`).",
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-05-01T10:17:09.413Z"
+        },
+        {
+          "id": 2,
+          "title": "infra/cmux.ts — cmux 알림 파이프라인 추출 (factory 패턴)",
+          "status": "completed",
+          "context": "plugin.ts의 cmux 관련 코드(cmuxQueue, cmuxSpawn, cmuxNotify, cmuxSetStatus, cmuxClearStatus, cmuxClearLog, cmuxLog, 에러 헬퍼, preview 유틸, UI 상수)를 infra/cmux.ts로 추출. cmuxQueue 모듈레벨 상태 이슈 해결을 위해 createCmuxClient() 팩토리 패턴 적용.",
+          "acceptance": "- src/infra/cmux.ts 파일 존재.\n- createCmuxClient() 팩토리 함수 export → { cmuxNotify, cmuxSetStatus, cmuxClearStatus, cmuxClearLog, cmuxLog, extractErrorSummary, isAbortError, buildResponseReadyBody, isPreviewDebugEnabled } 반환.\n- 모든 PILL_*, RUNNING_*, NEEDS_INPUT_*, LOG_SOURCE, RESPONSE_READY_FALLBACK, PREVIEW_MAX_LEN, PRE_CHECK_MARKER 상수 export.\n- cmuxQueue는 factory 클로저 내부로 이동 (모듈레벨 상태 없음).\n- bun run check exit 0.",
+          "approach": "기존 cmux 함수들을 createCmuxClient() 내부로 이동. factory가 호출될 때마다 새로운 cmuxQueue Promise 생성.",
+          "risk": "e2e 테스트가 plugin.ts를 dynamic import하므로 factory 호출 타이밍 확인 필요. stripPreCheck/truncateForNotification은 buildResponseReadyBody 내부에서만 사용되므로 export 불필요.",
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-05-01T10:17:22.752Z"
+        },
+        {
+          "id": 3,
+          "title": "tools/registry.ts — TaskRegistry 인메모리 맵",
+          "status": "completed",
+          "context": "백그라운드 task 추적을 위한 경량 인메모리 레지스트리. Map<string, TaskEntry> 기반.",
+          "acceptance": "- src/tools/registry.ts 파일 존재.\n- TaskEntry 타입 export: { taskId, sessionId, parentSessionId, status: \"running\"|\"idle\"|\"error\", agent, result?, error? }\n- TaskRegistry 클래스 export: register(), getByTaskId(), getBySessionId(), setIdle(), setError(), removeBySessionId(), removeByParentSessionId(), getRunningByParent().\n- bun run check exit 0.",
+          "approach": "클래스 내부에 `private map = new Map<string, TaskEntry>()` + `private sessionIndex = new Map<string, string>()`. sessionIndex는 sessionId → taskId 역인덱스.",
+          "risk": "없음 — 순수 데이터 구조, 외부 의존성 제로.",
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-05-01T10:17:32.353Z"
+        },
+        {
+          "id": 4,
+          "title": "tools/bg-state.ts — 백그라운드 상태머신 + watchdog",
+          "status": "completed",
+          "context": "TaskRegistry를 감싸는 상태머신. session create/promptAsync 호출, 완료 감지 시 parent notification 주입, watchdog 타임아웃 관리. SDK client를 주입받아 동작.",
+          "acceptance": "- src/tools/bg-state.ts 파일 존재.\n- createBgTaskState(deps: { client, registry }) 팩토리 함수 export.\n- BgTaskState 인터페이스 export: { isBgSession, onIdle, onError, removeBySessionId, spawnTask, getResult }.\n- spawnTask(taskId, sessionId, parentSessionId, agent, timeoutMs?) → session.create + promptAsync 호출 + watchdog 스케줄링.\n- onIdle(sessionId) → session.messages()로 결과 수집 → setIdle() → injectTaskCompletion().\n- injectTaskCompletion() → noReply 계산 후 parent에 promptAsync로 <system-reminder> 주입.\n- watchdog: setTimeout 기반. 완료/에러 시 clearTimeout. 타임아웃 시 session.abort() + setError().\n- notification 템플릿 정확 (일부 완료/전체 완료 구분).\n- bun run check exit 0.",
+          "approach": "createBgTaskState()가 받은 client를 클로저에 가둠. spawnTask 내부에서 session.create → promptAsync 호출. onIdle은 session.messages() 호출 후 마지막 assistant text 파싱. watchdog는 Map<taskId, NodeJS.Timeout>으로 관리.",
+          "risk": "promptAsync idle wake 실패(#21524) — spawnTask에서 create 직후 즉시 promptAsync로 회피. session.messages() 응답 shape (SDK result.data wrapper) 처리 주의.",
+          "deps": [
+            3
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_21cef5964ffeMfNaMT3gLC5y2f"
+          },
+          "created_at": "2026-05-01T10:17:48.059Z"
+        },
+        {
+          "id": 5,
+          "title": "tools/task.ts — 커스텀 task 툴 + nx_bg_output + nx_bg_cancel",
+          "status": "completed",
+          "context": "내장 task 툴을 오버라이드하는 커스텀 툴. async:true(기본)이면 bg-state를 통해 백그라운드 spawn. async:false면 동기 prompt 호출. task_id 제공 시 resume. nx_bg_output/nx_bg_cancel은 bg-state를 조회/취소.",
+          "acceptance": "- src/tools/task.ts 파일 존재.\n- createTaskTool(deps: { client, directory, registry, bgState }) 팩토리 함수 export → ToolDefinition 반환.\n- createBgOutputTool(deps: { bgState }), createBgCancelTool(deps: { client, bgState }) export.\n- task 툴 파라미터: description, prompt, subagent_type, async(z.boolean().optional().default(true)), task_id?, command?\n- async=true: ctx.ask() → session.create({parentID}) → registry.register() → bgState.spawnTask() → task_id 즉시 반환.\n- async=false: ctx.ask() → session.create → session.prompt() 동기 호출 → assistant text 반환.\n- task_id resume: registry.getByTaskId() → running이면 상태, idle이면 session.messages() 결과, 없으면 새 task.\n- nx_bg_output(task_id): registry 조회 → 결과/상태 반환.\n- nx_bg_cancel(task_id): registry 조회 → session.delete() → registry.setError().\n- bun run check exit 0.",
+          "approach": "@opencode-ai/plugin의 tool() 팩토리 사용. execute 함수 내에서 args.async 분기. client, registry, bgState는 factory 시점에 주입.",
+          "risk": "ctx.ask()의 permission 파라미터 형식 확인 필요. session.prompt() 동기 응답에서 assistant text 추출 방식 (response.parts 배열 파싱).",
+          "deps": [
+            4
+          ],
+          "owner": {
+            "role": "engineer",
+            "resume_tier": "bounded",
+            "agent_id": "ses_21ce5986dffedh3A2ZeqpEvLE0"
+          },
+          "created_at": "2026-05-01T10:18:04.514Z"
+        },
+        {
+          "id": 6,
+          "title": "hooks/session.ts — 훅 통합 + bg session 이벤트 분기",
+          "status": "completed",
+          "context": "plugin.ts의 모든 훅 핸들러(config, event, chat.message, tool.execute.before, permission.ask)를 hooks/session.ts로 추출. HookDeps DI 패턴으로 infra 모듈과 bgState를 주입받음. event 핸들러에 bg session 검사 분기 추가.",
+          "acceptance": "- src/hooks/session.ts 파일 존재.\n- createHooks(deps: { directory, cmux, nexus, bgState? }) 팩토리 함수 export → { config, event, \"chat.message\", \"tool.execute.before\", \"permission.ask\" } 반환.\n- config: NEXUS_AGENTS 순회 → toAgentConfig + mergeAgentConfig + default_agent=\"lead\". 기존 동작 보존.\n- event: 모든 기존 이벤트 타입 처리(session.created/deleted/idle/status/error, message.part.updated, permission.replied) + bg session 분기(session.idle/error/deleted).\n- session.idle: isBgSession 검사 먼저 → onIdle() 호출 후 early return. rootSessions.has()는 그 다음.\n- session.error, session.deleted: 동일 패턴.\n- chat.message: extractLeadingTag/stripLeadingTag 호출 → TAG_INSTRUCTIONS 조회 → text part rewrite.\n- tool.execute.before: question 툴 감지 → cmuxNotify/SetStatus.\n- permission.ask: cmuxNotify/SetStatus.\n- 내부 상태(rootSessions, rootSessionLastText, assistantTurnActive, sessionRunning)는 createHooks 클로저에 유지.\n- bun run check exit 0.",
+          "approach": "기존 plugin.ts의 Plugin 함수 내부 코드를 createHooks()로 이동. nexus, cmux 인스턴스는 HookDeps로 주입받음. bgState는 옵셔널 — 없으면 bg 분기 건너뜀.",
+          "risk": "config 훅에서 config 객체를 mutate하는 패턴이 그대로 유지되어야 함 (SDK가 객체 참조를 통해 설정 반영). event 핸들러 내 변수 참조(rootSessions 등)가 클로저로 올바르게 캡처되는지 확인.",
+          "deps": [
+            1,
+            2
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-05-01T10:18:23.562Z"
+        },
+        {
+          "id": 7,
+          "title": "plugin.ts — 진입점 재작성 + 모듈 조립",
+          "status": "completed",
+          "context": "기존 464줄 plugin.ts를 ~50줄 진입점으로 재작성. 모든 모듈 팩토리를 호출하고 Hooks 객체를 조립. 기존 코드는 infra/, hooks/, tools/로 이동되었으므로 plugin.ts에는 import + assembly만 남음.",
+          "acceptance": "- src/plugin.ts 파일이 60줄 이내.\n- OpencodeNexus: Plugin export 유지 (외부 인터페이스 불변).\n- createCmuxClient(), createHooks(), createBgTaskState(), createTaskTool() 등 모든 팩토리 호출.\n- tool 객체에 task, nx_bg_output, nx_bg_cancel 등록.\n- Hooks 객체에 config, event, chat.message, tool.execute.before, permission.ask 포함.\n- bun run check exit 0.\n- bun run test:e2e exit 0 (모든 시나리오 PASS).",
+          "approach": "plugin.ts에서 모든 import를 새 모듈 경로로 변경. Plugin 함수 내에서 팩토리 호출 → Hooks 조립 → 반환. 기존 plugin.ts 코드는 모두 제거 (이미 다른 파일로 이동).",
+          "risk": "e2e 테스트가 `import(\"../src/plugin.ts\")`로 동적 로드하므로 export interface 불변이 중요. OpencodeNexus default export 유지.",
+          "deps": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-05-01T10:18:36.750Z"
+        },
+        {
+          "id": 8,
+          "title": "검증 — build check + e2e 회귀 + lint",
+          "status": "completed",
+          "context": "모든 변경 완료 후 자동 검증 실행. TypeScript 컴파일, e2e 시나리오 전체 통과, lint 오류 없음 확인.",
+          "acceptance": "- bun run check exit 0 (tsc --noEmit + sync:dry).\n- bun run test:e2e exit 0 (시나리오 A~D 모두 PASS).\n- bun run lint exit 0 (있는 경우).\n- src/plugin.ts 60줄 이내.\n- 새 파일 6개(infra/nexus.ts, infra/cmux.ts, hooks/session.ts, tools/registry.ts, tools/bg-state.ts, tools/task.ts) 모두 존재.\n- grep으로 src/ 디렉터리에 import 순환참조 없음 확인.",
+          "deps": [
+            7
+          ],
+          "owner": {
+            "role": "tester"
+          },
+          "created_at": "2026-05-01T10:18:44.953Z"
+        }
+      ]
     }
   ]
 }
