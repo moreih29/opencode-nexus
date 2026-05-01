@@ -47,7 +47,10 @@ export function createTaskTool(deps: {
     description: "Launch or resume background subagent tasks",
     args: taskArgs,
     async execute(args, ctx) {
-      const regEntry = args.task_id ? deps.registry.getByTaskId(args.task_id) : undefined;
+      let regEntry = args.task_id ? deps.registry.getByTaskId(args.task_id) : undefined;
+      if (!regEntry && args.task_id) {
+        regEntry = deps.registry.getBySessionId(args.task_id);
+      }
 
       if (args.task_id && regEntry) {
         if (regEntry.status === "idle") {
