@@ -53,6 +53,48 @@ export function createTaskTool(deps: {
       }
 
       if (args.task_id && regEntry) {
+        // Resume with new prompt → continue the existing session
+        if (args.prompt) {
+          const isAsync = args.async !== false;
+          await Effect.runPromise(ctx.ask({
+            permission: "task",
+            patterns: ["*"],
+            always: [],
+            metadata: {},
+          }));
+
+          if (isAsync) {
+            deps.registry.register({
+              taskId: args.task_id,
+              sessionId: regEntry.sessionId,
+              parentSessionId: ctx.sessionID,
+              agent: args.subagent_type || regEntry.agent,
+              description: args.description || regEntry.description,
+            });
+            await deps.bgState.spawnTask(
+              args.task_id, regEntry.sessionId, ctx.sessionID,
+              args.subagent_type || regEntry.agent,
+              args.description || regEntry.description,
+              args.prompt,
+            );
+            return {
+              output: `Resumed background task: ${args.task_id} (${args.subagent_type || regEntry.agent})`,
+              metadata: { task_id: args.task_id, session_id: regEntry.sessionId, status: "running" },
+            };
+          }
+
+          const promptRes = await deps.client.session.prompt({
+            path: { id: regEntry.sessionId },
+            body: { parts: [{ type: "text", text: args.prompt }] },
+          });
+          const resultText = extractLastAssistantText(promptRes.data);
+          return {
+            output: resultText,
+            metadata: { status: "completed" },
+          };
+        }
+
+        // Status query (no prompt) → return stored state
         if (regEntry.status === "idle") {
           const result = await deps.bgState.getResult(args.task_id);
           return {
@@ -72,7 +114,7 @@ export function createTaskTool(deps: {
         };
       }
 
-      const isAsync = args.task_id ? true : args.async !== false;
+      const isAsync = args.async !== false;
 
       if (isAsync) {
         const taskId = args.task_id ? args.task_id : randomTaskId();
