@@ -43,33 +43,32 @@ export function createBgTaskState(deps: {
 
   async function injectTaskCompletion(task: TaskEntry): Promise<void> {
     const remaining = registry.getRunningByParent(task.parentSessionId);
-    const noReply = remaining.length > 0;
+    const allDone = remaining.length === 0;
 
     let notification: string;
-    if (noReply) {
-      notification = `<system-reminder>
-[BACKGROUND TASK COMPLETED]
-**ID:** \`${task.sessionId}\`
-**Agent:** ${task.agent}
-**Description:** ${task.description}
-
-**${remaining.length} task(s) still in progress.**
-Do NOT poll — continue productive work.
-Use task(task_id="${task.sessionId}") to retrieve this result when ready.
-</system-reminder>`;
-    } else {
+    if (allDone) {
       notification = `<system-reminder>
 [ALL BACKGROUND TASKS COMPLETE]
 - ${task.sessionId}: ${task.agent} — ${task.description}
 
 Use task(task_id="${task.sessionId}") to retrieve each result.
 </system-reminder>`;
+    } else {
+      notification = `<system-reminder>
+[BACKGROUND TASK COMPLETED]
+**ID:** \`${task.sessionId}\`
+**Agent:** ${task.agent}
+**Description:** ${task.description}
+
+**${remaining.length} task(s) still in progress:** ${remaining.map(t => `\`${t.sessionId}\` (${t.agent})`).join(", ")}
+Retrieve this completed result with task(task_id="${task.sessionId}") and continue working.
+</system-reminder>`;
     }
 
     try {
       await client.session.promptAsync({
         path: { id: task.parentSessionId },
-        body: { noReply, parts: [{ type: "text", text: notification }] },
+        body: { noReply: false, parts: [{ type: "text", text: notification }] },
       });
     } catch {
       // best-effort notification; swallow failures
