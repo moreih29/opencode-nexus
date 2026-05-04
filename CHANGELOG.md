@@ -2,6 +2,16 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.19.1] — 2026-05-04
+
+### 버그 수정
+
+- **`task()` / `nx_bg_output` busy-polling 방지**. 백그라운드 작업이 실행 중일 때의 응답을 "still running" 대신 "DO NOT poll, system-reminder가 결과를 전달할 것"이라는 명시적 안내로 변경. Lead가 완료될 때까지 `nx_bg_output`을 반복 호출하는 polling loop 해소.
+
+### 유지보수
+
+- **stale skill 파일 동기화**. `skills/nx-auto-plan/SKILL.md`, `skills/nx-plan/SKILL.md`가 nexus-core 0.20.1 spec의 최신 Rule(4-rule auto-plan, multi-angle evidence plan)을 반영하도록 재생성.
+
 ## [0.19.0] — 2026-05-01
 
 ### 신규 기능

@@ -66,7 +66,11 @@ export function createTaskTool(deps: {
               args.prompt,
             );
             return {
-              output: `Resumed: ${regEntry.sessionId} (${args.subagent_type || regEntry.agent})`,
+              output: [
+                `Resumed: ${regEntry.sessionId} (${args.subagent_type || regEntry.agent})`,
+                `This runs asynchronously. DO NOT poll — when it finishes,`,
+                `a system-reminder will deliver the result here.`,
+              ].join("\n"),
               metadata: { session_id: regEntry.sessionId, status: "running" },
             };
           }
@@ -92,7 +96,10 @@ export function createTaskTool(deps: {
         }
         if (regEntry.status === "running") {
           return {
-            output: `Task ${regEntry.sessionId} still running`,
+            output: [
+              `Task ${regEntry.sessionId} still in progress. DO NOT poll.`,
+              `A system-reminder will appear when it finishes.`,
+            ].join("\n"),
             metadata: { session_id: regEntry.sessionId, status: "running" },
           };
         }
@@ -131,7 +138,12 @@ export function createTaskTool(deps: {
         );
 
         return {
-          output: `Background task started: ${session.id} (${args.subagent_type})`,
+          output: [
+            `Spawned: ${session.id} (${args.subagent_type})`,
+            `This runs asynchronously. DO NOT poll — when it finishes,`,
+            `a system-reminder will deliver the result here.`,
+            `Continue with other work or wait for the reminder.`,
+          ].join("\n"),
           metadata: { session_id: session.id, status: "running" },
         };
       }
@@ -180,7 +192,15 @@ export function createBgOutputTool(deps: {
         return { output: result.error, metadata: { session_id: args.task_id, status: "error" } };
       }
       if (result.status === "running") {
-        return { output: `Task ${args.task_id} is still running`, metadata: { session_id: args.task_id, status: "running" } };
+        return {
+          output: [
+            `Task ${args.task_id} is still in progress. DO NOT poll again.`,
+            `When it finishes, a system-reminder will deliver the result here.`,
+            `Retrieve it then with: task(task_id="${args.task_id}")`,
+            `Meanwhile, continue with other independent work.`,
+          ].join("\n"),
+          metadata: { session_id: args.task_id, status: "running" },
+        };
       }
       return { output: `Task ${args.task_id} not found`, metadata: { session_id: args.task_id, status: "unknown" } };
     },
