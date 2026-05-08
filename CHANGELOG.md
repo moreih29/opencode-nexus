@@ -2,6 +2,36 @@
 
 `opencode-nexus`의 주요 변경 사항은 이 파일에 기록한다.
 
+## [0.20.0] — 2026-05-08
+
+### 업스트림
+
+- **`@moreih29/nexus-core` `0.20.1` → `0.21.0`**. generated agents와 bundled skills를 새 core 산출물로 동기화.
+
+### 변경됨
+
+- **Strategist active surface 제거**. core 0.21.0에서 strategist agent가 제거되어, wrapper의 generated agent 목록과 `models` CLI 지원 대상에서도 strategist를 제외. 현재 지원되는 Nexus subagent는 `architect`, `designer`, `postdoc`, `engineer`, `researcher`, `writer`, `reviewer`, `tester`.
+- **0.21.0 state contract에 맞춰 workflow prompt 갱신**. `nx-auto-plan`, `nx-plan`, `nx-run` bundled skill 본문과 generated agent prompt가 새 state/task contract를 반영하도록 재생성.
+
+### 사용자 영향 / 마이그레이션
+
+- **pre-v1 정책상 minor release로 처리**. strategist 제거는 해당 agent를 직접 호출하거나 `opencode-nexus models --agents=strategist`를 사용하던 사용자에게 breaking change이므로 wrapper 버전을 `0.19.1`에서 `0.20.0`으로 올림.
+- 기존 `opencode.json`에 남아 있는 `agent.strategist.model` 같은 사용자 소유 override는 자동 제거하지 않음. 새 런타임에서는 strategist가 active agent/model target이 아니므로 해당 설정은 inert 상태로 남을 수 있으며, 원하면 사용자가 수동으로 정리해야 함.
+- 기존 설치본은 CLI 업그레이드 후 `opencode-nexus install --scope=<scope>`를 다시 실행해 plugin pin과 bundled skills를 새 버전으로 갱신.
+
+### 검증
+
+- 문서/버전 diff 확인: `git diff -- CHANGELOG.md README.md README.en.md package.json`
+- README/CHANGELOG 키워드 확인: `grep` tool로 `0.20.0`, `0.21.0`, `strategist` 관련 문구 확인
+- `bun run check` PASS
+- `bun run test:e2e` PASS (`All integration checks passed.`)
+- `npm pack --dry-run` PASS — prepack build 통과, 예상 package surface만 포함
+- 격리된 prefix에서 `npm install -g opencode-nexus-0.20.0.tgz` 후 `opencode-nexus` / `nexus-mcp` bin symlink 생성 확인
+- `nexus-mcp` JSON-RPC `initialize` handshake PASS (`serverInfo.name=nexus-core`, `version=0.21.0`)
+- MCP `tools/list` smoke PASS — `nx_artifact_list` 포함 0.21.0 tool surface 확인
+- `nx-auto-plan`, `nx-plan`, `nx-run` skill frontmatter PASS
+- strategist active-surface scan PASS — `src/`, `skills/`, `lib/`, `bin/`에는 잔존 없음; README/CHANGELOG에는 migration note만 유지
+
 ## [0.19.1] — 2026-05-04
 
 ### 버그 수정

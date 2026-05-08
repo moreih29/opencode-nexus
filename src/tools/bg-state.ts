@@ -51,7 +51,7 @@ export function createBgTaskState(deps: {
 [ALL BACKGROUND TASKS COMPLETE]
 - ${task.sessionId}: ${task.agent} — ${task.description}
 
-Use task(task_id="${task.sessionId}") to retrieve each result.
+Use nx_bg_output(task_id="${task.sessionId}") to retrieve each completed result.
 </system-reminder>`;
     } else {
       notification = `<system-reminder>
@@ -61,7 +61,7 @@ Use task(task_id="${task.sessionId}") to retrieve each result.
 **Description:** ${task.description}
 
 **${remaining.length} task(s) still in progress:** ${remaining.map(t => `\`${t.sessionId}\` (${t.agent})`).join(", ")}
-Retrieve this completed result with task(task_id="${task.sessionId}") and continue working.
+Retrieve this completed result with nx_bg_output(task_id="${task.sessionId}") and continue working.
 </system-reminder>`;
     }
 

@@ -106,6 +106,7 @@ async function main() {
   assert(config.default_agent === "lead", "config hook must set default_agent to lead when absent");
   assert(typeof config.agent?.lead?.prompt === "string", "config hook must inject lead agent prompt");
   assert(typeof config.agent?.engineer?.prompt === "string", "config hook must inject engineer agent prompt");
+  assert(config.agent?.strategist === undefined, "config hook must not inject strategist agent prompt");
 
   const dryRun = await run("./node_modules/.bin/nexus-sync", ["--harness=opencode", "--target=./", "--dry-run"]);
   assert(!dryRun.timedOut, "sync --dry-run timed out");
@@ -121,6 +122,34 @@ async function main() {
     assert(existsSync(resolve(relativePath)), `missing synced file: ${relativePath}`);
   }
 
+  const taskToolSource = readFileSync(resolve("src/tools/task.ts"), "utf8");
+  assert(
+    taskToolSource.includes("end this turn and wait for its system-reminder"),
+    "async task guidance must tell Lead to end the turn while blocked on a system-reminder",
+  );
+  assert(
+    taskToolSource.includes("Do not sleep or poll this task before its system-reminder arrives."),
+    "async task guidance must explicitly forbid sleep/poll waiting",
+  );
+  assert(
+    taskToolSource.includes('nx_bg_output(task_id="${session.id}")') && taskToolSource.includes('nx_bg_output(task_id="${args.task_id}")'),
+    "async task guidance must use nx_bg_output as the canonical completed-result retrieval tool",
+  );
+  assert(
+    !taskToolSource.includes('task(task_id="${args.task_id}")'),
+    "running background-output guidance must not point users back to task(task_id) for result retrieval",
+  );
+
+  const bgTaskStateSource = readFileSync(resolve("src/tools/bg-state.ts"), "utf8");
+  assert(
+    bgTaskStateSource.includes('nx_bg_output(task_id="${task.sessionId}")'),
+    "background completion reminders must direct result retrieval through nx_bg_output",
+  );
+  assert(
+    !bgTaskStateSource.includes('task(task_id="${task.sessionId}")'),
+    "background completion reminders must not use task(task_id) as the canonical result retrieval path",
+  );
+
   const tempDir = mkdtempSync(join(tmpdir(), "opencode-nexus-"));
   try {
     const cliEnv = installMockOpencode(tempDir);
@@ -131,6 +160,11 @@ async function main() {
         other: {
           type: "local",
           command: ["other-mcp"],
+        },
+      },
+      agent: {
+        strategist: {
+          model: "openai/gpt-5.3",
         },
       },
     }, null, 2)}\n`);
@@ -156,6 +190,7 @@ async function main() {
     assert(config.default_agent === "lead", "config.default_agent must be lead");
     assert(config.agent?.build?.disable === true, "agent.build.disable must default to true");
     assert(config.agent?.plan?.disable === true, "agent.plan.disable must default to true");
+    assert(config.agent?.strategist?.model === "openai/gpt-5.3", "install must preserve user-owned agent.strategist config");
     assert(existsSync(join(tempDir, ".opencode", "skills", "nx-auto-plan", "SKILL.md")), "install did not copy nx-auto-plan skill");
     assert(existsSync(join(tempDir, ".opencode", "skills", "nx-plan", "SKILL.md")), "install did not copy nx-plan skill");
     assert(existsSync(join(tempDir, ".opencode", "skills", "nx-run", "SKILL.md")), "install did not copy nx-run skill");
@@ -178,6 +213,23 @@ async function main() {
     assert(updatedConfig.agent?.architect?.model === "openai/gpt-5.4", "architect model override was not written");
     assert(updatedConfig.agent?.general?.model === "openai/gpt-5.4", "general model override was not written");
     assert(updatedConfig.agent?.explore?.model === "openai/gpt-5.4", "explore model override was not written");
+
+    const rejectedStrategistModelsResult = await run("node", [
+      resolve("bin/opencode-nexus.mjs"),
+      "models",
+      "--scope=project",
+      "--agents=strategist",
+      "--model=openai/gpt-5.4",
+    ], {
+      cwd: tempDir,
+      env: cliEnv,
+    });
+    assert(!rejectedStrategistModelsResult.timedOut, "models CLI strategist rejection timed out");
+    assert(rejectedStrategistModelsResult.code !== 0, "models CLI must reject strategist as an unsupported agent");
+    assert(
+      (rejectedStrategistModelsResult.stderr || rejectedStrategistModelsResult.stdout).includes("Unknown agent: strategist"),
+      `models CLI strategist rejection used unexpected output: ${rejectedStrategistModelsResult.stderr || rejectedStrategistModelsResult.stdout}`,
+    );
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

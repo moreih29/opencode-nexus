@@ -49,7 +49,7 @@ bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
-특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.18.1`).
+특정 버전에 고정하려면 `@latest` 대신 `@x.y.z` 형태로 지정하세요 (예: `npm install -g opencode-nexus@0.20.0`).
 
 설치된 CLI 버전은 `opencode-nexus --version` 또는 `opencode-nexus version`으로 확인할 수 있습니다.
 
@@ -66,12 +66,12 @@ interactive terminal에서 `opencode-nexus install`을 실행하면:
 - `.opencode/skills/` 아래에 Nexus 스킬 복사
 - 현재 실행 중인 CLI 버전으로 plugin pin
 
-`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.18.1`이면 다음과 같이 기록됩니다.
+`install`은 항상 **현재 실행 중인 CLI 버전**을 plugin entry에 기록합니다. 예를 들어 현재 설치된 CLI가 `0.20.0`이면 다음과 같이 기록됩니다.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.18.1"],
+  "plugin": ["opencode-nexus@0.20.0"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -121,12 +121,13 @@ opencode-nexus models
   - `architect`
   - `designer`
   - `postdoc`
-  - `strategist`
   - `engineer`
   - `researcher`
   - `writer`
   - `reviewer`
   - `tester`
+
+`strategist`는 `@moreih29/nexus-core` 0.21.0부터 active agent가 아니므로 모델 설정 대상에서 제외됩니다. 기존 `opencode.json`에 `agent.strategist.model` 같은 사용자 소유 override가 남아 있으면 `opencode-nexus`가 자동 제거하지 않습니다. 새 런타임에서는 inert 설정으로 남을 수 있으므로 필요하면 수동으로 정리하세요.
 
 interactive 화면에서는:
 
@@ -243,6 +244,12 @@ opencode-nexus install --scope=project
 
 `install`은 항상 현재 실행 중인 CLI 버전을 기준으로 plugin을 pin합니다.
 즉 다른 버전을 적용하고 싶으면, 먼저 그 버전의 CLI를 설치한 뒤 `install`을 다시 실행해야 합니다.
+
+### 0.20.0 마이그레이션 참고
+
+0.20.0은 `@moreih29/nexus-core` 0.21.0을 채택하면서 strategist active agent를 제거한 minor release입니다. pre-v1 정책상 이 변경은 strategist를 직접 호출하거나 `opencode-nexus models --agents=strategist`를 사용하던 사용자에게 breaking change입니다.
+
+기존 설정 파일에 남아 있는 `agent.strategist.model` 같은 사용자 소유 override는 자동 제거되지 않습니다. 새 런타임에서는 active agent/model target이 아니므로 inert 상태로 남을 수 있으며, 필요하면 직접 삭제하세요.
 
 ## 이 패키지가 배포하는 것
 

@@ -68,8 +68,11 @@ export function createTaskTool(deps: {
             return {
               output: [
                 `Resumed: ${regEntry.sessionId} (${args.subagent_type || regEntry.agent})`,
-                `This runs asynchronously. DO NOT poll — when it finishes,`,
-                `a system-reminder will deliver the result here.`,
+                `This runs asynchronously.`,
+                `If independent work remains, continue it now.`,
+                `If this task blocks further progress, end this turn and wait for its system-reminder.`,
+                `Do not sleep or poll this task before its system-reminder arrives.`,
+                `After the reminder arrives, retrieve the completed result with nx_bg_output(task_id="${regEntry.sessionId}").`,
               ].join("\n"),
               metadata: { session_id: regEntry.sessionId, status: "running" },
             };
@@ -97,8 +100,10 @@ export function createTaskTool(deps: {
         if (regEntry.status === "running") {
           return {
             output: [
-              `Task ${regEntry.sessionId} still in progress. DO NOT poll.`,
-              `A system-reminder will appear when it finishes.`,
+              `Task ${regEntry.sessionId} is still running.`,
+              `Do not sleep or poll this task before its system-reminder arrives.`,
+              `If no independent work remains, end this turn and wait.`,
+              `You may still retrieve other tasks whose completion reminders have already arrived with nx_bg_output(task_id="<completed_id>").`,
             ].join("\n"),
             metadata: { session_id: regEntry.sessionId, status: "running" },
           };
@@ -140,9 +145,11 @@ export function createTaskTool(deps: {
         return {
           output: [
             `Spawned: ${session.id} (${args.subagent_type})`,
-            `This runs asynchronously. DO NOT poll — when it finishes,`,
-            `a system-reminder will deliver the result here.`,
-            `Continue with other work or wait for the reminder.`,
+            `This runs asynchronously.`,
+            `If independent work remains, continue it now.`,
+            `If this task blocks further progress, end this turn and wait for its system-reminder.`,
+            `Do not sleep or poll this task before its system-reminder arrives.`,
+            `After the reminder arrives, retrieve the completed result with nx_bg_output(task_id="${session.id}").`,
           ].join("\n"),
           metadata: { session_id: session.id, status: "running" },
         };
@@ -194,10 +201,11 @@ export function createBgOutputTool(deps: {
       if (result.status === "running") {
         return {
           output: [
-            `Task ${args.task_id} is still in progress. DO NOT poll again.`,
-            `When it finishes, a system-reminder will deliver the result here.`,
-            `Retrieve it then with: task(task_id="${args.task_id}")`,
-            `Meanwhile, continue with other independent work.`,
+            `Task ${args.task_id} is still running.`,
+            `Do not sleep or poll this task before its system-reminder arrives.`,
+            `If independent work remains, continue it now.`,
+            `If this task blocks further progress, end this turn and wait for its system-reminder.`,
+            `After the reminder arrives, retrieve the completed result with nx_bg_output(task_id="${args.task_id}").`,
           ].join("\n"),
           metadata: { session_id: args.task_id, status: "running" },
         };

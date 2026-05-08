@@ -7,7 +7,6 @@ import { lead } from "../agents/lead.js";
 import { postdoc } from "../agents/postdoc.js";
 import { researcher } from "../agents/researcher.js";
 import { reviewer } from "../agents/reviewer.js";
-import { strategist } from "../agents/strategist.js";
 import { tester } from "../agents/tester.js";
 import { writer } from "../agents/writer.js";
 
@@ -38,7 +37,6 @@ export const NEXUS_AGENTS = {
   postdoc,
   researcher,
   reviewer,
-  strategist,
   tester,
   writer,
 };

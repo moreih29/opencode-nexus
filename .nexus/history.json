@@ -2599,6 +2599,182 @@
           "created_at": "2026-05-01T10:18:44.953Z"
         }
       ]
+    },
+    {
+      "schema_version": "1.0",
+      "completed_at": "2026-05-08T05:13:28.585Z",
+      "branch": "chore/bump-nexus-core-0.21.0",
+      "plan": {
+        "id": 18,
+        "topic": "Adopt @moreih29/nexus-core 0.21.0 in opencode-nexus",
+        "issues": [
+          {
+            "id": 1,
+            "title": "Define dependency bump + sync/post-sync handling for nexus-core 0.21.0",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "Recommended low-risk sequence: bump package.json to nexus-core 0.21.0, run bun install, review lockfile, run sync:dry before actual sync, then review generated artifacts and only then remove local strategist/runtime references. Noted current repo has no scripts/post-sync-asyncify.mjs despite older memory, so do not invent post-sync work unless sync proves need. Verification gates: stale version/strategist searches, bun run check, bun run test:e2e, npm pack --dry-run, MCP handshake.",
+                "recorded_at": "2026-05-08T04:51:57.799Z",
+                "agent_id": "ses_1fa134fcdffe5Sp3SEHGoCZwt0"
+              }
+            ],
+            "decision": "Selected approach: perform the 0.21.0 dependency adoption as a staged sync-first workflow: update package.json, run bun install, inspect bun.lock, run bun run sync:dry, then bun run sync, then review generated artifacts before local cleanup. Rationale: this exposes upstream-generated changes before wrapper edits, avoids fighting generated output, and lets TypeScript/sync failures identify the precise drift boundary. Rejected alternative: remove strategist locally before syncing; dismissed because it risks deleting files that sync or local imports still expect and obscures whether the change came from upstream or wrapper cleanup. Rejected alternative: recreate or modify a post-sync script preemptively; dismissed because current verified repo has no scripts/post-sync-asyncify.mjs and package scripts do not chain it, so old memory is historical until sync proves a new post-processing need. Assumption: execution will happen on the already-created chore/bump-nexus-core-0.21.0 branch and will preserve custom async task tooling unless generated skill contracts force a targeted change."
+          },
+          {
+            "id": 2,
+            "title": "Remove strategist from opencode-nexus runtime, prompts, docs, and generated artifacts",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "Approved sync-first strategist cleanup. Remove strategist from runtime registration, generated prompts/skills, CLI model support, README supported-agent docs; delete src/agents/strategist.ts if sync no longer generates it. Do not auto-delete user-owned agent.strategist config. Historical memory/history may retain mentions; migration/changelog notes may mention removal. Add test checks that config.agent.strategist is absent and models CLI rejects strategist.",
+                "recorded_at": "2026-05-08T04:53:29.810Z",
+                "agent_id": "ses_1fa124764ffehPALiP9NJ2Gzem"
+              }
+            ],
+            "decision": "Selected approach: remove strategist from all active opencode-nexus surfaces after the 0.21.0 sync boundary is observed: runtime agent registration, generated Lead/agent prompts, nx-plan/nx-auto-plan skill routing, model CLI agent list, README supported-agent lists, and tests. Rationale: keeping strategist in any active surface would create split-brain behavior where Lead can attempt to spawn or configure a role that nexus-core no longer defines. Rejected alternative: keep strategist as a local wrapper-only role for backward compatibility; dismissed because it would diverge from nexus-core's framework model and make generated prompt/skill sync unreliable. Rejected alternative: erase every historical mention; dismissed because changelog/migration/history/memory references are useful provenance and are not active runtime surfaces. User-owned existing `agent.strategist` config should not be automatically removed by install/uninstall because that is outside the wrapper's owned config leaves; it may be documented as inert/manual cleanup."
+          },
+          {
+            "id": 3,
+            "title": "Update Nexus MCP/state workflow prompts for 0.21.0 contract changes",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "architect",
+                "summary": "Recommended prompt/skill-first update. Must update nx-run, nx-plan, nx-auto-plan and Lead prompt to reflect nx_task_update mutable-only fields, TaskItem.result on completion, nx_task_close(force) only for recovery, nx_history_search scope/mode/group_by_cycle response variance, and nx_artifact_list discovery. App code likely does not parse Nexus MCP responses; bin/nexus-mcp is shim, src/tools/task is OpenCode background task tool, src/infra/nexus wiring only. Highest-risk active bug is legacy nx-run guidance using nx_task_add({subject})/nx_task_update({taskId}).",
+                "recorded_at": "2026-05-08T04:55:20.827Z",
+                "agent_id": "ses_1fa10e297ffessXkKYEW1G1kGH"
+              }
+            ],
+            "decision": "Selected approach: treat nexus-core 0.21.0 MCP/state changes as active prompt/skill workflow changes, not app-code parser changes. Update nx-run, nx-plan, nx-auto-plan, and Lead prompt so they use existing task IDs, avoid identity-field updates, record `result` when completing tasks, use `nx_task_close(force)` only for explicit recovery/abandonment, query history with `scope`/`mode`/`group_by_cycle` when appropriate, and use `nx_artifact_list` for artifact discovery. Rationale: verified app code primarily launches the MCP shim and wires OpenCode tools; agent behavior is where stale tool instructions cause failures. Rejected alternative: implement TypeScript response parser changes now; dismissed because no verified code path parses `nx_task_update` or `nx_history_search` results directly. Rejected alternative: rely entirely on generated sync without review; dismissed because current bundled nx-run already contains legacy guidance (`subject`/`taskId`) that must be verified and corrected after sync. Assumption: generated 0.21.0 skill text should supply most of these changes, but execution must explicitly diff/review bundled and local skill copies for stale workflow instructions."
+          },
+          {
+            "id": 4,
+            "title": "Define verification, release notes, and execution sequencing",
+            "status": "decided",
+            "analysis": [
+              {
+                "role": "tester",
+                "summary": "Recommended sequence: dependency boundary, sync:dry/sync, strategist active-surface cleanup, workflow prompt/state updates, docs/release notes last. Required gates: bun install, bun run check, bun run test:e2e, npm pack --dry-run, install/uninstall invariants, skill frontmatter validation, temp global MCP symlink + initialize handshake. Additional gates: scan active surfaces for strategist, allow only changelog/history/memory migration mentions; consider pre-v1 minor because strategist removal is breaking. Add/update tests for absence of agent.strategist, model CLI rejection, HOW mappings excluding strategist, and minimal 0.21.0 MCP/state contract smoke.",
+                "recorded_at": "2026-05-08T04:56:33.645Z",
+                "agent_id": "ses_1fa0f2869ffeLHTbXCIKhPNTa8"
+              }
+            ],
+            "decision": "Selected approach: execute and verify in strict dependency/sync/cleanup/docs order, with release gates plus new strategist-removal and 0.21.0 contract checks. Rationale: dependency and generated artifact boundaries must be visible before local cleanup, while documentation and changelog should describe the final verified state. Rejected alternative: update docs/release notes first; dismissed because generated sync and tests may change the final migration wording. Rejected alternative: rely only on existing release checklist; dismissed because strategist removal creates new active-surface regressions not currently asserted. Verification must include `bun install`, `bun run check`, `bun run test:e2e`, `npm pack --dry-run`, skill frontmatter validation, install/uninstall invariants, global temp install with `nexus-mcp` symlink and real initialize handshake, plus scans/tests proving strategist is absent from active runtime/skills/README/model CLI. Versioning assumption: because nexus-core 0.21.0 removes a supported subagent, the opencode-nexus release should be treated as pre-v1 breaking and likely receive a minor version bump rather than patch."
+          }
+        ],
+        "research_summary": "Verified local state: package.json and bun.lock pin @moreih29/nexus-core 0.20.1; current branch was main, switched to chore/bump-nexus-core-0.21.0 before state work. Verified external update: npm latest is @moreih29/nexus-core 0.21.0, published 2026-05-08; GitHub release v0.21.0 exists with detailed notes. Release facts: strategist subagent removed; HOW becomes architect/designer/postdoc; nx_task_update identity fields are immutable/stripped while status/acceptance/approach/risk/owner/result remain mutable; nx_history_search adds scope/mode/group_by_cycle and varied response shapes; nx_artifact_list, TaskItem.result, nx_task_close(force), and id-like numeric coercion added. Verified code touch points: package.json/bun.lock pins, bin/nexus-mcp.mjs imports @moreih29/nexus-core/mcp main, lib/install-spec.mjs defines CORE_SKILLS and nexus-mcp config, src/infra/nexus.ts imports/registers strategist, src/agents/strategist.ts exists, src/agents/lead.ts says 9 subagents and HOW includes strategist, skills/nx-auto-plan references strategist, README.md/README.en.md list strategist. Existing memory: pattern-opencode-plugin-surface says bump target is package.json + bun.lock, sync pipeline regenerates skills/agents, and post-sync asyncify assertions assume agent count/permissions; releasing.md requires bun install, bun run check, bun run test:e2e, npm pack --dry-run, and MCP handshake/package install smoke gates.",
+        "created_at": "2026-05-08T04:50:49.627Z"
+      },
+      "tasks": [
+        {
+          "id": 1,
+          "title": "Bump nexus-core and regenerate synced artifacts",
+          "status": "completed",
+          "context": "Plan #18 Issue 1. Adopt @moreih29/nexus-core 0.21.0 using a sync-first workflow on branch chore/bump-nexus-core-0.21.0. Current pin is 0.20.1 in package.json/bun.lock. Current repo has no scripts/post-sync-asyncify.mjs; do not recreate unless sync proves necessary.",
+          "acceptance": "package.json pins @moreih29/nexus-core 0.21.0; bun.lock updated consistently; bun run sync:dry succeeds or any failure is diagnosed; bun run sync applied generated artifacts; generated deltas are reviewed and no unexpected post-sync dependency is introduced.",
+          "approach": "Update dependency, run bun install, inspect lockfile diff, run sync:dry then sync, then record any generated changes that affect following tasks.",
+          "risk": "Generated sync may delete strategist artifacts or alter skill text in ways that require follow-up cleanup; old memory about post-sync may be stale.",
+          "plan_issue": 1,
+          "owner": {
+            "role": "engineer"
+          },
+          "created_at": "2026-05-08T04:56:43.350Z"
+        },
+        {
+          "id": 2,
+          "title": "Remove strategist from active runtime and user-facing surfaces",
+          "status": "completed",
+          "context": "Plan #18 Issue 2. nexus-core 0.21.0 removes strategist; HOW is architect/designer/postdoc. Verified stale active surfaces include src/infra/nexus.ts, src/agents/strategist.ts, src/agents/lead.ts, src/agents/writer.ts, skills, README files, and model CLI allowlist.",
+          "acceptance": "No active runtime/config surface registers strategist; plugin config does not inject agent.strategist; model CLI no longer accepts strategist as a supported agent; bundled skills and active generated prompts do not route to Strategist; README.md and README.en.md supported-agent docs exclude strategist; historical/migration mentions are limited to CHANGELOG/.nexus history/memory or explicit migration notes.",
+          "approach": "After Task 1 sync, remove/delete strategist generated/runtime files and imports if still present, update agent prompts/skills/docs/model allowlist, and add/adjust e2e assertions for absence/rejection.",
+          "risk": "Stale prompt text could cause Lead to spawn an unavailable role; over-cleaning historical records would lose useful provenance; install/uninstall must not auto-delete user-owned agent.strategist config.",
+          "plan_issue": 2,
+          "deps": [
+            1
+          ],
+          "owner": {
+            "role": "engineer"
+          },
+          "created_at": "2026-05-08T04:56:48.957Z"
+        },
+        {
+          "id": 3,
+          "title": "Update Nexus workflow prompts for 0.21.0 state contract",
+          "status": "completed",
+          "context": "Plan #18 Issue 3. nexus-core 0.21.0 changes MCP/state workflow semantics: nx_task_update mutable-only fields, TaskItem.result, nx_task_close(force), nx_history_search scope/mode/group_by_cycle, nx_artifact_list. App code likely does not parse these; active risk is stale prompt/skill guidance.",
+          "acceptance": "nx-run skill and Lead prompt instruct using existing task IDs, not legacy subject/taskId shapes; task completion records result outcome/summary/artifacts when appropriate; prompts state identity fields are immutable after nx_task_add; nx_history_search guidance mentions scope/mode/group_by_cycle and varied response shape; artifact discovery mentions nx_artifact_list; nx-plan/auto-plan clarify result is runtime-only and task generation fields remain acceptance/approach/risk/owner/deps.",
+          "approach": "Review regenerated 0.21.0 skills and src/agents/lead.ts; patch any stale workflow instructions left after sync; ensure bundled skills are the package source of truth.",
+          "risk": "If stale nx-run guidance remains, Lead may call invalid task APIs or omit result records; over-editing generated files may drift from upstream unnecessarily.",
+          "plan_issue": 3,
+          "deps": [
+            1,
+            2
+          ],
+          "owner": {
+            "role": "engineer"
+          },
+          "created_at": "2026-05-08T04:56:53.873Z"
+        },
+        {
+          "id": 4,
+          "title": "Update release documentation and migration notes",
+          "status": "completed",
+          "context": "Plan #18 Issue 4 plus Issue 2. User-facing docs must match final verified active surfaces after Tasks 1-3. Release should likely be minor because strategist removal is breaking under pre-v1 policy.",
+          "acceptance": "CHANGELOG has a new entry describing @moreih29/nexus-core 0.21.0 adoption, strategist removal, workflow/state prompt updates, user impact, and verification results placeholders or completed commands; README.md and README.en.md supported agent lists match runtime; migration note says existing agent.strategist model overrides may be inert/manual cleanup, not auto-removed; package version decision is documented consistently with pre-v1 policy if changed during execution.",
+          "approach": "After code/prompt changes settle, update docs in one pass using final diff and release checklist terminology.",
+          "risk": "Writing docs before implementation can record inaccurate migration details; version bump policy needs final release intent alignment.",
+          "plan_issue": 4,
+          "deps": [
+            1,
+            2,
+            3
+          ],
+          "owner": {
+            "role": "writer"
+          },
+          "created_at": "2026-05-08T04:57:01.198Z"
+        },
+        {
+          "id": 5,
+          "title": "Verify nexus-core 0.21.0 adoption end-to-end",
+          "status": "completed",
+          "context": "Plan #18 Issue 4. Verification for engineering and release docs after Tasks 1-4. Existing release checklist in .nexus/context/releasing.md applies plus new strategist-removal checks.",
+          "acceptance": "bun run check passes; bun run test:e2e passes; npm pack --dry-run output is acceptable; skill frontmatter is valid for nx-auto-plan/nx-plan/nx-run; temp global install exposes opencode-nexus and nexus-mcp and real MCP initialize handshake returns serverInfo.name nexus-core with version 0.21.0; install/uninstall invariants still pass; active-surface scan confirms strategist absent from src/skills/README/model CLI except allowed migration/history notes; 0.21.0 MCP contract smoke covers tools/list or minimal changed tool behavior where practical.",
+          "approach": "Run automated gates, add targeted e2e assertions if not already added, diagnose failures and report exact blockers. Pair this tester task after engineer/writer changes.",
+          "risk": "MCP handshake and global install smoke are easy to skip but historically caught release-critical failures; strategist scans need careful allowed-path filtering.",
+          "plan_issue": 4,
+          "deps": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "owner": {
+            "role": "tester"
+          },
+          "created_at": "2026-05-08T04:57:05.886Z"
+        },
+        {
+          "id": 6,
+          "title": "Update changelog verification results after final gates",
+          "status": "completed",
+          "context": "End-of-cycle review found CHANGELOG verification section still says release gates are pending, but Task 5 verified bun run check, bun run test:e2e, npm pack --dry-run, skill frontmatter, temp global install, MCP handshake/tools-list, install/uninstall invariants, and strategist active-surface scan as PASS.",
+          "acceptance": "CHANGELOG 0.20.0 verification section reflects completed Task 5 verification results and no longer says required release gates are pending.",
+          "approach": "Edit only the 0.20.0 CHANGELOG verification bullets to replace pending wording with completed PASS evidence from Task 5.",
+          "risk": "If documentation still says pending, release notes contradict verified state.",
+          "plan_issue": 4,
+          "deps": [
+            5
+          ],
+          "owner": {
+            "role": "lead"
+          },
+          "created_at": "2026-05-08T05:13:02.321Z"
+        }
+      ]
     }
   ]
 }

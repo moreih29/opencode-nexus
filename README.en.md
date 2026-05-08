@@ -49,7 +49,7 @@ bun install -g opencode-nexus@latest
 opencode-nexus install
 ```
 
-To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.18.1`).
+To pin to a specific version, replace `@latest` with `@x.y.z` (e.g. `npm install -g opencode-nexus@0.20.0`).
 
 Check the installed CLI version with `opencode-nexus --version` or `opencode-nexus version`.
 
@@ -66,12 +66,12 @@ It then applies the following:
 - copies Nexus skills into `.opencode/skills/`
 - pins the plugin to the exact currently running CLI version
 
-`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.18.1`, it writes:
+`install` always pins the plugin entry to the **currently running CLI version**. For example, if the installed CLI is `0.20.0`, it writes:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-nexus@0.18.1"],
+  "plugin": ["opencode-nexus@0.20.0"],
   "mcp": {
     "nx": {
       "type": "local",
@@ -121,12 +121,13 @@ Supported targets:
   - `architect`
   - `designer`
   - `postdoc`
-  - `strategist`
   - `engineer`
   - `researcher`
   - `writer`
   - `reviewer`
   - `tester`
+
+`strategist` is no longer an active agent in `@moreih29/nexus-core` 0.21.0, so it is not a model configuration target. If an existing `opencode.json` still contains a user-owned override such as `agent.strategist.model`, `opencode-nexus` does not remove it automatically. It may remain as inert configuration in the new runtime; remove it manually if you want to clean it up.
 
 The interactive flow lets you:
 
@@ -242,6 +243,12 @@ opencode-nexus install --scope=project
 ```
 
 `install` always pins the version of the currently running CLI. If you want a different plugin version, first install that CLI version and then rerun `install`.
+
+### 0.20.0 migration note
+
+0.20.0 adopts `@moreih29/nexus-core` 0.21.0 and removes strategist as an active agent. Under the pre-v1 policy, this is a minor release because it is a breaking change for users who invoked strategist directly or used `opencode-nexus models --agents=strategist`.
+
+Existing user-owned overrides such as `agent.strategist.model` are not removed automatically. In the new runtime they may remain as inert configuration because strategist is no longer an active agent/model target; delete them manually if you want to clean up the config.
 
 ## What this package ships
 
