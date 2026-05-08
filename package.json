@@ -30,8 +30,8 @@
     ".": "./src/plugin.ts"
   },
   "bin": {
-    "opencode-nexus": "./bin/opencode-nexus.mjs",
-    "nexus-mcp": "./bin/nexus-mcp.mjs"
+    "opencode-nexus": "bin/opencode-nexus.mjs",
+    "nexus-mcp": "bin/nexus-mcp.mjs"
   },
   "files": [
     "src",
@@ -43,8 +43,8 @@
     "access": "public"
   },
   "scripts": {
-    "sync": "./node_modules/.bin/nexus-sync --harness=opencode --target=./",
-    "sync:dry": "./node_modules/.bin/nexus-sync --harness=opencode --target=./ --dry-run",
+    "sync": "nexus-sync --harness=opencode --target=./",
+    "sync:dry": "nexus-sync --harness=opencode --target=./ --dry-run",
     "build": "bun run sync && tsc --noEmit",
     "check": "bun run sync:dry && tsc --noEmit",
     "test:e2e": "bun run sync && bun scripts/e2e-nexus-integration.mjs",
